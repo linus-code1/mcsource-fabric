@@ -22,6 +22,9 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 	private static final float UNITS = 1.0F / 40.0F;
 	/** Trees taller than this many blocks are scaled down to it. */
 	private static final float MAX_HEIGHT = 20.0F;
+	/** Distances in blocks where trees switch to fewer leaves. */
+	private static final float NEAR = 28.0F;
+	private static final float FAR = 64.0F;
 
 	public static class State extends EntityRenderState {
 		String wood = "";
@@ -70,10 +73,14 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		poseStack.rotateDegrees(Axis.YP, -state.yaw);
 		Identifier[] textures = model.materialTextures();
 		int light = state.lightCoords;
+		// Level of detail: further trees draw fewer, bigger leaf cards.
+		float distance = (float) Math.sqrt(state.distanceToCameraSq);
+		float keep = distance < NEAR ? 1.0F : distance < FAR ? 0.35F : 0.12F;
+		float grow = keep < 1.0F ? Math.max(1.0F, 0.85F / (float) Math.sqrt(keep)) : 1.0F;
 		for (int i = 0; i < textures.length; i++) {
 			int material = i;
 			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textures[i]),
-					(pose, consumer) -> model.emitMaterial(pose, consumer, material, drawScale, light, OverlayTexture.NO_OVERLAY));
+					(pose, consumer) -> model.emitMaterial(pose, consumer, material, drawScale, light, OverlayTexture.NO_OVERLAY, keep, grow));
 		}
 		poseStack.popPose();
 		super.submit(state, poseStack, collector, camera);

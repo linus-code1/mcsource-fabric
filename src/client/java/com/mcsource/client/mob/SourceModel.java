@@ -216,22 +216,52 @@ public final class SourceModel {
 		return materialTextures;
 	}
 
+	/** Whether a material has see-through parts, such as leaves. */
+	public boolean cutout(int material) {
+		return model.textures[material].masked();
+	}
+
 	/**
 	 * Like {@link #emit}, but only the triangles of one material, with their
-	 * own texture coordinates for {@link #materialTextures()}.
+	 * own texture coordinates for {@link #materialTextures()}. For a level of
+	 * detail, a cut-out material (leaves) can be thinned to about
+	 * {@code keep} of its triangles, each kept one grown by {@code grow}
+	 * about its middle so the crown stays about as full.
 	 */
-	public void emitMaterial(PoseStack.Pose pose, VertexConsumer consumer, int material, float scale, int light, int overlay) {
+	public void emitMaterial(PoseStack.Pose pose, VertexConsumer consumer, int material, float scale, int light, int overlay, float keep,
+			float grow) {
 		int count = model.triangleCount();
+		boolean thin = keep < 1.0F && cutout(material);
+		int threshold = (int) (keep * 65536.0F);
 		for (int i = 0; i < count; i++) {
 			if (model.triangleTexture[i] != material || hidden != null && hidden[i]) {
 				continue;
+			}
+			// Leaf cards are pairs of triangles; keep or drop both halves together.
+			if (thin && ((i >> 1) * 0x9E3779B1 >>> 16) >= threshold) {
+				continue;
+			}
+			float cx = 0.0F;
+			float cy = 0.0F;
+			float cz = 0.0F;
+			float factor = thin ? grow : 1.0F;
+			if (thin) {
+				for (int k = 0; k < 3; k++) {
+					int v = model.cornerVertex[i * 3 + k] * 3;
+					cx += posed[v] / 3.0F;
+					cy += posed[v + 1] / 3.0F;
+					cz += posed[v + 2] / 3.0F;
+				}
 			}
 			for (int c = 0; c < 4; c++) {
 				int corner = i * 3 + (c == 3 ? 2 : c);
 				int v = model.cornerVertex[corner] * 3;
 				int n = model.cornerNormal[corner] * 3;
+				float x = cx + (posed[v] - cx) * factor;
+				float y = cy + (posed[v + 1] - cy) * factor;
+				float z = cz + (posed[v + 2] - cz) * factor;
 				// Half-Life's z-up axes to Minecraft's y-up ones.
-				consumer.addVertex(pose, posed[v + 1] * scale, posed[v + 2] * scale, posed[v] * scale)
+				consumer.addVertex(pose, y * scale, z * scale, x * scale)
 						.setColor(-1)
 						.setUv(model.cornerUv[corner * 2], model.cornerUv[corner * 2 + 1])
 						.setOverlay(overlay)

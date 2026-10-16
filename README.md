@@ -58,7 +58,8 @@ world to try it in.
   and more) use the closest Half-Life 2 materials, built from your install
   into an always-on resource pack at `config/mcsource/hl2_block_pack` the
   first time the game starts. Grass, ferns and flowers are cut out of Half-Life
-  2's grass sprite sheet, since its grass is sprites too, and water is made
+  2's grass sprite sheet, since its grass is sprites too (it has no flowers,
+  so flowers become its weeds and tufts), and water is made
   from the ripples of a Half-Life 2 water material in its murky canal colour.
   Leaves use Half-Life 2's foliage textures and are drawn as clumps of crossed
   leaf cards, like Source trees, instead of cubes. See
@@ -67,8 +68,10 @@ world to try it in.
 - **Half-Life 2 trees.** With Half-Life 2 installed, trees in newly made
   chunks and trees grown from saplings are Half-Life 2 tree models instead of
   log and leaves blocks: spruces become pines, pale oaks bare trees and the
-  rest broadleaf trees, at their real size. Forests are thinned out since
-  these trees are bigger. Only the trunk is solid; hit a tree five times to
+  rest broadleaf trees, at their real size. Only upright tree models are
+  used, so logs, stumps, cliff trees and alien plants are left out. Forests
+  are thinned out since these trees are bigger, and further trees draw fewer,
+  bigger leaf cards so they cost less. Only the trunk is solid; hit a tree five times to
   fell it into logs and saplings. Set `hl2_trees=false` in
   `config/mcsource.properties` to keep block trees.
 - **Half-Life 2 sun and moon.** The sun is a small white-hot disc in a soft

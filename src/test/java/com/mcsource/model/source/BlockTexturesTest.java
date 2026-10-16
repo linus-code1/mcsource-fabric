@@ -96,10 +96,11 @@ class BlockTexturesTest {
 		};
 		Map<String, String> used = BlockTextures.generate(game, BlockTextures.parse("plants = detail/detailsprites\n"), dir);
 		assertTrue(used.get("short_grass").startsWith("detail/detailsprites"));
-		assertTrue(used.get("poppy").contains("sprite at 40,"));
-		assertNull(used.get("cornflower"));
+		// Half-Life 2 has no flowers: they become its green sprites, never the red one.
+		assertTrue(used.get("poppy").contains("sprite at 4,"));
+		assertTrue(used.get("rose_bush").contains("sprite at 4,"));
 		Path blocks = dir.resolve("assets/minecraft/textures/block");
-		for (String name : new String[] {"short_grass", "tall_grass_top", "tall_grass_bottom", "fern", "poppy"}) {
+		for (String name : new String[] {"short_grass", "tall_grass_top", "tall_grass_bottom", "fern", "poppy", "rose_bush_top", "rose_bush_bottom"}) {
 			assertTrue(Files.exists(blocks.resolve(name + ".png")));
 		}
 	}

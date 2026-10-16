@@ -20,7 +20,7 @@ import com.mcsource.model.source.StudioModel;
 public final class TreeModels {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	private static final String[] SKIP = {"stump", "shadow", "branch", "log", "trunk", "leaves", "gib", "card", "skybox", "lod",
-		"root", "_low", "fallen", "broken"};
+		"root", "_low", "fallen", "broken", "xen", "alien", "tentacle", "cliff", "hedge", "bush", "dead_fall", "leaning"};
 
 	private static List<String> conifers;
 	private static List<String> bare;
@@ -54,15 +54,63 @@ public final class TreeModels {
 		return null;
 	}
 
-	/** Whether the model reads and has something to draw, so trees are never planted invisible. */
+	/**
+	 * Whether the model reads and stands up like a tree: tall enough, its foot
+	 * at its origin and its top above its foot. Leaning cliff trees, logs,
+	 * stumps and other things with "tree" in their names are left out.
+	 */
 	private static boolean readable(String path) {
 		try {
 			RiggedModel model = StudioModel.load(GameInstalls.source(), path, null);
-			return model != null && model.triangleCount() > 0;
+			if (model == null || model.triangleCount() == 0) {
+				return false;
+			}
+			if (!upright(model.positions)) {
+				LOGGER.info("Tree model {} left out: not an upright tree", path);
+				return false;
+			}
+			return true;
 		} catch (Exception e) {
 			LOGGER.info("Tree model {} could not be read: {}", path, e.toString());
 			return false;
 		}
+	}
+
+	/** Positions are x, y, z with z up, in Source units. */
+	static boolean upright(float[] positions) {
+		int count = positions.length / 3;
+		if (count == 0) {
+			return false;
+		}
+		float low = Float.MAX_VALUE;
+		float high = -Float.MAX_VALUE;
+		for (int i = 0; i < count; i++) {
+			low = Math.min(low, positions[i * 3 + 2]);
+			high = Math.max(high, positions[i * 3 + 2]);
+		}
+		float height = high - low;
+		// At least three blocks tall, standing on its origin.
+		if (height < 120.0F || Math.abs(low) > 0.15F * height) {
+			return false;
+		}
+		return Math.hypot(average(positions, low + 0.75F * height, high, 0), average(positions, low + 0.75F * height, high, 1))
+				<= 0.3F * height
+				&& Math.hypot(average(positions, low, low + 0.15F * height, 0), average(positions, low, low + 0.15F * height, 1))
+						<= 0.2F * height;
+	}
+
+	/** Average of one horizontal axis over the vertices between two heights. */
+	private static float average(float[] positions, float from, float to, int axis) {
+		double sum = 0.0;
+		int n = 0;
+		for (int i = 0; i < positions.length / 3; i++) {
+			float z = positions[i * 3 + 2];
+			if (z >= from && z <= to) {
+				sum += positions[i * 3 + axis];
+				n++;
+			}
+		}
+		return n == 0 ? 0.0F : (float) (sum / n);
 	}
 
 	private static void find() {

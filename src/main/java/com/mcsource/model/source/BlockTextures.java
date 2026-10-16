@@ -528,11 +528,15 @@ public final class BlockTextures {
 		{"short_grass", "wide"}, {"fern", "any"}, {"tall_grass", "tall"}, {"large_fern", "any"}, {"short_dry_grass", "wide"},
 		{"bush", "wide"}, {"sugar_cane", "tall"},
 	};
-	private static final String[][] FLOWERS = {
-		{"poppy", "red"}, {"red_tulip", "red"}, {"dandelion", "yellow"}, {"sunflower_front", "yellow"}, {"cornflower", "blue"},
-		{"blue_orchid", "blue"}, {"oxeye_daisy", "white"}, {"azure_bluet", "white"}, {"lily_of_the_valley", "white"},
-		{"white_tulip", "white"}, {"allium", "purple"}, {"pink_tulip", "purple"}, {"orange_tulip", "red"},
-	};
+	/**
+	 * Flowers. Half-Life 2 has no flowers, so they become its weeds and grass
+	 * tufts, untinted, so meadows look like its overgrown fields.
+	 */
+	private static final String[] FLOWERS = {"poppy", "red_tulip", "dandelion", "cornflower", "blue_orchid", "oxeye_daisy",
+		"azure_bluet", "lily_of_the_valley", "white_tulip", "allium", "pink_tulip", "orange_tulip", "torchflower",
+		"closed_eyeblossom", "open_eyeblossom"};
+	/** Two-block flowers, drawn as one tall sprite split in two. */
+	private static final String[] TALL_FLOWERS = {"rose_bush", "lilac", "peony", "sunflower"};
 	/** Plant textures Minecraft tints with the grass colour. */
 	private static final java.util.Set<String> GRASS_TINTED = java.util.Set.of("short_grass", "fern", "tall_grass_top",
 		"tall_grass_bottom", "large_fern_top", "large_fern_bottom", "sugar_cane", "bush");
@@ -646,18 +650,23 @@ public final class BlockTextures {
 			writePlant(folder, "dead_bush", spriteImage(sheet, brown.getFirst(), SIZE, SIZE));
 			used.put("dead_bush", chosen + " (sprite at " + brown.getFirst().x + "," + brown.getFirst().y + ")");
 		}
-		Map<String, Integer> nextOfColour = new HashMap<>();
-		for (String[] flower : FLOWERS) {
-			List<Sprite> options = coloured.getOrDefault(flower[1], List.of());
-			if (options.isEmpty()) {
-				used.put(flower[0], null);
-				continue;
-			}
-			int index = nextOfColour.merge(flower[1], 1, Integer::sum) - 1;
-			Sprite pick = options.get(index % options.size());
-			writePlant(folder, flower[0], spriteImage(sheet, pick, SIZE, SIZE));
-			used.put(flower[0], chosen + " (sprite at " + pick.x + "," + pick.y + ")");
+		// Flowers: the sprites after the ones grass took, so they differ from it.
+		int flowerIndex = GREEN_PLANTS.length;
+		for (String flower : FLOWERS) {
+			Sprite pick = pickShape(green, "any", flowerIndex++);
+			writePlant(folder, flower, spriteImage(sheet, pick, SIZE, SIZE));
+			used.put(flower, chosen + " (sprite at " + pick.x + "," + pick.y + ")");
 		}
+		for (String flower : TALL_FLOWERS) {
+			Sprite pick = pickShape(green, "tall", flowerIndex++);
+			int[] tall = spriteImage(sheet, pick, SIZE, SIZE * 2);
+			writePlant(folder, flower + "_top", java.util.Arrays.copyOfRange(tall, 0, SIZE * SIZE));
+			writePlant(folder, flower + "_bottom", java.util.Arrays.copyOfRange(tall, SIZE * SIZE, SIZE * SIZE * 2));
+			used.put(flower, chosen + " (sprite at " + pick.x + "," + pick.y + ")");
+		}
+		// The sunflower's head is drawn separately; leave it out.
+		writePng(folder.resolve("sunflower_front.png"), new int[SIZE * SIZE], SIZE);
+		writePng(folder.resolve("sunflower_back.png"), new int[SIZE * SIZE], SIZE);
 	}
 
 	private static String summary(Map<String, List<Sprite>> coloured) {
