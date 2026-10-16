@@ -21,9 +21,9 @@ public final class Karts {
 
 	public static final EntityType<KartEntity> KART = Registry.register(BuiltInRegistries.ENTITY_TYPE, KART_KEY,
 			EntityType.Builder.<KartEntity>of(KartEntity::new, MobCategory.MISC)
-					.sized(1.4F, 0.55F)
+					.sized(2.3F, 0.9F)
 					// The driver sits low in the seat, a little behind the middle.
-					.passengerAttachments(new Vec3(0.0, 0.25, -0.15))
+					.passengerAttachments(new Vec3(0.0, 0.42, -0.25))
 					.clientTrackingRange(10)
 					.build(KART_KEY));
 	public static final Item KART_ITEM = Registry.register(BuiltInRegistries.ITEM, KART_ITEM_KEY,

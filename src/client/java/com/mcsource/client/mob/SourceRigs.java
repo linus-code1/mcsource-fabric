@@ -32,7 +32,8 @@ public final class SourceRigs {
 				new String[] {"walk"},
 				new String[] {"attack1", "attack"},
 				new String[] {"dieforward", "diesimple", "dieheadshot", "die"}));
-		RIGS.put(Karts.KART, new Rig("kart", UNITS,
+		// The kart is built small; this makes it big enough to sit in.
+		RIGS.put(Karts.KART, new Rig("kart", UNITS * 1.7F,
 				new String[] {"idle"},
 				new String[] {"drive"},
 				new String[0],

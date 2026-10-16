@@ -15,7 +15,7 @@ import com.mcsource.kart.KartEntity;
 public class KartRenderer extends EntityRenderer<KartEntity, LivingEntityRenderState> {
 	public KartRenderer(EntityRendererProvider.Context context) {
 		super(context);
-		shadowRadius = 0.8F;
+		shadowRadius = 1.3F;
 	}
 
 	@Override
