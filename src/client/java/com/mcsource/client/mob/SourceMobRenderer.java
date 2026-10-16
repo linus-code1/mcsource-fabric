@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 
-import com.mcsource.model.GoldSrcModel;
+import com.mcsource.model.RiggedModel;
 
 /**
  * Draws a mob with its rigged model: picks and blends the model's idle,
@@ -32,21 +32,26 @@ public final class SourceMobRenderer {
 		if (rig == null) {
 			return false;
 		}
-		SourceModel loaded = SourceModel.get(rig.model());
+		SourceModel loaded = rig.model();
 		if (loaded == null) {
 			return false;
 		}
 		if (state.isInvisible) {
 			return true;
 		}
-		GoldSrcModel model = loaded.model;
-		GoldSrcModel.Pose pose = new GoldSrcModel.Pose(model);
-		animate(rig, model, state, pose);
-		Matrix4f[] bones = new Matrix4f[model.bones.length];
-		model.matrices(pose, bones);
+		RiggedModel model = loaded.model;
+		RiggedModel.Pose pose = new RiggedModel.Pose(model);
+		boolean deathAnimated = animate(rig, model, state, pose);
+		Matrix4f[] bones = new Matrix4f[model.boneCount()];
+		model.skinning(pose, bones);
 
 		poseStack.pushPose();
 		poseStack.rotateDegrees(Axis.YP, -state.bodyRot);
+		if (state.deathTime > 0.0F && !deathAnimated) {
+			// No death animation: topple over sideways, as Minecraft mobs do.
+			float fall = Math.min(1.0F, Mth.sqrt((state.deathTime - 1.0F) / 20.0F * 1.6F));
+			poseStack.rotateDegrees(Axis.ZP, fall * 90.0F);
+		}
 		float scale = rig.scale() * state.scale * state.ageScale;
 		int light = state.lightCoords;
 		int overlay = LivingEntityRenderer.getOverlayCoords(state, 0.0F);
@@ -58,21 +63,26 @@ public final class SourceMobRenderer {
 		return true;
 	}
 
-	private static void animate(SourceRigs.Rig rig, GoldSrcModel model, LivingEntityRenderState state, GoldSrcModel.Pose pose) {
+	/** Poses the model; returns whether a death animation was used. */
+	private static boolean animate(SourceRigs.Rig rig, RiggedModel model, LivingEntityRenderState state, RiggedModel.Pose pose) {
 		float seconds = state.ageInTicks / 20.0F;
-		GoldSrcModel.Sequence death = model.find(rig.death());
+		RiggedModel.Sequence death = model.find(rig.death());
 		if (state.deathTime > 0.0F && death != null) {
 			// Minecraft removes a dead mob after a second; play the fall in that time.
 			model.pose(death, Math.min(state.deathTime / 20.0F, 1.0F) * (death.frameCount() - 1), pose);
-			return;
+			return true;
 		}
-		GoldSrcModel.Sequence idle = model.find(rig.idle());
-		if (idle == null) {
+		RiggedModel.Sequence idle = model.find(rig.idle());
+		if (idle == null && model.sequences.length > 0) {
 			idle = model.sequences[0];
 		}
-		model.pose(idle, seconds * idle.fps(), pose);
+		if (idle != null) {
+			model.pose(idle, seconds * idle.fps(), pose);
+		} else {
+			model.bindPose(pose);
+		}
 
-		GoldSrcModel.Sequence walk = model.find(rig.walk());
+		RiggedModel.Sequence walk = model.find(rig.walk());
 		if (walk != null) {
 			float weight = Mth.clamp(state.walkAnimationSpeed * 1.5F, 0.0F, 1.0F);
 			if (weight > 0.01F) {
@@ -84,17 +94,18 @@ public final class SourceMobRenderer {
 				} else {
 					frame = seconds * walk.fps();
 				}
-				GoldSrcModel.Pose walking = new GoldSrcModel.Pose(model);
+				RiggedModel.Pose walking = new RiggedModel.Pose(model);
 				model.pose(walk, frame, walking);
 				model.blend(pose, walking, weight);
 			}
 		}
 
-		GoldSrcModel.Sequence attack = model.find(rig.attack());
+		RiggedModel.Sequence attack = model.find(rig.attack());
 		if (attack != null && state instanceof ArmedEntityRenderState armed && armed.swingAnimation > 0.0F) {
-			GoldSrcModel.Pose attacking = new GoldSrcModel.Pose(model);
+			RiggedModel.Pose attacking = new RiggedModel.Pose(model);
 			model.pose(attack, armed.swingAnimation * (attack.frameCount() - 1), attacking);
 			model.blend(pose, attacking, Mth.clamp(Mth.sin(armed.swingAnimation * Mth.PI) * 3.0F, 0.0F, 1.0F));
 		}
+		return false;
 	}
 }

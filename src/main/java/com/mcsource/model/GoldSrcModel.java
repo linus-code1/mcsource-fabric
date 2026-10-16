@@ -143,6 +143,91 @@ public final class GoldSrcModel {
 		}
 	}
 
+	/**
+	 * This model in the common rigged form. Half-Life 1 vertices sit in their
+	 * bone's space with a single bone each, so every inverse bind matrix is the
+	 * identity.
+	 */
+	public RiggedModel toRigged() {
+		int boneCount = bones.length;
+		String[] names = new String[boneCount];
+		int[] parents = new int[boneCount];
+		Matrix4f[] inverseBind = new Matrix4f[boneCount];
+		float[] bindPosition = new float[boneCount * 3];
+		float[] bindRotation = new float[boneCount * 4];
+		Quaternionf q = new Quaternionf();
+		for (int b = 0; b < boneCount; b++) {
+			names[b] = bones[b].name();
+			parents[b] = bones[b].parent();
+			inverseBind[b] = new Matrix4f();
+			float[] v = bones[b].value();
+			System.arraycopy(v, 0, bindPosition, b * 3, 3);
+			q.rotationZYX(v[5], v[4], v[3]);
+			bindRotation[b * 4] = q.x;
+			bindRotation[b * 4 + 1] = q.y;
+			bindRotation[b * 4 + 2] = q.z;
+			bindRotation[b * 4 + 3] = q.w;
+		}
+		int vertexCount = vertexBones.length;
+		int[] positionBones = new int[vertexCount * 3];
+		float[] positionWeights = new float[vertexCount * 3];
+		for (int i = 0; i < vertexCount; i++) {
+			positionBones[i * 3] = vertexBones[i];
+			positionWeights[i * 3] = 1.0F;
+		}
+		int normalCount = normalBones.length;
+		int[] nBones = new int[normalCount * 3];
+		float[] nWeights = new float[normalCount * 3];
+		for (int i = 0; i < normalCount; i++) {
+			nBones[i * 3] = normalBones[i];
+			nWeights[i * 3] = 1.0F;
+		}
+		int triangleCount = triangles.size();
+		int[] cornerVertex = new int[triangleCount * 3];
+		int[] cornerNormal = new int[triangleCount * 3];
+		float[] cornerUv = new float[triangleCount * 6];
+		int[] triangleTexture = new int[triangleCount];
+		for (int i = 0; i < triangleCount; i++) {
+			Triangle tri = triangles.get(i);
+			triangleTexture[i] = tri.texture();
+			Texture t = textures.length > 0 ? textures[tri.texture()] : null;
+			for (int k = 0; k < 3; k++) {
+				cornerVertex[i * 3 + k] = tri.vertex()[k];
+				cornerNormal[i * 3 + k] = tri.normal()[k];
+				if (t != null) {
+					cornerUv[i * 6 + k * 2] = (tri.s()[k] + 0.5F) / t.width();
+					cornerUv[i * 6 + k * 2 + 1] = (tri.t()[k] + 0.5F) / t.height();
+				}
+			}
+		}
+		RiggedModel.Texture[] riggedTextures = new RiggedModel.Texture[textures.length];
+		for (int i = 0; i < textures.length; i++) {
+			Texture t = textures[i];
+			riggedTextures[i] = new RiggedModel.Texture(t.name(), t.width(), t.height(), t.pixels(), (t.flags() & TEXTURE_MASKED) != 0);
+		}
+		RiggedModel.Sequence[] riggedSequences = new RiggedModel.Sequence[sequences.length];
+		for (int s = 0; s < sequences.length; s++) {
+			Sequence sequence = sequences[s];
+			float[][] frames = new float[sequence.frames.length][];
+			for (int f = 0; f < frames.length; f++) {
+				float[] in = sequence.frames[f];
+				float[] out = new float[boneCount * 7];
+				for (int b = 0; b < boneCount; b++) {
+					System.arraycopy(in, b * 6, out, b * 7, 3);
+					q.rotationZYX(in[b * 6 + 5], in[b * 6 + 4], in[b * 6 + 3]);
+					out[b * 7 + 3] = q.x;
+					out[b * 7 + 4] = q.y;
+					out[b * 7 + 5] = q.z;
+					out[b * 7 + 6] = q.w;
+				}
+				frames[f] = out;
+			}
+			riggedSequences[s] = new RiggedModel.Sequence(sequence.label, "", sequence.fps, sequence.looping, sequence.distance, frames);
+		}
+		return new RiggedModel(name, names, parents, inverseBind, bindPosition, bindRotation, vertices, positionBones, positionWeights, normals,
+				nBones, nWeights, cornerVertex, cornerNormal, cornerUv, triangleTexture, riggedTextures, riggedSequences);
+	}
+
 	/** Euler angles stored as rotations about x, then y, then z. */
 	private static void euler(float[] values, int offset, Quaternionf out) {
 		out.rotationZYX(values[offset + 2], values[offset + 1], values[offset]);

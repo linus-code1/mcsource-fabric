@@ -18,19 +18,20 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 
 import com.mcsource.client.mob.SourceModel;
-import com.mcsource.model.GoldSrcModel;
+import com.mcsource.model.RiggedModel;
 
 /**
- * Draws the rigged suit hand model for the first-person arms instead of the
- * player's blocky skin arm, with its fingers resting in a slowly breathing
- * curl.
+ * Draws the mod's own rigged suit hand for the first-person arms instead of
+ * the player's blocky skin arm, with its fingers resting in a slowly
+ * breathing curl. Used when Half-Life 2's hands can't be loaded (see
+ * {@link FirstPersonHandsMixin}) and for the hands holding maps.
  */
 @Mixin(AvatarRenderer.class)
 public abstract class AvatarRendererMixin {
 	@Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
 	private void mcsource$suitHand(PoseStack poseStack, SubmitNodeCollector collector, int light, Identifier skin, ModelPart arm,
 			boolean sleeve, CallbackInfo ci) {
-		SourceModel hand = SourceModel.get("suit_hand");
+		SourceModel hand = SourceModel.get("builtin:suit_hand");
 		if (hand == null) {
 			return;
 		}
@@ -39,12 +40,16 @@ public abstract class AvatarRendererMixin {
 		arm.resetPose();
 		arm.zRot = left ? -0.1F : 0.1F;
 
-		GoldSrcModel rig = hand.model;
-		GoldSrcModel.Sequence idle = rig.find("idle");
-		GoldSrcModel.Pose pose = new GoldSrcModel.Pose(rig);
-		rig.pose(idle != null ? idle : rig.sequences[0], Util.getMillis() / 1000.0F * 10.0F, pose);
-		Matrix4f[] bones = new Matrix4f[rig.bones.length];
-		rig.matrices(pose, bones);
+		RiggedModel rig = hand.model;
+		RiggedModel.Sequence idle = rig.find("idle");
+		RiggedModel.Pose pose = new RiggedModel.Pose(rig);
+		if (idle != null || rig.sequences.length > 0) {
+			rig.pose(idle != null ? idle : rig.sequences[0], Util.getMillis() / 1000.0F * 10.0F, pose);
+		} else {
+			rig.bindPose(pose);
+		}
+		Matrix4f[] bones = new Matrix4f[rig.boneCount()];
+		rig.skinning(pose, bones);
 
 		poseStack.pushPose();
 		arm.translateAndRotate(poseStack);

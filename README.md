@@ -63,22 +63,25 @@ world to try it in.
 - **Half-Life 2 style sky and haze.** Minecraft's blocky clouds are replaced
   by a soft painted cloud layer in the sky, and distant terrain fades into the
   sky colour with distance haze.
-- **Suit hand.** Your first-person arm is a rigged hand model: an orange
-  hazard-suit sleeve with an armour plate, a ribbed cuff, and a black glove
-  with a full finger skeleton (17 bones) resting in a slowly breathing curl.
-- **Zombie.** If you own Half-Life 1, zombies use Valve's real zombie model,
-  read at run time from your install (see *Half-Life models* below); it is
-  never shipped with this mod. Without it, zombies are the mod's own rigged
-  zombie scientist in a torn lab coat with a
-  parasite on its head and clawed hands, with its own idle, walk, attack and
-  death animations; the walk keeps pace with how fast it moves.
+- **Half-Life 2 hands.** If you own Half-Life 2, your empty first-person hand
+  is the HEV suit hand from Half-Life 2's view models, read from your install
+  (see *Half-Life models* below), idling and swinging with its own
+  animations. Without it, the hand is the mod's own rigged suit hand: an
+  orange sleeve and a black glove with a full finger skeleton.
+- **Zombie.** Zombies use Half-Life 2's classic zombie if you own Half-Life 2,
+  else Half-Life 1's zombie if you own that, read at run time from your
+  install; neither is ever shipped with this mod. Without either, zombies are
+  the mod's own rigged zombie scientist in a torn lab coat with a parasite on
+  its head and clawed hands. Every model plays its own idle, walk, attack and
+  death animations; the walk keeps pace with how fast the mob moves.
 - **Kart.** A drivable go-kart, found in the Tools & Utilities tab. Use it on
   the ground to place it, use the kart to get in, then drive with W and S and
   steer with A and D; it slides a little through fast corners and climbs
   one-block steps. Sneak to get out; hit it to pick it back up.
-- All three models are this mod's own, built by the scripts in
-  `tools/models` and shipped inside the mod jar. No Valve or Nintendo models,
-  textures or code are used.
+- The models shipped inside the mod jar are this mod's own, built by the
+  scripts in `tools/models`. Valve's models are only ever read from your own
+  game files on your computer; no Valve or Nintendo models, textures or code
+  are in this repository or the jar.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
@@ -98,11 +101,26 @@ world to try it in.
 
 ## Half-Life models
 
-The mod looks for `valve/models/zombie.mdl` in Steam's usual Half-Life
-folder, `~/Library/Application Support/Steam/steamapps/common/Half-Life` on a
-Mac. If Half-Life is somewhere else, set its folder as `halflife_path` in
-`config/mcsource.properties` (created on first launch), or copy `zombie.mdl`
-into `config/mcsource/models`. The game log says which model it used.
+Models are read from your own copies of the games, in this order:
+
+1. Loose files in `config/mcsource` inside your Minecraft folder, laid out as
+   in the game, such as `config/mcsource/models/zombie/classic.mdl` with its
+   `.vvd`, `.dx90.vtx` and the `materials` folder beside `models`.
+2. The folders set in `config/mcsource.properties` (created on first launch):
+   `halflife2_path` for Half-Life 2 (the folder holding `hl2`),
+   `halflife_path` for Half-Life (the folder holding `valve`), and
+   `source_paths` for other Source games, separated by commas.
+3. Steam's usual folders, `~/Library/Application Support/Steam/steamapps/common`
+   on a Mac. Every Source game there (any folder with a `gameinfo.txt`) is
+   searched, so models from other Source games can be used too.
+
+Half-Life 2's `.vpk` archives are read directly; nothing needs unpacking. Steam
+no longer installs Half-Life 2 on macOS, so on a Mac copy the `Half-Life 2`
+folder from a Windows or Linux install (or download the Windows depot) and set
+`halflife2_path` to it.
+
+The game log lists the folders searched ("Source game files searched") and
+which model each mob uses ("Using model ...").
 
 ## Build
 
@@ -145,10 +163,16 @@ client with the mod loaded.
 - `GoldSrcModel` reads models in the Half-Life 1 `.mdl` layout (bones,
   meshes, paletted textures and run-length encoded animations), written from
   public descriptions of the format. The mod's own models use that layout.
-  `SourceRigs` (client) lists which mobs get which model and which animations
-  stand for idle, walk, attack and death; adding a mob there is all a new rig
-  needs. `SourceMobRenderer` poses and skins the model each frame, and
+- `model/source` reads Source engine files, also written from public
+  descriptions: `StudioModel` (`.mdl`, `.vvd`, `.vtx`, `.ani`, included
+  models), `Vtf` textures, `.vmt` materials, `Vpk` archives and Half-Life 1
+  `Pak` files. Both readers produce a `RiggedModel`. `GameInstalls` (client)
+  finds the games on disk.
+- `SourceRigs` (client) lists which mobs get which models (tried in order)
+  and which animations stand for idle, walk, attack and death; adding a mob
+  there is all a new rig needs. `SourceMobRenderer` poses and skins the model each frame, and
   `LivingEntityRendererMixin` draws it in place of the Minecraft model.
+  `FirstPersonHandsMixin` draws Half-Life 2's hands in first person.
 - `tools/models` builds the models: shapes sculpted from blended distance
   fields, meshed with surface nets, bound to a skeleton, painted with
   procedural textures and animated in code. Run `python3 hand.py`,
@@ -170,6 +194,8 @@ client with the mod loaded.
   Minecraft's fixed face shading on top of the sun.
 - Mobs and items still use Minecraft's sharp textures; only blocks get the
   Half-Life 1 look so far. Menus are still Minecraft's.
-- The rest of the Source look (materials, bloom and full HDR, view model,
-  menus) comes in later steps of the plan. Valve's SDK shader code is never copied in;
+- Half-Life 2's hands show only with an empty hand; held items still use
+  Minecraft's arm.
+- The rest of the Source look (materials, bloom and full HDR, weapon view
+  models, menus) comes in later steps of the plan. Valve's SDK shader code is never copied in;
   techniques are rebuilt from Valve's public talks and documentation.
