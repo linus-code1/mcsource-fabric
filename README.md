@@ -26,7 +26,11 @@ world to try it in.
   surface to within an eighth of a block; the steps between columns are small
   enough that you walk up slopes without jumping.
 - **Plants and snow follow the ground.** Grass, flowers, saplings, snow layers
-  and similar blocks bend to the surface of the ground under them.
+  and similar blocks bend to the surface of the ground under them. A single
+  snow layer is drawn as a thin sheet lying on the ground without the little
+  walls round its edges.
+- **No stairs on slopes.** Walking down a slope keeps you on the ground, as in
+  Source, and smoothed ground has no block outline.
 - **Source-style lighting.** Torches and other lamps light a warm pool that
   falls off with the square of distance, whiter near the flame and orange at
   the edge. Daylight is a warm sun from a fixed direction, like a Source map's
@@ -47,12 +51,18 @@ world to try it in.
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
   like the GoldSrc renderer's, and their colours are muted, warmed and reduced
   to a paletted look. This is done in the shader from Minecraft's own textures.
-- **Source-style HUD.** Health, suit (armour) and food as large yellow numbers
-  in dark translucent panels at the bottom left, the held item's count or
-  durability at the bottom right, an oxygen meter underwater, a weapon
+- **Source-style HUD.** Laid out like Half-Life 2's HUD on its 640x480
+  reference screen and scaled to the window: health, suit (armour) and food as
+  large glowing yellow numbers in rounded dark panels at the bottom left, the
+  held item's count or durability as AMMO at the bottom right, an oxygen meter underwater, a weapon
   selection row along the top when you change slot, and a small crosshair.
   The HUD font is DejaVu Sans Bold (license in
   `assets/mcsource/font/dejavu_license.txt`).
+- **Half-Life 2 style sky and haze.** Minecraft's blocky clouds are replaced
+  by a soft painted cloud layer in the sky, and distant terrain fades into the
+  sky colour with distance haze.
+- **Suit arm.** Your first-person arm wears an orange hazard-suit sleeve and a
+  black glove, in the spirit of the HEV suit (the mod's own pixel art).
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.

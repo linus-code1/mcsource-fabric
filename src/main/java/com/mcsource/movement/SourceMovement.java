@@ -29,6 +29,8 @@ public final class SourceMovement {
 	public static final double GRAVITY = 600.0 / UNITS_PER_BLOCK;
 	/** Jump height. A little over Minecraft's 1.25 so one-block steps stay jumpable. */
 	public static final double JUMP_HEIGHT = 1.3;
+	/** How far the player is pulled down to stay on the ground, Source's 18-unit step. */
+	public static final double STEP_DOWN = 18.0 / UNITS_PER_BLOCK;
 	/** Source's sv_maxvelocity, 3500 units/s, for falling. */
 	public static final double MAX_FALL_SPEED = 3500.0 / UNITS_PER_BLOCK;
 	/**

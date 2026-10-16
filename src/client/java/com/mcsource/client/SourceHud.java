@@ -26,14 +26,33 @@ public final class SourceHud {
 	private static final FontDescription NUMBERS = new FontDescription.Resource(Identifier.fromNamespaceAndPath("mcsource", "hud_numbers"));
 	private static final FontDescription LABELS = new FontDescription.Resource(Identifier.fromNamespaceAndPath("mcsource", "hud_labels"));
 
-	private static final int FOREGROUND = 0xE6FFDC00;
-	private static final int FOREGROUND_DIM = 0x99FFDC00;
-	private static final int DAMAGED = 0xE6C80000;
-	private static final int PANEL = 0x55000000;
-	private static final int PANEL_SELECTED = 0x88000000;
+	// Colours of Half-Life 2's default HUD scheme: yellow on 30% black.
+	private static final int FOREGROUND = 0xF0FFDC00;
+	private static final int LABEL = 0xC8FFDC00;
+	private static final int FOREGROUND_DIM = 0x80FFDC00;
+	private static final int GLOW = 0x30FFDC00;
+	private static final int DAMAGED = 0xF0B40000;
+	private static final int PANEL = 0x4C000000;
+	private static final int PANEL_SELECTED = 0x80000000;
 
-	private static final int MARGIN = 8;
-	private static final int PANEL_HEIGHT = 26;
+	// Layout on Half-Life 2's 640x480 reference screen, scaled to the window.
+	private static final float REFERENCE_HEIGHT = 480.0F;
+	private static final float PANEL_Y = 432.0F;
+	private static final float PANEL_TALL = 36.0F;
+	private static final float HEALTH_X = 16.0F;
+	private static final float HEALTH_WIDE = 102.0F;
+	private static final float SUIT_X = 140.0F;
+	private static final float SUIT_WIDE = 108.0F;
+	private static final float AMMO_RIGHT = 150.0F;
+	private static final float AMMO_WIDE = 136.0F;
+	private static final float LABEL_X = 8.0F;
+	private static final float LABEL_Y = 20.0F;
+	private static final float DIGIT_X = 50.0F;
+	private static final float DIGIT_Y = 2.0F;
+	/** Height of the big digits on the reference screen. */
+	private static final float DIGIT_TALL = 32.0F;
+	/** Size the digit font is made at, in GUI pixels. */
+	private static final float DIGIT_FONT = 18.0F;
 	private static final long SELECTION_SHOW_MS = 1500;
 
 	private static int lastSlot = -1;
@@ -49,6 +68,7 @@ public final class SourceHud {
 		HudElementRegistry.removeElement(VanillaHudElements.AIR_BAR);
 		HudElementRegistry.removeElement(VanillaHudElements.EXPERIENCE_LEVEL);
 		HudElementRegistry.removeElement(VanillaHudElements.INFO_BAR);
+		HudElementRegistry.removeElement(VanillaHudElements.HELD_ITEM_TOOLTIP);
 		HudElementRegistry.replaceElement(VanillaHudElements.HOTBAR, vanilla -> (graphics, delta) -> {
 			if (!draw(graphics, delta)) {
 				vanilla.extractRenderState(graphics, delta);
@@ -66,34 +86,31 @@ public final class SourceHud {
 		}
 		Font font = minecraft.font;
 		int width = graphics.guiWidth();
-		int height = graphics.guiHeight();
-		int bottom = height - MARGIN - PANEL_HEIGHT;
+		float k = graphics.guiHeight() / REFERENCE_HEIGHT;
 
-		int x = MARGIN;
 		if (minecraft.gameMode != null && minecraft.gameMode.canHurtPlayer()) {
 			int health = Mth.ceil((player.getHealth() + player.getAbsorptionAmount()) * 100.0F / player.getMaxHealth());
-			x += numberPanel(graphics, font, x, bottom, "HEALTH", health, health <= 25 ? DAMAGED : FOREGROUND) + MARGIN;
+			numberPanel(graphics, font, k, HEALTH_X, HEALTH_WIDE, "HEALTH", health, health <= 25 ? DAMAGED : FOREGROUND);
+			float x = SUIT_X;
 			int armor = player.getArmorValue() * 5;
 			if (armor > 0) {
-				x += numberPanel(graphics, font, x, bottom, "SUIT", armor, FOREGROUND) + MARGIN;
+				numberPanel(graphics, font, k, x, SUIT_WIDE, "SUIT", armor, FOREGROUND);
+				x += SUIT_WIDE + 24.0F;
 			}
 			int food = player.getFoodData().getFoodLevel() * 5;
-			x += numberPanel(graphics, font, x, bottom, "FOOD", food, food <= 30 ? DAMAGED : FOREGROUND) + MARGIN;
+			numberPanel(graphics, font, k, x, SUIT_WIDE, "FOOD", food, food <= 30 ? DAMAGED : FOREGROUND);
 
 			int air = player.getAirSupply();
 			if (air < player.getMaxAirSupply() || player.isUnderWater()) {
-				auxPower(graphics, font, MARGIN, bottom - MARGIN - 18, "OXYGEN", Math.max(air, 0) / (float) player.getMaxAirSupply());
+				auxPower(graphics, font, k, "OXYGEN", Math.max(air, 0) / (float) player.getMaxAirSupply());
 			}
 		}
 
 		ItemStack held = player.getInventory().getSelectedItem();
 		if (!held.isEmpty()) {
 			int value = held.isDamageableItem() ? held.getMaxDamage() - held.getDamageValue() : held.getCount();
-			String label = held.isDamageableItem() ? "DURABILITY" : "AMOUNT";
-			int panelWidth = panelWidth(font, label, value) + 22;
-			int px = width - MARGIN - panelWidth;
-			numberPanel(graphics, font, px, bottom, label, value, FOREGROUND, panelWidth);
-			graphics.item(held, px + panelWidth - 20, bottom + (PANEL_HEIGHT - 16) / 2);
+			float x = width / k - AMMO_RIGHT;
+			numberPanel(graphics, font, k, x, AMMO_WIDE, "AMMO", value, FOREGROUND);
 		}
 
 		weaponSelection(graphics, font, player, width);
@@ -108,33 +125,46 @@ public final class SourceHud {
 		return Component.literal(text).withStyle(Style.EMPTY.withFont(LABELS));
 	}
 
-	private static int panelWidth(Font font, String label, int value) {
-		return 6 + font.width(label(label)) + 4 + font.width(numbers(Integer.toString(value))) + 6;
+	/** A label and a big number in a panel, laid out like Half-Life 2's health panel. */
+	private static void numberPanel(GuiGraphicsExtractor graphics, Font font, float k, float x, float wide, String label, int value, int color) {
+		int px = Math.round(x * k);
+		int py = Math.round(PANEL_Y * k);
+		panel(graphics, px, py, Math.round(wide * k), Math.round(PANEL_TALL * k), PANEL);
+		graphics.text(font, label(label), px + Math.round(LABEL_X * k), py + Math.round(LABEL_Y * k), (color & 0xFFFFFF) | (LABEL & 0xFF000000), false);
+
+		Component digits = numbers(Integer.toString(value));
+		float scale = DIGIT_TALL * k / DIGIT_FONT;
+		graphics.pose().pushMatrix();
+		graphics.pose().translate(px + DIGIT_X * k, py + DIGIT_Y * k);
+		graphics.pose().scale(scale, scale);
+		// A soft glow behind the digits, like the HUD's additive glow pass.
+		int glow = (color & 0xFFFFFF) | (GLOW & 0xFF000000);
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dy = -1; dy <= 1; dy++) {
+				if (dx != 0 || dy != 0) {
+					graphics.text(font, digits, dx, dy, glow, false);
+				}
+			}
+		}
+		graphics.text(font, digits, 0, 0, color, false);
+		graphics.pose().popMatrix();
 	}
 
-	private static int numberPanel(GuiGraphicsExtractor graphics, Font font, int x, int y, String label, int value, int color) {
-		int panelWidth = panelWidth(font, label, value);
-		numberPanel(graphics, font, x, y, label, value, color, panelWidth);
-		return panelWidth;
-	}
-
-	private static void numberPanel(GuiGraphicsExtractor graphics, Font font, int x, int y, String label, int value, int color, int panelWidth) {
-		panel(graphics, x, y, panelWidth, PANEL_HEIGHT, PANEL);
-		Component labelText = label(label);
-		graphics.text(font, labelText, x + 6, y + PANEL_HEIGHT - 6 - font.lineHeight + 2, color, false);
-		graphics.text(font, numbers(Integer.toString(value)), x + 6 + font.width(labelText) + 4, y + 4, color, false);
-	}
-
-	/** A row of segments like the suit's aux power meter. */
-	private static void auxPower(GuiGraphicsExtractor graphics, Font font, int x, int y, String label, float fraction) {
+	/** A row of segments like the suit's aux power meter, above the health panel. */
+	private static void auxPower(GuiGraphicsExtractor graphics, Font font, float k, String label, float fraction) {
+		int x = Math.round(HEALTH_X * k);
+		int y = Math.round((PANEL_Y - 30.0F) * k);
 		int segments = 10;
-		int width = 6 + segments * 5 + 6;
-		panel(graphics, x, y, width, 18, PANEL);
-		graphics.text(font, label(label), x + 6, y + 2, FOREGROUND, false);
+		int segment = Math.max(2, Math.round(6.0F * k));
+		int width = Math.round(HEALTH_WIDE * k);
+		int height = Math.round(24.0F * k);
+		panel(graphics, x, y, width, height, PANEL);
+		graphics.text(font, label(label), x + Math.round(LABEL_X * k), y + Math.round(3.0F * k), LABEL, false);
 		int lit = Mth.ceil(fraction * segments);
+		int barY = y + height - Math.round(8.0F * k);
 		for (int i = 0; i < segments; i++) {
-			int sx = x + 6 + i * 5;
-			graphics.fill(sx, y + 11, sx + 4, y + 15, i < lit ? FOREGROUND : FOREGROUND_DIM & 0x40FFFFFF);
+			int sx = x + Math.round(LABEL_X * k) + i * (segment + Math.max(1, Math.round(2.0F * k)));
+			graphics.fill(sx, barY, sx + segment, barY + Math.max(2, Math.round(4.0F * k)), i < lit ? FOREGROUND : FOREGROUND_DIM & 0x40FFFFFF);
 		}
 	}
 
@@ -155,7 +185,7 @@ public final class SourceHud {
 		int gap = 3;
 		int total = 9 * box + 8 * gap;
 		int left = (width - total) / 2;
-		int top = MARGIN;
+		int top = 8;
 		for (int slot = 0; slot < 9; slot++) {
 			int bx = left + slot * (box + gap);
 			boolean active = slot == selected;
@@ -176,13 +206,17 @@ public final class SourceHud {
 		}
 	}
 
-	/** A dark translucent panel with its corners cut, like Source's rounded boxes. */
+	/** A dark translucent box with rounded corners, like Source's HUD panels. */
 	private static void panel(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int color) {
-		graphics.fill(x + 2, y, x + width - 2, y + 1, color);
-		graphics.fill(x + 1, y + 1, x + width - 1, y + 2, color);
-		graphics.fill(x, y + 2, x + width, y + height - 2, color);
-		graphics.fill(x + 1, y + height - 2, x + width - 1, y + height - 1, color);
-		graphics.fill(x + 2, y + height - 1, x + width - 2, y + height, color);
+		int radius = Math.max(2, Math.min(height, width) / 6);
+		for (int row = 0; row < radius; row++) {
+			// Inset of this row of the corner, from the circle through the corner.
+			float d = radius - row - 0.5F;
+			int inset = Math.round(radius - Mth.sqrt(radius * radius - d * d));
+			graphics.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
+			graphics.fill(x + inset, y + height - row - 1, x + width - inset, y + height - row, color);
+		}
+		graphics.fill(x, y + radius, x + width, y + height - radius, color);
 	}
 
 	private static void crosshair(GuiGraphicsExtractor graphics, DeltaTracker delta) {

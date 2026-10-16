@@ -98,6 +98,17 @@ public abstract class LivingEntityMixin {
 		// Set the end velocity first: moving zeroes the parts that hit something.
 		self.setDeltaMovement(velocity[0] / 20.0, vertical / 20.0, velocity[1] / 20.0);
 		self.move(MoverType.SELF, new Vec3(dx, dy, dz));
+
+		// Stay on the ground when walking down slopes and steps, as Source
+		// does, instead of falling a little off every step.
+		if (grounded && !self.onGround() && !jumping && self.getDeltaMovement().y <= 0.0) {
+			Vec3 snap = new Vec3(0.0, -SourceMovement.STEP_DOWN, 0.0);
+			if (!self.level().noCollision(self, self.getBoundingBox().move(snap))) {
+				self.move(MoverType.SELF, snap);
+				Vec3 after = self.getDeltaMovement();
+				self.setDeltaMovement(after.x, 0.0, after.z);
+			}
+		}
 		ci.cancel();
 	}
 

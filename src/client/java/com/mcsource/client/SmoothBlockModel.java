@@ -15,6 +15,8 @@ import net.minecraft.util.ARGB;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 import org.joml.Vector3fc;
@@ -29,6 +31,9 @@ import com.mcsource.terrain.SmoothTerrain;
  * with the ground under them.
  */
 public final class SmoothBlockModel extends WrapperBlockStateModel {
+	/** How far a thin snow sheet sits above the ground. */
+	private static final float SNOW_LIFT = 0.02F;
+
 	public SmoothBlockModel(BlockStateModel wrapped) {
 		super(wrapped);
 	}
@@ -46,24 +51,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				}
 			} else if (state.is(SmoothTerrain.FOLLOWS)) {
 				int ground = SmoothTerrain.groundCorners(level, pos);
-				if (ground != SmoothMath.FULL) {
-					// Each vertex rides the ground surface under it, so snow layers and
-					// flower carpets bend over slopes instead of floating flat.
-					emitter.pushTransform(quad -> {
-						for (int i = 0; i < 4; i++) {
-							float x = quad.x(i);
-							float z = quad.z(i);
-							float rise = SmoothMath.surface(ground, Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F)) - 1.0F;
-							quad.pos(i, x, quad.y(i) + rise, z);
-						}
-						quad.ambientOcclusion(TriState.FALSE);
-						return true;
-					});
-					try {
-						super.emitQuads(emitter, level, pos, state, random, cullTest);
-					} finally {
-						emitter.popTransform();
-					}
+				boolean thinSnow = state.is(Blocks.SNOW) && state.getValue(SnowLayerBlock.LAYERS) == 1;
+				if (ground != SmoothMath.FULL || thinSnow) {
+					emitFollowing(emitter, level, pos, state, random, cullTest, ground, thinSnow);
 					return;
 				}
 			}
@@ -74,6 +64,40 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		emitter.pushTransform(quad -> {
 			applySun(quad, level, pos);
+			return true;
+		});
+		try {
+			super.emitQuads(emitter, level, pos, state, random, cullTest);
+		} finally {
+			emitter.popTransform();
+		}
+	}
+
+	/**
+	 * Plants and snow on top of smoothed ground: each vertex rides the ground
+	 * surface under it, so they bend over slopes instead of floating flat. A
+	 * single snow layer is drawn as a thin sheet lying on the ground, without
+	 * the little walls round its edge.
+	 */
+	private void emitFollowing(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
+			Predicate<Direction> cullTest, int ground, boolean thinSnow) {
+		int lightHere = LightCoordsUtil.getLightCoords(level, pos);
+		emitter.pushTransform(quad -> {
+			if (thinSnow && quad.faceNormal().y() < 0.5F) {
+				return false;
+			}
+			for (int i = 0; i < 4; i++) {
+				float x = quad.x(i);
+				float z = quad.z(i);
+				float groundY = SmoothMath.surface(ground, Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F)) - 1.0F;
+				float y = thinSnow ? groundY + SNOW_LIFT : quad.y(i) + groundY;
+				quad.pos(i, x, y, z);
+				// Plants and snow take the sun as if facing up, like the ground.
+				int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + y, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
+						LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
+				quad.color(i, ARGB.multiply(quad.color(i), sun));
+			}
+			quad.ambientOcclusion(TriState.FALSE);
 			return true;
 		});
 		try {
