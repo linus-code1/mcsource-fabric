@@ -97,7 +97,14 @@ public abstract class LivingEntityMixin {
 		}
 		// Set the end velocity first: moving zeroes the parts that hit something.
 		self.setDeltaMovement(velocity[0] / 20.0, vertical / 20.0, velocity[1] / 20.0);
-		self.move(MoverType.SELF, new Vec3(dx, dy, dz));
+		// Move in short pieces. Smoothed ground collides as columns an eighth of
+		// a block wide; Minecraft steps up onto only one ledge per move and stops
+		// the rest of the motion dead, so a long move up a slope would stall.
+		int pieces = Math.max(1, Mth.ceil(Math.sqrt(dx * dx + dz * dz) / SourceMovement.MAX_MOVE_PIECE));
+		Vec3 piece = new Vec3(dx / pieces, dy / pieces, dz / pieces);
+		for (int i = 0; i < pieces; i++) {
+			self.move(MoverType.SELF, piece);
+		}
 
 		// Stay on the ground when walking down slopes and steps, as Source
 		// does, instead of falling a little off every step.

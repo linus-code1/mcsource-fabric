@@ -40,6 +40,8 @@ public final class SunLight {
 	/** Occluders this close to the start are the surface itself. */
 	private static final float SKIP = 0.3F;
 	private static final float LEAF_TRANSMIT = 0.45F;
+	private static final float WRAP = 0.35F;
+	private static final float BOUNCE = 0.3F;
 
 	private static final ThreadLocal<Cache> CACHE = ThreadLocal.withInitial(Cache::new);
 
@@ -58,8 +60,10 @@ public final class SunLight {
 		float vx = SUN_Y * uz;
 		float vy = SUN_Z * ux - SUN_X * uz;
 		float vz = -SUN_Y * ux;
-		float spread = 0.05F;
-		float[][] offsets = {{0, 0}, {1, 0}, {-0.5F, 0.87F}, {-0.5F, -0.87F}};
+		// A wide spread gives the soft penumbra of Source's baked shadows and
+		// hides the one-block spacing of the vertices the shadow is stored at.
+		float spread = 0.13F;
+		float[][] offsets = {{0, 0}, {1, 0}, {0.31F, 0.95F}, {-0.81F, 0.59F}, {-0.81F, -0.59F}, {0.31F, -0.95F}};
 		RAYS = new float[offsets.length][];
 		for (int i = 0; i < offsets.length; i++) {
 			float a = offsets[i][0] * spread;
@@ -85,7 +89,9 @@ public final class SunLight {
 		if (sky <= 0.0F) {
 			return -1;
 		}
-		float facing = nx * SUN_X + ny * SUN_Y + nz * SUN_Z;
+		// Wrapped lighting: surfaces turned partly away from the sun still catch
+		// some of it, the way bounced light softens Source's lightmaps.
+		float facing = (nx * SUN_X + ny * SUN_Y + nz * SUN_Z + WRAP) / (1.0F + WRAP);
 		float sun = facing <= 0.0F ? 0.0F : facing * visibility(level, x, y, z);
 		// Only daylight is shaded: indoors and near lamps the multiplier fades out.
 		float skyShare = sky / 15.0F;
@@ -97,7 +103,10 @@ public final class SunLight {
 	}
 
 	private static int channel(int c, float sun, float strength) {
-		float lit = (AMBIENT * FILL[c] + DIRECT * SUN[c] * sun) / (AMBIENT * FILL[c] + DIRECT * SUN[c]);
+		// Shade never goes fully to the sky fill: light bounced off sunlit
+		// ground nearby lifts it, as radiosity does in Source maps.
+		float received = sun + BOUNCE * (1.0F - sun);
+		float lit = (AMBIENT * FILL[c] + DIRECT * SUN[c] * received) / (AMBIENT * FILL[c] + DIRECT * SUN[c]);
 		return Math.round(255.0F * Mth.lerp(strength, 1.0F, lit));
 	}
 

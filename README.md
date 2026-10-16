@@ -29,8 +29,10 @@ world to try it in.
   and similar blocks bend to the surface of the ground under them. A single
   snow layer is drawn as a thin sheet lying on the ground without the little
   walls round its edges.
-- **No stairs on slopes.** Walking down a slope keeps you on the ground, as in
-  Source, and smoothed ground has no block outline.
+- **No stairs on slopes.** Movement is applied in pieces shorter than a
+  collision column, so you walk up slopes at full speed instead of stalling on
+  every little ledge, and walking down keeps you on the ground, as in Source.
+  Smoothed ground has no block outline.
 - **Source-style lighting.** Torches and other lamps light a warm pool that
   falls off with the square of distance, whiter near the flame and orange at
   the edge. Daylight is a warm sun from a fixed direction, like a Source map's
@@ -61,8 +63,10 @@ world to try it in.
 - **Half-Life 2 style sky and haze.** Minecraft's blocky clouds are replaced
   by a soft painted cloud layer in the sky, and distant terrain fades into the
   sky colour with distance haze.
-- **Suit arm.** Your first-person arm wears an orange hazard-suit sleeve and a
-  black glove, in the spirit of the HEV suit (the mod's own pixel art).
+- **Suit hand.** Your first-person arm is a modelled hand instead of the
+  blocky skin arm: a tapered orange hazard-suit sleeve, a ribbed cuff, and a
+  black glove with jointed fingers and thumb in a relaxed curl, smooth shaded.
+  Built in code by this mod (`HandMesh`); no Valve models are used.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
