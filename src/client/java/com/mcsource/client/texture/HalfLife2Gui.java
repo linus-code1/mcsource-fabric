@@ -110,15 +110,25 @@ final class HalfLife2Gui {
 			}
 			Path folder = packRoot.resolve("assets/minecraft/textures/gui/title/background");
 			Files.createDirectories(folder);
+			// Minecraft needs all six the same square size, but Half-Life 2's
+			// sides are often half height (the sky above the horizon only) and
+			// its floor tiny, so each is resampled onto one size.
+			int size = PANORAMA_SIZE;
+			int horizon = 0;
+			for (int i = 0; i < 4; i++) {
+				horizon = average(horizon, faces[i].pixels()[faces[i].pixels().length - 1], i);
+			}
+			int ground = darken(horizon, 0.5F);
 			for (int i = 0; i < 6; i++) {
 				com.mcsource.model.RiggedModel.Texture face = faces[i];
-				int size = Math.min(face.width(), face.height());
 				int[] pixels = new int[size * size];
+				// Sides shorter than wide cover only the top of the face.
+				int covered = i < 4 ? Math.round(size * Math.min(1.0F, face.height() / (float) face.width())) : size;
 				for (int y = 0; y < size; y++) {
 					for (int x = 0; x < size; x++) {
-						// Source's up and down faces are turned a quarter relative to Minecraft's.
 						int sx = x;
 						int sy = y;
+						// Source's up and down faces are turned a quarter relative to Minecraft's.
 						if (i == 4) {
 							sx = y;
 							sy = size - 1 - x;
@@ -126,7 +136,21 @@ final class HalfLife2Gui {
 							sx = size - 1 - y;
 							sy = x;
 						}
-						pixels[y * size + x] = face.pixels()[sy * face.width() + sx] | 0xFF000000;
+						int colour;
+						if (i == 5) {
+							colour = ground;
+						} else if (sy < covered) {
+							int tx = Math.min(face.width() - 1, sx * face.width() / size);
+							int ty = Math.min(face.height() - 1, sy * face.height() / covered);
+							colour = face.pixels()[ty * face.width() + tx];
+						} else {
+							// Below the sky: fade from the bottom of the sky to the ground.
+							int tx = Math.min(face.width() - 1, sx * face.width() / size);
+							int edge = face.pixels()[(face.height() - 1) * face.width() + tx];
+							float t = (sy - covered) / (float) Math.max(1, size - covered);
+							colour = mix(edge, ground, Math.min(1.0F, t * 2.0F));
+						}
+						pixels[y * size + x] = colour | 0xFF000000;
 					}
 				}
 				BlockTextures.writePng(folder.resolve("panorama_" + i + ".png"), pixels, size);
@@ -134,6 +158,26 @@ final class HalfLife2Gui {
 			return sky;
 		}
 		return "(no Half-Life 2 skybox found)";
+	}
+
+	private static final int PANORAMA_SIZE = 512;
+
+	/** Running average of colours: {@code sum} holds the average of {@code count} colours so far. */
+	private static int average(int sum, int colour, int count) {
+		return mix(sum, colour, 1.0F / (count + 1));
+	}
+
+	private static int mix(int a, int b, float t) {
+		int out = 0;
+		for (int shift = 0; shift <= 16; shift += 8) {
+			float c = (a >> shift & 255) * (1.0F - t) + (b >> shift & 255) * t;
+			out |= Math.round(c) << shift;
+		}
+		return out;
+	}
+
+	private static int darken(int colour, float factor) {
+		return mix(0, colour, factor);
 	}
 
 	// Half-Life 2's VGUI scheme: flat dark panels with thin lighter borders.
