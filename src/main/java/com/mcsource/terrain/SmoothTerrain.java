@@ -131,21 +131,20 @@ public final class SmoothTerrain {
 	}
 
 	/**
-	 * How far (in blocks) a plant at {@code pos} should move to sit on the
-	 * smoothed ground. Looks through up to two stacked plants, so both halves
-	 * of tall grass move together.
+	 * Top corner heights of the smoothed ground a plant or snow layer at
+	 * {@code pos} rests on, or {@link SmoothMath#FULL} when the ground is flat.
+	 * Looks through up to two stacked plants, so both halves of tall grass
+	 * move together.
 	 */
-	public static float followOffset(BlockGetter level, BlockPos pos) {
+	public static int groundCorners(BlockGetter level, BlockPos pos) {
 		BlockPos.MutableBlockPos cursor = pos.mutable();
 		for (int depth = 0; depth < 3; depth++) {
 			cursor.move(0, -1, 0);
 			BlockState below = level.getBlockState(cursor);
-			if (below.is(FOLLOWS)) {
-				continue;
+			if (!below.is(FOLLOWS)) {
+				return corners(level, cursor, below);
 			}
-			int packed = corners(level, cursor, below);
-			return packed == SmoothMath.FULL ? 0.0F : SmoothMath.meanHeight(packed) - 1.0F;
 		}
-		return 0.0F;
+		return SmoothMath.FULL;
 	}
 }

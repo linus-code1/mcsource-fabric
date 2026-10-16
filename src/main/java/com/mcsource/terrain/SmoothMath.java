@@ -7,8 +7,8 @@ package com.mcsource.terrain;
  * <p>Smoothing moves every grid corner (the points where block corners meet)
  * up or down by an offset that depends only on the eight blocks around that
  * corner. Every block touching a corner moves it the same way, so the surface
- * stays watertight: a one-block step becomes a ramp two blocks long, and flat
- * ground stays flat.
+ * stays watertight: a one-block step, straight or diagonal, becomes a ramp, and
+ * flat ground stays flat.
  *
  * <p>Offsets are in eighths of a block, from -4 to +4. A block's four top
  * corner heights are stored as {@code 8 + offset} (4 to 12), packed four bits
@@ -26,14 +26,17 @@ public final class SmoothMath {
 	/**
 	 * Vertical offset in eighths for a grid corner surrounded by {@code terrain}
 	 * smoothed blocks (out of 8), when none of the 8 is a built block or liquid.
-	 * Half full stays put; emptier corners sink and fuller corners rise, by up
-	 * to half a block so neighbouring corners can meet but never cross.
+	 * Exactly half full (flat ground, a straight cliff face) stays put. Any
+	 * emptier corner sinks half a block and any fuller corner rises half a
+	 * block, so the top and foot of every one-block step meet, whether the
+	 * step runs straight or diagonally. Corners never move further than that,
+	 * so neighbouring corners can meet but never cross.
 	 */
 	public static int cornerOffset(int terrain) {
-		if (terrain <= 0 || terrain >= 8) {
+		if (terrain <= 0 || terrain >= 8 || terrain == 4) {
 			return 0;
 		}
-		return Math.max(-4, Math.min(4, (terrain - 4) * 2));
+		return terrain < 4 ? -4 : 4;
 	}
 
 	public static int pack(int h00, int h10, int h01, int h11) {

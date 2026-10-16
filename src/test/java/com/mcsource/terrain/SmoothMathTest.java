@@ -32,23 +32,27 @@ class SmoothMathTest {
 		// Fully buried or fully open corners never move.
 		assertEquals(0, SmoothMath.cornerOffset(0));
 		assertEquals(0, SmoothMath.cornerOffset(8));
-		// Outer corners sink, inner corners rise, by at most half a block.
+		// Emptier corners sink and fuller corners rise, by half a block.
 		assertEquals(-4, SmoothMath.cornerOffset(1));
-		assertEquals(-2, SmoothMath.cornerOffset(3));
-		assertEquals(2, SmoothMath.cornerOffset(5));
+		assertEquals(-4, SmoothMath.cornerOffset(3));
+		assertEquals(4, SmoothMath.cornerOffset(5));
 		assertEquals(4, SmoothMath.cornerOffset(7));
 	}
 
 	/**
-	 * A straight one-block step: the top edge of the high side (2 of 8 terrain)
-	 * sinks half a block and the foot of the step (6 of 8) rises half a block,
-	 * so they meet and the step's vertical face closes into a ramp.
+	 * A one-block step: the top edge of the high side sinks half a block and the
+	 * foot of the step rises half a block, so they meet and the step's vertical
+	 * face closes into a ramp. Straight steps put 2 of 8 blocks around the top
+	 * edge and 6 around the foot; diagonal steps put 1 or 3 and 5 or 7.
 	 */
 	@Test
-	void oneBlockStepBecomesRamp() {
-		float topEdge = 1 + SmoothMath.cornerOffset(2) / 8.0F;
-		float foot = 0 + SmoothMath.cornerOffset(6) / 8.0F;
-		assertEquals(topEdge, foot, 1e-6);
+	void oneBlockStepsBecomeRamps() {
+		int[][] topAndFoot = {{2, 6}, {1, 5}, {3, 7}, {1, 7}, {3, 5}};
+		for (int[] pair : topAndFoot) {
+			float topEdge = 1 + SmoothMath.cornerOffset(pair[0]) / 8.0F;
+			float foot = SmoothMath.cornerOffset(pair[1]) / 8.0F;
+			assertEquals(topEdge, foot, 1e-6);
+		}
 	}
 
 	@Test

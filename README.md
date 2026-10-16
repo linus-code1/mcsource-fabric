@@ -11,8 +11,8 @@ world to try it in.
 - **Smooth terrain.** Natural blocks (grass, dirt, stone, sand and the others
   in `data/mcsource/tags/block/smooth_terrain.json`) form one continuous
   surface: every grid corner where blocks meet moves up or down by up to half a
-  block depending on how much terrain surrounds it. A one-block step becomes a
-  ramp two blocks long, flat ground stays flat, and textures, grass tint and
+  block depending on how much terrain surrounds it. Every one-block step,
+  straight or diagonal, becomes a ramp, flat ground stays flat, and textures, grass tint and
   side overlays bend with the surface.
 - **Sharp built blocks.** Anything not in that tag (planks, bricks, cobblestone,
   glass and so on) stays a sharp cube. Corners touching a built block or a
@@ -22,8 +22,8 @@ world to try it in.
   slope you see. Collision is built from 8×8 columns that follow the drawn
   surface to within an eighth of a block; the steps between columns are small
   enough that you walk up slopes without jumping.
-- **Plants move with the ground.** Grass, flowers, saplings, snow layers and
-  similar blocks move by the same amount as the ground under them.
+- **Plants and snow follow the ground.** Grass, flowers, saplings, snow layers
+  and similar blocks bend to the surface of the ground under them.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.

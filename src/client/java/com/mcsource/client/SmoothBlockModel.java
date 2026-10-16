@@ -62,12 +62,18 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					return;
 				}
 			} else if (state.is(SmoothTerrain.FOLLOWS)) {
-				float offset = SmoothTerrain.followOffset(level, pos);
-				if (offset != 0.0F) {
+				int ground = SmoothTerrain.groundCorners(level, pos);
+				if (ground != SmoothMath.FULL) {
+					// Each vertex rides the ground surface under it, so snow layers and
+					// flower carpets bend over slopes instead of floating flat.
 					emitter.pushTransform(quad -> {
 						for (int i = 0; i < 4; i++) {
-							quad.pos(i, quad.x(i), quad.y(i) + offset, quad.z(i));
+							float x = quad.x(i);
+							float z = quad.z(i);
+							float rise = SmoothMath.surface(ground, Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F)) - 1.0F;
+							quad.pos(i, x, quad.y(i) + rise, z);
 						}
+						quad.ambientOcclusion(TriState.FALSE);
 						return true;
 					});
 					try {
