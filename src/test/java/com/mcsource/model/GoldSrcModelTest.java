@@ -60,6 +60,30 @@ class GoldSrcModelTest {
 		assertEquals(10.0F, p.z, 1.0E-5F);
 	}
 
+	@Test
+	void bundledModelsLoad() throws Exception {
+		Path models = Path.of("src/client/resources/assets/mcsource/models");
+		GoldSrcModel zombie = GoldSrcModel.read(Files.readAllBytes(models.resolve("zombie.mdl")));
+		assertNotNull(zombie.find("walk"));
+		assertNotNull(zombie.find("attack1"));
+		assertNotNull(zombie.find("dieforward"));
+		GoldSrcModel hand = GoldSrcModel.read(Files.readAllBytes(models.resolve("suit_hand.mdl")));
+		assertNotNull(hand.find("idle"));
+		GoldSrcModel kart = GoldSrcModel.read(Files.readAllBytes(models.resolve("kart.mdl")));
+		assertNotNull(kart.find("drive"));
+		for (GoldSrcModel model : new GoldSrcModel[] {zombie, hand, kart}) {
+			assertEquals(model.vertices.length / 3, model.vertexBones.length);
+			for (GoldSrcModel.Triangle triangle : model.triangles) {
+				for (int k = 0; k < 3; k++) {
+					GoldSrcModel.Texture texture = model.textures[triangle.texture()];
+					if (triangle.s()[k] < 0 || triangle.s()[k] >= texture.width() || triangle.t()[k] < 0 || triangle.t()[k] >= texture.height()) {
+						throw new AssertionError("Texture coordinate outside its texture in " + model.name);
+					}
+				}
+			}
+		}
+	}
+
 	private static byte[] tinyModel() {
 		ByteBuffer b = ByteBuffer.allocate(1856).order(ByteOrder.LITTLE_ENDIAN);
 		b.putInt(0, 0x54534449);

@@ -1,3 +1,5 @@
 {
-	"generator.mcsource.test_hills": "MC:Source Test Hills"
+	"generator.mcsource.test_hills": "MC:Source Test Hills",
+	"item.mcsource.kart": "Kart",
+	"entity.mcsource.kart": "Kart"
 }

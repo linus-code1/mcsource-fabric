@@ -63,16 +63,19 @@ world to try it in.
 - **Half-Life 2 style sky and haze.** Minecraft's blocky clouds are replaced
   by a soft painted cloud layer in the sky, and distant terrain fades into the
   sky colour with distance haze.
-- **Suit hand.** Your first-person arm is a modelled hand instead of the
-  blocky skin arm: a tapered orange hazard-suit sleeve, a ribbed cuff, and a
-  black glove with jointed fingers and thumb in a relaxed curl, smooth shaded.
-  Built in code by this mod (`HandMesh`); no Valve models are used.
-- **Half-Life zombie.** Zombies are drawn with the zombie from your own
-  copy of Half-Life 1 (`zombie.mdl`), skinned to its skeleton and animated
-  with its own idle, walk, attack and death animations; the walk keeps pace
-  with how fast the mob moves. The model is read from your install at run
-  time and never shipped with this mod. See *Half-Life models* below. If the
-  file isn't found, zombies look like normal Minecraft zombies.
+- **Suit hand.** Your first-person arm is a rigged hand model: an orange
+  hazard-suit sleeve with an armour plate, a ribbed cuff, and a black glove
+  with a full finger skeleton (17 bones) resting in a slowly breathing curl.
+- **Zombie.** Zombies are a rigged zombie scientist in a torn lab coat with a
+  parasite on its head and clawed hands, with its own idle, walk, attack and
+  death animations; the walk keeps pace with how fast it moves.
+- **Kart.** A drivable go-kart, found in the Tools & Utilities tab. Use it on
+  the ground to place it, use the kart to get in, then drive with W and S and
+  steer with A and D; it slides a little through fast corners and climbs
+  one-block steps. Sneak to get out; hit it to pick it back up.
+- All three models are this mod's own, built by the scripts in
+  `tools/models` and shipped inside the mod jar. No Valve or Nintendo models,
+  textures or code are used.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
@@ -89,15 +92,6 @@ world to try it in.
 4. Put both jars in `~/Library/Application Support/minecraft/mods`.
 5. Start the Fabric profile, choose **Create New World → More → World Type →
    MC:Source Test Hills**, and create the world.
-
-## Half-Life models
-
-Mob models come from your own Half-Life 1 install (Steam's *Half-Life*, which
-runs on macOS). The mod looks for `valve/models/zombie.mdl` in Steam's usual
-folder, `~/Library/Application Support/Steam/steamapps/common/Half-Life` on a
-Mac. If Half-Life is somewhere else, set its folder as `halflife_path` in
-`config/mcsource.properties` (created on first launch), or copy the `.mdl`
-files into `config/mcsource/models`. The game log says which model it loaded.
 
 ## Build
 
@@ -137,13 +131,19 @@ client with the mod loaded.
   experience and hotbar HUD elements, and the crosshair.
 - `assets/minecraft/shaders/include/texture_sampling.glsl` replaces how block
   textures are sampled, for the Half-Life 1 look.
-- `GoldSrcModel` reads Half-Life 1 `.mdl` files (bones, meshes, paletted
-  textures and run-length encoded animations), written from public
-  descriptions of the format. `SourceRigs` (client) lists which mobs get
-  which model and which animations stand for idle, walk, attack and death;
-  adding a mob there is all a new rig needs. `SourceMobRenderer` poses and
-  skins the model each frame, and `LivingEntityRendererMixin` draws it in
-  place of the Minecraft model.
+- `GoldSrcModel` reads models in the Half-Life 1 `.mdl` layout (bones,
+  meshes, paletted textures and run-length encoded animations), written from
+  public descriptions of the format. The mod's own models use that layout.
+  `SourceRigs` (client) lists which mobs get which model and which animations
+  stand for idle, walk, attack and death; adding a mob there is all a new rig
+  needs. `SourceMobRenderer` poses and skins the model each frame, and
+  `LivingEntityRendererMixin` draws it in place of the Minecraft model.
+- `tools/models` builds the models: shapes sculpted from blended distance
+  fields, meshed with surface nets, bound to a skeleton, painted with
+  procedural textures and animated in code. Run `python3 hand.py`,
+  `zombie.py` or `kart.py` with an output path (needs numpy).
+- `KartEntity` holds the kart's driving: throttle, braking, steering that
+  turns the driver with it, and grip that lets it slide when fast.
 - `TestHillsGenerator` is the test world's chunk generator.
 
 ## Known limits

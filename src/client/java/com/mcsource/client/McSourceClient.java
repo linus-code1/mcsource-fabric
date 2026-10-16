@@ -2,10 +2,13 @@ package com.mcsource.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.shapes.Shapes;
 
+import com.mcsource.client.mob.KartRenderer;
+import com.mcsource.kart.Karts;
 import com.mcsource.terrain.SmoothTerrain;
 
 public class McSourceClient implements ClientModInitializer {
@@ -16,6 +19,7 @@ public class McSourceClient implements ClientModInitializer {
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake()
 				.register((model, modelContext) -> new SmoothBlockModel(model)));
 		SourceHud.register();
+		EntityRendererRegistry.register(Karts.KART, KartRenderer::new);
 		// Smoothed ground has no block outline, as in Source; its stepped
 		// collision columns would otherwise show as little stairs.
 		LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, outline) -> {

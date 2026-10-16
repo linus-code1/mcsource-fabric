@@ -8,6 +8,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 
+import com.mcsource.kart.Karts;
 import com.mcsource.world.TestHillsGenerator;
 
 public class McSource implements ModInitializer {
@@ -21,6 +22,7 @@ public class McSource implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, id("test_hills"), TestHillsGenerator.CODEC);
+		Karts.register();
 		LOGGER.info("MC:Source loaded");
 	}
 }

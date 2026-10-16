@@ -163,28 +163,44 @@ public final class GoldSrcModel {
 	}
 
 	/**
-	 * Reads a model. Textures stored in a companion {@code <name>T.mdl} and
+	 * Reads a model file. Textures stored in a companion {@code <name>T.mdl} and
 	 * animations stored in {@code <name>01.mdl} and so on are read from beside it.
 	 */
 	public static GoldSrcModel load(Path file) throws IOException {
-		ByteBuffer data = read(file);
-		if (data.getInt(0) != MAGIC_MODEL) {
-			throw new IOException(file + " is not a GoldSrc model");
+		return parse(read(file), suffix -> {
+			Path sibling = sibling(file, suffix);
+			return Files.isRegularFile(sibling) ? read(sibling) : null;
+		});
+	}
+
+	/** Reads a model held in memory, with everything in the one file. */
+	public static GoldSrcModel read(byte[] bytes) throws IOException {
+		return parse(ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN), suffix -> null);
+	}
+
+	/** Finds a companion file by the suffix added to the model's name, or returns null. */
+	private interface Siblings {
+		ByteBuffer find(String suffix) throws IOException;
+	}
+
+	private static GoldSrcModel parse(ByteBuffer data, Siblings siblings) throws IOException {
+		if (data.capacity() < 244 || data.getInt(0) != MAGIC_MODEL) {
+			throw new IOException("Not a GoldSrc model");
 		}
 		int version = data.getInt(4);
 		if (version != VERSION) {
-			throw new IOException(file + " is model version " + version + ", only version " + VERSION + " (Half-Life 1) is supported");
+			throw new IOException("Model version " + version + "; only version " + VERSION + " (Half-Life 1) is supported");
 		}
 		String name = string(data, 8, 64);
 
 		Bone[] bones = readBones(data);
-		Sequence[] sequences = readSequences(data, file, bones);
+		Sequence[] sequences = readSequences(data, siblings, bones);
 
 		ByteBuffer textureSource = data;
 		if (data.getInt(180) == 0) {
-			Path textureFile = sibling(file, "T");
-			if (Files.isRegularFile(textureFile)) {
-				textureSource = read(textureFile);
+			ByteBuffer textureFile = siblings.find("T");
+			if (textureFile != null) {
+				textureSource = textureFile;
 			}
 		}
 		Texture[] textures = readTextures(textureSource);
@@ -199,14 +215,14 @@ public final class GoldSrcModel {
 		for (int i = 0; i < vertexList.size(); i++) {
 			float[] v = vertexList.get(i);
 			System.arraycopy(v, 0, vertices, i * 3, 3);
-			vertexBones[i] = (int) v[3];
+			vertexBones[i] = Math.min((int) v[3], bones.length - 1);
 		}
 		float[] normals = new float[normalList.size() * 3];
 		int[] normalBones = new int[normalList.size()];
 		for (int i = 0; i < normalList.size(); i++) {
 			float[] n = normalList.get(i);
 			System.arraycopy(n, 0, normals, i * 3, 3);
-			normalBones[i] = (int) n[3];
+			normalBones[i] = Math.min((int) n[3], bones.length - 1);
 		}
 		return new GoldSrcModel(name, bones, sequences, textures, triangles, vertices, vertexBones, normals, normalBones);
 	}
@@ -256,7 +272,7 @@ public final class GoldSrcModel {
 		return bones;
 	}
 
-	private static Sequence[] readSequences(ByteBuffer data, Path file, Bone[] bones) throws IOException {
+	private static Sequence[] readSequences(ByteBuffer data, Siblings siblings, Bone[] bones) throws IOException {
 		int count = data.getInt(164);
 		int index = data.getInt(168);
 		check(data, index, count * 176);
@@ -281,10 +297,10 @@ public final class GoldSrcModel {
 			ByteBuffer source = data;
 			if (group > 0 && group < groups.length) {
 				if (groups[group] == null) {
-					Path groupFile = sibling(file, String.format(Locale.ROOT, "%02d", group));
-					groups[group] = read(groupFile);
-					if (groups[group].getInt(0) != MAGIC_SEQUENCES) {
-						throw new IOException(groupFile + " is not a GoldSrc sequence group");
+					String suffix = String.format(Locale.ROOT, "%02d", group);
+					groups[group] = siblings.find(suffix);
+					if (groups[group] == null || groups[group].getInt(0) != MAGIC_SEQUENCES) {
+						throw new IOException("Missing sequence group " + suffix);
 					}
 				}
 				source = groups[group];
