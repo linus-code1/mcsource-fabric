@@ -40,6 +40,17 @@ public abstract class BlockStateBaseMixin {
 		mcsource$applySmoothShape(level, pos, cir);
 	}
 
+	/**
+	 * Raised ground reaches up to half a block into the space above it, so
+	 * collision checks must look at smoothed blocks next to an entity too.
+	 */
+	@Inject(method = "hasLargeCollisionShape()Z", at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothReachesOut(CallbackInfoReturnable<Boolean> cir) {
+		if (((BlockState) (Object) this).is(SmoothTerrain.SMOOTH)) {
+			cir.setReturnValue(true);
+		}
+	}
+
 	private void mcsource$applySmoothShape(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
 		BlockState self = (BlockState) (Object) this;
 		int packed = SmoothTerrain.corners(level, pos, self);

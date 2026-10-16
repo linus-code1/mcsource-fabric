@@ -4,17 +4,36 @@ package com.mcsource.terrain;
  * Pure math for the smooth terrain surface, shared by the client mesher and the
  * collision shapes so both sides agree on exactly the same surface.
  *
- * <p>A smoothed block keeps its bottom and lowers its four top corners. Corner
- * heights are stored in eighths of a block (2, 4, 6 or 8), packed four bits each
- * in the order (x0,z0), (x1,z0), (x0,z1), (x1,z1).
+ * <p>Smoothing moves every grid corner (the points where block corners meet)
+ * up or down by an offset that depends only on the eight blocks around that
+ * corner. Every block touching a corner moves it the same way, so the surface
+ * stays watertight: a one-block step becomes a ramp two blocks long, and flat
+ * ground stays flat.
+ *
+ * <p>Offsets are in eighths of a block, from -4 to +4. A block's four top
+ * corner heights are stored as {@code 8 + offset} (4 to 12), packed four bits
+ * each in the order (x0,z0), (x1,z0), (x0,z1), (x1,z1).
  */
 public final class SmoothMath {
-	/** Packed value for a block whose four corners are all at full height. */
+	/** Packed value for a block whose four top corners are all at full height. */
 	public static final int FULL = 0x8888;
 	/** Collision is built from this many columns per block side. */
 	public static final int COLUMNS = 8;
 
 	private SmoothMath() {
+	}
+
+	/**
+	 * Vertical offset in eighths for a grid corner surrounded by {@code terrain}
+	 * smoothed blocks (out of 8), when none of the 8 is a built block or liquid.
+	 * Half full stays put; emptier corners sink and fuller corners rise, by up
+	 * to half a block so neighbouring corners can meet but never cross.
+	 */
+	public static int cornerOffset(int terrain) {
+		if (terrain <= 0 || terrain >= 8) {
+			return 0;
+		}
+		return Math.max(-4, Math.min(4, (terrain - 4) * 2));
 	}
 
 	public static int pack(int h00, int h10, int h01, int h11) {
@@ -26,21 +45,7 @@ public final class SmoothMath {
 		return packed >> (index * 4) & 0xF;
 	}
 
-	/**
-	 * Height of one top corner in eighths.
-	 *
-	 * @param anyAboveBlocked whether any of the four cells one level up around this corner holds something
-	 * @param anyBuiltBeside whether any of the four cells at this level around the corner holds a non-terrain block
-	 * @param filledBeside how many of the four cells at this level around the corner hold terrain (1 to 4)
-	 */
-	public static int cornerHeight(boolean anyAboveBlocked, boolean anyBuiltBeside, int filledBeside) {
-		if (anyAboveBlocked || anyBuiltBeside) {
-			return 8;
-		}
-		return Math.max(1, Math.min(4, filledBeside)) * 2;
-	}
-
-	/** Bilinear surface height in blocks (0 to 1) at local position u (x) and v (z), each 0 to 1. */
+	/** Bilinear surface height in blocks (0.5 to 1.5) at local position u (x) and v (z), each 0 to 1. */
 	public static float surface(int packed, float u, float v) {
 		float h00 = corner(packed, 0);
 		float h10 = corner(packed, 1);
@@ -51,9 +56,24 @@ public final class SmoothMath {
 		return (near + (far - near) * v) / 8.0F;
 	}
 
-	/** Mean of the four corners in blocks. */
+	/** Mean of the four top corners in blocks. */
 	public static float meanHeight(int packed) {
 		return (corner(packed, 0) + corner(packed, 1) + corner(packed, 2) + corner(packed, 3)) / 32.0F;
+	}
+
+	/**
+	 * Trilinear offset in blocks inside a block from its eight corner offsets
+	 * (eighths, index cx + 2 * cy + 4 * cz), at local position x, y, z (0 to 1).
+	 */
+	public static float offsetAt(int[] offsets, float x, float y, float z) {
+		float result = 0;
+		for (int i = 0; i < 8; i++) {
+			float wx = (i & 1) != 0 ? x : 1 - x;
+			float wy = (i & 2) != 0 ? y : 1 - y;
+			float wz = (i & 4) != 0 ? z : 1 - z;
+			result += offsets[i] * wx * wy * wz;
+		}
+		return result / 8.0F;
 	}
 
 	/**

@@ -16,9 +16,10 @@ import com.mcsource.terrain.SmoothMath;
 import com.mcsource.terrain.SmoothTerrain;
 
 /**
- * Draws smoothed terrain by bending the block's own quads: each vertex's height
- * is scaled to the smooth surface, so textures, grass tint and overlays all
- * follow. Plants on top sink by the same amount.
+ * Draws smoothed terrain by bending the block's own quads: each vertex moves up
+ * or down with the grid corners around it, so textures, grass tint and overlays
+ * all follow, and neighbouring blocks stay joined. Plants on top move with the
+ * ground under them.
  */
 public final class SmoothBlockModel extends WrapperBlockStateModel {
 	public SmoothBlockModel(BlockStateModel wrapped) {
@@ -30,14 +31,16 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			Predicate<Direction> cullTest) {
 		if (level != BlockAndTintGetter.EMPTY) {
 			if (state.is(SmoothTerrain.SMOOTH)) {
-				int packed = SmoothTerrain.corners(level, pos, state);
-				if (packed != SmoothMath.FULL) {
+				int[] offsets = SmoothTerrain.cornerOffsets(level, pos, state);
+				if (offsets != null) {
 					emitter.pushTransform(quad -> {
 						for (int i = 0; i < 4; i++) {
 							float x = quad.x(i);
+							float y = quad.y(i);
 							float z = quad.z(i);
-							float height = SmoothMath.surface(packed, Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F));
-							quad.pos(i, x, quad.y(i) * height, z);
+							float offset = SmoothMath.offsetAt(offsets,
+									Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(y, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F));
+							quad.pos(i, x, y + offset, z);
 						}
 						return true;
 					});

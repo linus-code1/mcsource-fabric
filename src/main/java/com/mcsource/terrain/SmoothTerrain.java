@@ -14,9 +14,9 @@ import net.minecraft.world.level.block.state.BlockState;
  * (meshing) and the server (collision) because it only reads block states.
  */
 public final class SmoothTerrain {
-	/** Natural terrain that gets a smooth top. Anything else stays a sharp cube. */
+	/** Natural terrain that gets smoothed. Anything else stays a sharp cube. */
 	public static final TagKey<Block> SMOOTH = tag("smooth_terrain");
-	/** Plants and covers that sink with the smoothed ground below them. */
+	/** Plants and covers that move with the smoothed ground below them. */
 	public static final TagKey<Block> FOLLOWS = tag("follows_terrain");
 
 	private static final int OPEN = 0;
@@ -35,58 +35,105 @@ public final class SmoothTerrain {
 		return state.canBeReplaced() && state.getFluidState().isEmpty();
 	}
 
+	private static int classify(BlockState state) {
+		if (isOpen(state)) {
+			return OPEN;
+		}
+		return state.is(SMOOTH) ? TERRAIN : BUILT;
+	}
+
+	private static boolean applies(BlockGetter level, BlockState state) {
+		return level != EmptyBlockGetter.INSTANCE && state.is(SMOOTH);
+	}
+
 	/**
-	 * Packed corner heights for the block at {@code pos}, or {@link SmoothMath#FULL}
-	 * when it keeps its full cube.
+	 * Reads the classes of the blocks from {@code pos + (-1, dy0, -1)} to
+	 * {@code pos + (1, dy0 + layers - 1, 1)}, indexed {@code dx + 1 + 3 * (dz + 1) + 9 * (dy - dy0)}.
+	 */
+	private static int[] neighbourhood(BlockGetter level, BlockPos pos, BlockState self, int dy0, int layers) {
+		int[] classes = new int[9 * layers];
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int layer = 0; layer < layers; layer++) {
+			int dy = dy0 + layer;
+			for (int dz = -1; dz <= 1; dz++) {
+				for (int dx = -1; dx <= 1; dx++) {
+					BlockState state = dx == 0 && dy == 0 && dz == 0 ? self : level.getBlockState(cursor.setWithOffset(pos, dx, dy, dz));
+					classes[dx + 1 + 3 * (dz + 1) + 9 * layer] = classify(state);
+				}
+			}
+		}
+		return classes;
+	}
+
+	/**
+	 * Offset (eighths) of the grid corner at {@code pos + (cx, cy, cz)}, from a
+	 * neighbourhood whose lowest layer is at {@code pos.y + dy0}.
+	 */
+	private static int cornerOffset(int[] classes, int dy0, int cx, int cy, int cz) {
+		int terrain = 0;
+		for (int oy = cy - 1; oy <= cy; oy++) {
+			for (int oz = cz - 1; oz <= cz; oz++) {
+				for (int ox = cx - 1; ox <= cx; ox++) {
+					int kind = classes[ox + 1 + 3 * (oz + 1) + 9 * (oy - dy0)];
+					if (kind == BUILT) {
+						// Built blocks and liquids pin the corner so they meet terrain cleanly.
+						return 0;
+					}
+					if (kind == TERRAIN) {
+						terrain++;
+					}
+				}
+			}
+		}
+		return SmoothMath.cornerOffset(terrain);
+	}
+
+	/**
+	 * Offsets (eighths) of all eight corners of a smoothed block, index
+	 * {@code cx + 2 * cy + 4 * cz}, or null when the block is not smoothed or
+	 * nothing moves. Used by the client mesher.
+	 */
+	public static int[] cornerOffsets(BlockGetter level, BlockPos pos, BlockState state) {
+		if (!applies(level, state)) {
+			return null;
+		}
+		int[] classes = neighbourhood(level, pos, state, -1, 3);
+		int[] offsets = new int[8];
+		boolean moved = false;
+		for (int i = 0; i < 8; i++) {
+			offsets[i] = cornerOffset(classes, -1, i & 1, i >> 1 & 1, i >> 2 & 1);
+			moved |= offsets[i] != 0;
+		}
+		return moved ? offsets : null;
+	}
+
+	/**
+	 * Packed top corner heights for the block at {@code pos}, or
+	 * {@link SmoothMath#FULL} when it keeps its full cube. Used for collision on
+	 * both sides; matches the top of {@link #cornerOffsets} exactly.
 	 */
 	public static int corners(BlockGetter level, BlockPos pos, BlockState state) {
-		if (level == EmptyBlockGetter.INSTANCE || !state.is(SMOOTH)) {
+		if (!applies(level, state)) {
 			return SmoothMath.FULL;
 		}
-
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 		if (!isOpen(level.getBlockState(cursor.setWithOffset(pos, 0, 1, 0)))) {
 			return SmoothMath.FULL;
 		}
-
-		// 3x3 neighbourhood at this level and the level above, indexed [dx + 1 + 3 * (dz + 1)].
-		int[] here = new int[9];
-		boolean[] aboveBlocked = new boolean[9];
-		for (int dz = -1; dz <= 1; dz++) {
-			for (int dx = -1; dx <= 1; dx++) {
-				int i = dx + 1 + 3 * (dz + 1);
-				BlockState cell = dx == 0 && dz == 0 ? state : level.getBlockState(cursor.setWithOffset(pos, dx, 0, dz));
-				here[i] = isOpen(cell) ? OPEN : cell.is(SMOOTH) ? TERRAIN : BUILT;
-				aboveBlocked[i] = !isOpen(level.getBlockState(cursor.setWithOffset(pos, dx, 1, dz)));
-			}
-		}
-
+		int[] classes = neighbourhood(level, pos, state, 0, 2);
 		int packed = 0;
 		for (int cz = 0; cz <= 1; cz++) {
 			for (int cx = 0; cx <= 1; cx++) {
-				boolean blocked = false;
-				boolean built = false;
-				int filled = 0;
-				for (int oz = cz - 1; oz <= cz; oz++) {
-					for (int ox = cx - 1; ox <= cx; ox++) {
-						int i = ox + 1 + 3 * (oz + 1);
-						blocked |= aboveBlocked[i];
-						built |= here[i] == BUILT;
-						if (here[i] == TERRAIN) {
-							filled++;
-						}
-					}
-				}
-				packed |= SmoothMath.cornerHeight(blocked, built, filled) << ((cx + 2 * cz) * 4);
+				packed |= (8 + cornerOffset(classes, 0, cx, 1, cz)) << ((cx + 2 * cz) * 4);
 			}
 		}
 		return packed;
 	}
 
 	/**
-	 * How far (in blocks, zero or negative) a plant at {@code pos} should sink to
-	 * sit on smoothed ground. Looks through up to two stacked plants, so both
-	 * halves of tall grass move together.
+	 * How far (in blocks) a plant at {@code pos} should move to sit on the
+	 * smoothed ground. Looks through up to two stacked plants, so both halves
+	 * of tall grass move together.
 	 */
 	public static float followOffset(BlockGetter level, BlockPos pos) {
 		BlockPos.MutableBlockPos cursor = pos.mutable();
