@@ -159,7 +159,7 @@ public final class StudioModel {
 
 		// Materials and textures.
 		String[] materials = readMaterialNames(mdl);
-		short[] skins = readSkins(mdl);
+		short[] skins = readSkins(mdl, materials);
 		String[] searchPaths = readSearchPaths(mdl);
 		RiggedModel.Texture[] textures = new RiggedModel.Texture[materials.length];
 		for (int i = 0; i < materials.length; i++) {
@@ -661,14 +661,41 @@ public final class StudioModel {
 		return names;
 	}
 
-	private static short[] readSkins(ByteBuffer mdl) {
-		int refs = mdl.getInt(220);
+	/**
+	 * The material each reference uses in the skin family drawn: the first,
+	 * unless another uses more leaf materials. Half-Life 2's broadleaf trees
+	 * are bare in their first skin and only have leaves in a later one.
+	 */
+	private static short[] readSkins(ByteBuffer mdl, String[] materials) {
+		int refs = Math.max(0, mdl.getInt(220));
+		int families = Math.max(1, mdl.getInt(224));
 		int index = mdl.getInt(228);
-		short[] skins = new short[Math.max(0, refs)];
-		for (int i = 0; i < skins.length; i++) {
-			skins[i] = mdl.getShort(index + i * 2);
+		short[] best = null;
+		int bestLeaves = -1;
+		for (int family = 0; family < families; family++) {
+			short[] skins = new short[refs];
+			int leaves = 0;
+			for (int i = 0; i < refs; i++) {
+				int at = index + (family * refs + i) * 2;
+				if (at < 0 || at + 2 > mdl.capacity()) {
+					return best != null ? best : skins;
+				}
+				skins[i] = mdl.getShort(at);
+				if (skins[i] >= 0 && skins[i] < materials.length && isLeaf(materials[skins[i]])) {
+					leaves++;
+				}
+			}
+			if (leaves > bestLeaves) {
+				best = skins;
+				bestLeaves = leaves;
+			}
 		}
-		return skins;
+		return best == null ? new short[0] : best;
+	}
+
+	private static boolean isLeaf(String material) {
+		String lower = material.toLowerCase(Locale.ROOT);
+		return lower.contains("leaves") || lower.contains("leaf");
 	}
 
 	private static String[] readSearchPaths(ByteBuffer mdl) {

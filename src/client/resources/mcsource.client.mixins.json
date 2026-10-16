@@ -5,8 +5,9 @@
 	"client": [
 		"AvatarRendererMixin",
 		"FirstPersonHandsMixin",
-		"LivingEntityRendererMixin",
+		"GameRendererMixin",
 		"GuiGraphicsExtractorMixin",
+		"LivingEntityRendererMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",
 		"TitleScreenMixin"

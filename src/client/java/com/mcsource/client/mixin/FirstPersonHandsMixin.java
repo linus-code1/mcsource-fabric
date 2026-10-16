@@ -47,7 +47,9 @@ public abstract class FirstPersonHandsMixin {
 	 */
 	private static final float DEFAULT_FOV = 54.0F;
 	private static final float DEFAULT_OFFSET_X = -2.5F;
-	private static final float DEFAULT_OFFSET_Z = 9.0F;
+	/** Pulled back towards the eye, so the hand is not held out ahead. */
+	private static final float DEFAULT_OFFSET_Y = -8.0F;
+	private static final float DEFAULT_OFFSET_Z = 10.0F;
 	private static SourceModel trimmed;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
@@ -105,7 +107,7 @@ public abstract class FirstPersonHandsMixin {
 		// Source units; here x is left, y up and z forward.
 		float side = GameInstalls.setting("viewmodel_offset_x", DEFAULT_OFFSET_X) * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F);
 		poseStack.translate(-side * UNITS, GameInstalls.setting("viewmodel_offset_z", DEFAULT_OFFSET_Z) * UNITS,
-				GameInstalls.setting("viewmodel_offset_y", 0.0F) * UNITS);
+				GameInstalls.setting("viewmodel_offset_y", DEFAULT_OFFSET_Y) * UNITS);
 		SourceModel.Axes axes = arm == HumanoidArm.LEFT ? SourceModel.Axes.HALF_LIFE_MIRRORED : SourceModel.Axes.HALF_LIFE;
 		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(hands.texture), (matrices, consumer) -> {
 			hands.skin(bones);

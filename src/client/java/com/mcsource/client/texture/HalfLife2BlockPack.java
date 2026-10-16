@@ -39,7 +39,7 @@ import com.mcsource.model.source.SkyTextures;
 public final class HalfLife2BlockPack implements RepositorySource {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	/** Bump when the way textures are built changes, so old packs are rebuilt. */
-	private static final String VERSION = "7";
+	private static final String VERSION = "8";
 	private static final String USER_LIST = """
 			# Your changes to which Half-Life 2 material each Minecraft block texture uses.
 			# A line here replaces the mod's own line for that texture, for example:
@@ -126,6 +126,11 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			report.append("menus = ").append(HalfLife2Gui.generate(fresh)).append(" textures in Half-Life 2's dark grey\n");
 		} catch (IOException | RuntimeException e) {
 			LOGGER.warn("Could not make the menu textures", e);
+		}
+		try {
+			report.append("title screen = ").append(HalfLife2Gui.panorama(GameInstalls.source(), fresh)).append('\n');
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not make the title screen background", e);
 		}
 		Files.writeString(fresh.resolve("used_materials.txt"), report.toString());
 		Files.writeString(fresh.resolve("built_from.txt"), stamp);

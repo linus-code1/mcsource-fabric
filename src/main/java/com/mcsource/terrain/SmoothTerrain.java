@@ -2,6 +2,7 @@ package com.mcsource.terrain;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
@@ -61,8 +62,13 @@ public final class SmoothTerrain {
 		return kind;
 	}
 
+	/**
+	 * Smoothing reads the blocks around, so it is left out while chunks are
+	 * generated: there the neighbours may be in a chunk not yet made, and
+	 * reading them floods the log with errors and slows generation down.
+	 */
 	private static boolean applies(BlockGetter level, BlockState state) {
-		return level != EmptyBlockGetter.INSTANCE && state.is(SMOOTH);
+		return level != EmptyBlockGetter.INSTANCE && !(level instanceof WorldGenRegion) && state.is(SMOOTH);
 	}
 
 	/**
@@ -178,6 +184,75 @@ public final class SmoothTerrain {
 			}
 		}
 		return SmoothMath.cornerOffset(lower, upper);
+	}
+
+	/**
+	 * Whether the grid corner at {@code pos + (gx, gy, gz)} (each -1 to 2)
+	 * lies in flat ground: smoothed terrain in all four blocks below it and
+	 * open space in all four above.
+	 */
+	public static boolean wideFlatGround(int[] wide, int gx, int gy, int gz) {
+		for (int oy = gy - 1; oy <= gy; oy++) {
+			for (int oz = gz - 1; oz <= gz; oz++) {
+				for (int ox = gx - 1; ox <= gx; ox++) {
+					int kind = wide[ox + 2 + 5 * (oz + 2) + 25 * (oy + 2)];
+					if (kind != (oy < gy ? TERRAIN : OPEN)) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Like {@link #wideFlatGround}, read from the level: whether the top
+	 * corner {@code (cx, 1, cz)} (each 0 or 1) of the block at {@code pos} lies
+	 * in flat ground.
+	 */
+	public static boolean flatGround(BlockGetter level, BlockPos pos, int cx, int cz) {
+		if (!(level instanceof WorldGenRegion)) {
+			BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+			for (int oy = 0; oy <= 1; oy++) {
+				for (int oz = cz - 1; oz <= cz; oz++) {
+					for (int ox = cx - 1; ox <= cx; ox++) {
+						cursor.setWithOffset(pos, ox, oy, oz);
+						if (classify(level, cursor, level.getBlockState(cursor)) != (oy == 0 ? TERRAIN : OPEN)) {
+							return false;
+						}
+					}
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	/** The block under the plants or snow at {@code pos}, looking through up to two stacked plants. */
+	public static BlockPos ground(BlockGetter level, BlockPos pos) {
+		BlockPos.MutableBlockPos cursor = pos.mutable();
+		for (int depth = 0; depth < 3; depth++) {
+			cursor.move(0, -1, 0);
+			if (!level.getBlockState(cursor).is(FOLLOWS)) {
+				return cursor.immutable();
+			}
+		}
+		return cursor.immutable();
+	}
+
+	/**
+	 * Height of the ground in the column at {@code pos + (dx, ?, dz)}, in
+	 * blocks above {@code pos.y}, looking from 3 above to 3 below; liquids
+	 * count as ground so shores keep level with the water.
+	 */
+	public static int columnHeight(BlockGetter level, BlockPos pos, int dx, int dz, BlockPos.MutableBlockPos cursor) {
+		for (int dy = 3; dy >= -3; dy--) {
+			BlockState state = level.getBlockState(cursor.setWithOffset(pos, dx, dy, dz));
+			if (!isOpen(state) || !state.getFluidState().isEmpty()) {
+				return dy + 1;
+			}
+		}
+		return -3;
 	}
 
 	/**

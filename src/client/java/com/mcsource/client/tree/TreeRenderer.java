@@ -23,8 +23,8 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 	/** Trees taller than this many blocks are scaled down to it. */
 	private static final float MAX_HEIGHT = 20.0F;
 	/** Distances in blocks where trees switch to fewer leaves. */
-	private static final float NEAR = 28.0F;
-	private static final float FAR = 64.0F;
+	private static final float NEAR = 24.0F;
+	private static final float FAR = 56.0F;
 
 	public static class State extends EntityRenderState {
 		String wood = "";
@@ -77,8 +77,8 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		// furthest draw fewer, bigger leaf cards. Leaves are kept in full at
 		// middle distance, or the crowns look bare.
 		float distance = (float) Math.sqrt(state.distanceToCameraSq);
-		float keep = distance < NEAR ? 1.0F : distance < FAR ? 0.5F : 0.25F;
-		float leafKeep = distance < FAR ? 1.0F : 0.6F;
+		float keep = distance < NEAR ? 1.0F : distance < FAR ? 0.4F : 0.15F;
+		float leafKeep = distance < FAR ? 1.0F : 0.45F;
 		float grow = leafKeep < 1.0F ? 1.0F / (float) Math.sqrt(leafKeep) : 1.0F;
 		for (int i = 0; i < textures.length; i++) {
 			int material = i;

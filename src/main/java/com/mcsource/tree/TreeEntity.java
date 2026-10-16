@@ -27,7 +27,7 @@ public class TreeEntity extends Entity {
 	private static final EntityDataAccessor<String> WOOD = SynchedEntityData.defineId(TreeEntity.class, EntityDataSerializers.STRING);
 	/** Hits it takes to fell a tree. */
 	private static final int CHOPS = 5;
-	private static final double RENDER_DISTANCE = 192.0;
+	private static final double RENDER_DISTANCE = 112.0;
 
 	private int chops;
 

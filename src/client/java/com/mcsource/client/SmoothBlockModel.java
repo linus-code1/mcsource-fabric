@@ -44,9 +44,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			Predicate<Direction> cullTest) {
 		if (level != BlockAndTintGetter.EMPTY) {
-			if (state.is(SmoothTerrain.SMOOTH)) {
+			if (state.is(SmoothTerrain.SMOOTH) && !buried(level, pos)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, pos, state);
-				float[] grid = wide == null ? null : grid(wide);
+				float[] grid = wide == null ? null : grid(wide, level, pos);
 				if (grid != null) {
 					emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
 					return;
@@ -84,6 +84,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	private void emitFollowing(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			Predicate<Direction> cullTest, int ground, boolean thinSnow) {
 		int lightHere = LightCoordsUtil.getLightCoords(level, pos);
+		float[] corners = groundTop(level, pos, ground);
 		emitter.pushTransform(quad -> {
 			if (thinSnow && quad.faceNormal().y() < 0.5F) {
 				return false;
@@ -91,7 +92,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			for (int i = 0; i < 4; i++) {
 				float x = quad.x(i);
 				float z = quad.z(i);
-				float groundY = SmoothMath.surface(ground, Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F)) - 1.0F;
+				float u = Mth.clamp(x, 0.0F, 1.0F);
+				float v = Mth.clamp(z, 0.0F, 1.0F);
+				float groundY = Mth.lerp(v, Mth.lerp(u, corners[0], corners[1]), Mth.lerp(u, corners[2], corners[3])) - 1.0F;
 				float y = thinSnow ? groundY + SNOW_LIFT : quad.y(i) + groundY;
 				quad.pos(i, x, y, z);
 				// Plants and snow take the sun as if facing up, like the ground.
@@ -115,6 +118,34 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		} finally {
 			emitter.popTransform();
 		}
+	}
+
+	/**
+	 * Heights of the four top corners of the ground under a plant, in blocks
+	 * (index cx + 2 * cz): the collision corners, with flat ground corners
+	 * rounded the same way the ground itself is drawn.
+	 */
+	private static float[] groundTop(BlockAndTintGetter level, BlockPos pos, int packed) {
+		float[] out = new float[4];
+		for (int i = 0; i < 4; i++) {
+			out[i] = SmoothMath.corner(packed, i) / 8.0F;
+		}
+		BlockPos below = SmoothTerrain.ground(level, pos);
+		if (!level.getBlockState(below).is(SmoothTerrain.SMOOTH)) {
+			return out;
+		}
+		int[] heights = null;
+		for (int i = 0; i < 4; i++) {
+			int cx = i & 1;
+			int cz = i >> 1;
+			if (SmoothMath.corner(packed, i) == 8 && SmoothTerrain.flatGround(level, below, cx, cz)) {
+				if (heights == null) {
+					heights = columnHeights(level, below);
+				}
+				out[i] += rounding(heights, cx, 1, cz);
+			}
+		}
+		return out;
 	}
 
 	/** Sun and shadow for an ordinary block face, lit by the cell it faces. */
@@ -158,19 +189,72 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * Offsets in blocks of the 4x4x4 grid corners around a block, from -1 to
 	 * 2 on each axis, or null when none of them moves.
 	 */
-	private static float[] grid(int[] wide) {
+	private static float[] grid(int[] wide, BlockAndTintGetter level, BlockPos pos) {
 		float[] grid = new float[64];
 		boolean moved = false;
+		int[] heights = null;
 		for (int gy = -1; gy <= 2; gy++) {
 			for (int gz = -1; gz <= 2; gz++) {
 				for (int gx = -1; gx <= 2; gx++) {
 					int offset = SmoothTerrain.wideCornerOffset(wide, gx, gy, gz);
-					grid[node(gx, gy, gz)] = offset / 8.0F;
-					moved |= offset != 0;
+					float value = offset / 8.0F;
+					if (offset == 0 && SmoothTerrain.wideFlatGround(wide, gx, gy, gz)) {
+						if (heights == null) {
+							heights = columnHeights(level, pos);
+						}
+						value = rounding(heights, gx, gy, gz);
+					}
+					grid[node(gx, gy, gz)] = value;
+					moved |= value != 0.0F;
 				}
 			}
 		}
 		return moved ? grid : null;
+	}
+
+	/** Most a flat ground corner is moved to round off a terrace, in blocks. */
+	private static final float ROUNDING = 0.3F;
+
+	/** Ground heights of the 7x7 columns round a block, from -3 to 3 on x and z, index {@code dx + 3 + 7 * (dz + 3)}. */
+	private static int[] columnHeights(BlockAndTintGetter level, BlockPos pos) {
+		int[] heights = new int[49];
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int dz = -3; dz <= 3; dz++) {
+			for (int dx = -3; dx <= 3; dx++) {
+				heights[dx + 3 + 7 * (dz + 3)] = SmoothTerrain.columnHeight(level, pos, dx, dz, cursor);
+			}
+		}
+		return heights;
+	}
+
+	/**
+	 * How far a corner in flat ground moves (drawing only): towards the
+	 * average height of the ground round it, so the flat tops and feet of
+	 * terraces round off into the ramps between them instead of meeting
+	 * them at a crease. Weighted 1, 3, 3, 1 over the four columns each way.
+	 */
+	private static float rounding(int[] heights, int gx, int gy, int gz) {
+		int[] w = {1, 3, 3, 1};
+		float sum = 0.0F;
+		for (int j = 0; j < 4; j++) {
+			for (int i = 0; i < 4; i++) {
+				int h = heights[gx - 2 + i + 3 + 7 * (gz - 2 + j + 3)];
+				sum += w[i] * w[j] * Mth.clamp(h, gy - 2, gy + 2);
+			}
+		}
+		return Mth.clamp(sum / 64.0F - gy, -ROUNDING, ROUNDING);
+	}
+
+	/** Whether every side of the block is covered by a solid block, so nothing of it shows. */
+	private static boolean buried(BlockAndTintGetter level, BlockPos pos) {
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (Direction direction : Direction.values()) {
+			BlockState next = level.getBlockState(cursor.setWithOffset(pos, direction));
+			if (SmoothTerrain.isOpen(next) || !next.canOcclude()) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Catmull-Rom weights for the four nodes around a point {@code t} (0 to 1) between the middle two. */

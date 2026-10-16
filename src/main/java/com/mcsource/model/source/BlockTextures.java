@@ -892,7 +892,7 @@ public final class BlockTextures {
 			}
 			// 0 at the tips, 1 at the root.
 			float down = bottom == top ? 1.0F : (i / SIZE - top) / (float) (bottom - top);
-			float toward = 0.35F + 0.45F * down * down;
+			float toward = 0.5F + 0.4F * down * down;
 			float dark = 1.0F - 0.3F * down * down;
 			int out = p & 0xFF000000;
 			for (int c = 0; c < 3; c++) {
@@ -907,7 +907,7 @@ public final class BlockTextures {
 	/**
 	 * Short grass and ferns as Half-Life 2 style tufts: three cards in a star
 	 * rather than Minecraft's crossed pair, each block picking one of several
-	 * sprites and turnings at random, and many blocks left bare so the grass
+	 * sprites, sizes and turnings at random, and most blocks left bare so the grass
 	 * grows in scattered clumps.
 	 */
 	private static void grassTufts(Path packRoot) throws IOException {
@@ -929,17 +929,19 @@ public final class BlockTextures {
 					}
 				}
 			}
-			// About half the blocks are left bare (weight equal to all the tufts together).
-			variants.append(",\n\t\t{\"model\": \"mcsource:block/no_plant\", \"weight\": ").append(TUFTS * 2 * 4).append("}");
+			// Three blocks in four are left bare, so grass grows in scattered clumps.
+			variants.append(",\n\t\t{\"model\": \"mcsource:block/no_plant\", \"weight\": ").append(TUFTS * 2 * 4 * 3).append("}");
 			Files.writeString(states.resolve(plant + ".json"), "{\"variants\": {\"\": [\n\t\t" + variants + "\n\t]}}");
 		}
 	}
 
-	/** Three two-sided cards in a star, {@code grow} sixteenths wider and taller than a block. */
+	/** Three two-sided cards in a star, {@code grow} sixteenths bigger than the smallest tuft. */
 	private static String tuftModel(String texture, int grow) {
-		int low = -grow / 2;
-		int high = 16 + grow - grow / 2;
-		int top = 14 + grow;
+		// Low tufts, as wide as they are tall so the sprite keeps its shape:
+		// Half-Life 2's grass sprites are knee high at most.
+		int top = 10 + grow;
+		int low = 8 - top / 2;
+		int high = low + top;
 		return "{\"ambientocclusion\": false, \"textures\": {\"particle\": \"" + texture + "\", \"all\": \"" + texture + "\"},\n"
 				+ "\"elements\": [\n" + plantCard(low, 0, 8, high, top, 8, -22.5F) + ",\n" + plantCard(low, 0, 8, high, top, 8, 45.0F) + ",\n"
 				+ plantCard(8, 0, low, 8, top, high, 22.5F) + "\n]}";

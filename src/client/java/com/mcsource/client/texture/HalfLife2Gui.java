@@ -82,6 +82,60 @@ final class HalfLife2Gui {
 		return count;
 	}
 
+	/** Half-Life 2 skies tried for the title screen, best first. */
+	private static final String[] SKIES = {"skybox/sky_day01_01", "skybox/sky_day01_05", "skybox/sky_day02_02", "skybox/sky_day01_04",
+		"skybox/sky_day02_01", "skybox/sky_day01_06"};
+	/** Source's sky faces in the order of Minecraft's panorama images: north, east, south, west, up, down. */
+	private static final String[] FACES = {"ft", "rt", "bk", "lf", "up", "dn"};
+
+	/**
+	 * The title screen's turning background made from a Half-Life 2 skybox,
+	 * as its menu shows the game's world behind it. Returns the sky used, or
+	 * a note that none was found.
+	 */
+	static String panorama(com.mcsource.model.source.GameFiles files, Path packRoot) throws IOException {
+		for (String sky : SKIES) {
+			com.mcsource.model.RiggedModel.Texture[] faces = new com.mcsource.model.RiggedModel.Texture[6];
+			boolean all = true;
+			for (int i = 0; i < 6 && all; i++) {
+				try {
+					faces[i] = com.mcsource.model.source.Materials.load(files, sky + FACES[i], 1024);
+				} catch (IOException | RuntimeException e) {
+					faces[i] = null;
+				}
+				all = faces[i] != null;
+			}
+			if (!all) {
+				continue;
+			}
+			Path folder = packRoot.resolve("assets/minecraft/textures/gui/title/background");
+			Files.createDirectories(folder);
+			for (int i = 0; i < 6; i++) {
+				com.mcsource.model.RiggedModel.Texture face = faces[i];
+				int size = Math.min(face.width(), face.height());
+				int[] pixels = new int[size * size];
+				for (int y = 0; y < size; y++) {
+					for (int x = 0; x < size; x++) {
+						// Source's up and down faces are turned a quarter relative to Minecraft's.
+						int sx = x;
+						int sy = y;
+						if (i == 4) {
+							sx = y;
+							sy = size - 1 - x;
+						} else if (i == 5) {
+							sx = size - 1 - y;
+							sy = x;
+						}
+						pixels[y * size + x] = face.pixels()[sy * face.width() + sx] | 0xFF000000;
+					}
+				}
+				BlockTextures.writePng(folder.resolve("panorama_" + i + ".png"), pixels, size);
+			}
+			return sky;
+		}
+		return "(no Half-Life 2 skybox found)";
+	}
+
 	// Half-Life 2's VGUI scheme: flat dark panels with thin lighter borders.
 	private static final int PANEL = 0xF0383634;
 	private static final int SLOT = 0xFF1E1D1C;

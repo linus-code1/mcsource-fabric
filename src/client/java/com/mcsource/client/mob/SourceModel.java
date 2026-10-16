@@ -217,7 +217,7 @@ public final class SourceModel {
 	}
 
 	private float[] areas;
-	private float smallArea;
+	private float[] sortedAreas;
 
 	/** Each triangle's area in the bind pose, in square model units. */
 	private float[] areas() {
@@ -238,18 +238,20 @@ public final class SourceModel {
 				float cz = ux * vy - uy * vx;
 				out[i] = 0.5F * (float) Math.sqrt(cx * cx + cy * cy + cz * cz);
 			}
-			float[] sorted = out.clone();
-			java.util.Arrays.sort(sorted);
-			// A quarter of the triangles are smaller than this.
-			smallArea = sorted.length == 0 ? 0.0F : sorted[sorted.length / 4] * 0.35F;
+			sortedAreas = out.clone();
+			java.util.Arrays.sort(sortedAreas);
 			areas = out;
 		}
 		return areas;
 	}
 
-	private float smallArea() {
+	/** The area below which about {@code 1 - keep} of the triangles fall. */
+	private float smallArea(float keep) {
 		areas();
-		return smallArea;
+		if (sortedAreas.length == 0) {
+			return 0.0F;
+		}
+		return sortedAreas[Math.min(sortedAreas.length - 1, (int) ((1.0F - keep) * sortedAreas.length))];
 	}
 
 	/** Whether a material has see-through parts, such as leaves. */
@@ -274,7 +276,7 @@ public final class SourceModel {
 		int threshold = (int) (keep * 65536.0F);
 		// Solid parts drop their smallest triangles (twigs and thin branches)
 		// as the tree gets further away; the trunk and big boughs stay.
-		float minArea = keep >= 1.0F || cutout(material) ? 0.0F : smallArea() / keep;
+		float minArea = keep >= 1.0F || cutout(material) ? 0.0F : smallArea(keep);
 		for (int i = 0; i < count; i++) {
 			if (model.triangleTexture[i] != material || hidden != null && hidden[i]) {
 				continue;
