@@ -1,0 +1,75 @@
+# MC:Source (Fabric)
+
+A Fabric mod for Minecraft Java 26.3 that aims to make Minecraft look like a
+Source engine game (Half-Life 2 era) while playing exactly like Minecraft.
+
+This first step adds **smooth terrain with matching collision** and a test
+world to try it in.
+
+## What it does so far
+
+- **Smooth terrain.** Natural blocks (grass, dirt, stone, sand and the others
+  in `data/mcsource/tags/block/smooth_terrain.json`) lower the top corners that
+  face open air, so hills become slopes instead of stairs. Textures, grass tint
+  and side overlays bend with the surface.
+- **Sharp built blocks.** Anything not in that tag (planks, bricks, cobblestone,
+  glass and so on) stays a sharp cube, and terrain touching a built block keeps
+  full height there so the two meet cleanly.
+- **Matching collision.** The same corner heights drive collision, the block
+  outline and ray picking on both the client and the server, so you walk up the
+  slope you see. Collision is built from 8×8 columns that follow the drawn
+  surface to within an eighth of a block, with steps of at most 2/16 of a block.
+- **Plants sink with the ground.** Grass, flowers, saplings, snow layers and
+  similar blocks drop by the same amount as the ground under them.
+- **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
+  hills with a stone brick house near spawn, to compare smooth terrain against
+  sharp built blocks.
+
+## Install on your Mac
+
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for
+   Minecraft **26.3** with the Fabric installer. This adds a "fabric-loader-26.3"
+   profile to the normal Minecraft Launcher.
+2. Download [Fabric API](https://modrinth.com/mod/fabric-api) for 26.3.
+3. Get `mcsource-<version>.jar`: either download the `mcsource-mod` artifact
+   from the latest run on the repository's **Actions** tab, or build it yourself
+   (below).
+4. Put both jars in `~/Library/Application Support/minecraft/mods`.
+5. Start the Fabric profile, choose **Create New World → More → World Type →
+   MC:Source Test Hills**, and create the world.
+
+## Build
+
+Needs JDK 25.
+
+```sh
+./gradlew build
+```
+
+The mod jar is written to `build/libs/`. `./gradlew runClient` starts a dev
+client with the mod loaded.
+
+## How it works
+
+- `SmoothMath` holds the surface math shared by both sides: corner heights in
+  eighths of a block, the bilinear surface, and the collision column heights.
+- `SmoothTerrain` reads the 3×3 neighbourhood around a block (at its level and
+  one above) and decides each top corner's height. It only reads block states,
+  so the client and server always agree.
+- `BlockStateBaseMixin` returns the smooth shape from `getCollisionShape` and
+  `getShape` for smoothed blocks.
+- `SmoothBlockModel` (client) wraps every block model and, for smoothed blocks,
+  scales each vertex's height to the surface before it is meshed.
+- `TestHillsGenerator` is the test world's chunk generator.
+
+## Known limits
+
+- Natural block types are always smoothed, including ones a player places.
+  Telling placed blocks from generated ones needs per-block data synced to
+  clients, which is a later step.
+- Slopes between two levels are terraced: each block only lowers itself, so a
+  one-block rise shows as a ramp with a small step.
+- Water next to a lowered block can show a thin gap at its edge.
+- The Source look itself (lighting, materials, HDR, view model, HUD) comes in
+  later steps of the plan. Valve's SDK shader code is never copied in;
+  techniques are rebuilt from Valve's public talks and documentation.

@@ -1,0 +1,30 @@
+{
+	"values": [
+		"minecraft:grass_block",
+		"minecraft:dirt",
+		"minecraft:coarse_dirt",
+		"minecraft:podzol",
+		"minecraft:mycelium",
+		"minecraft:rooted_dirt",
+		"minecraft:mud",
+		"minecraft:clay",
+		"minecraft:moss_block",
+		"minecraft:sand",
+		"minecraft:red_sand",
+		"minecraft:gravel",
+		"minecraft:sandstone",
+		"minecraft:red_sandstone",
+		"minecraft:terracotta",
+		"minecraft:snow_block",
+		"minecraft:stone",
+		"minecraft:granite",
+		"minecraft:diorite",
+		"minecraft:andesite",
+		"minecraft:deepslate",
+		"minecraft:tuff",
+		"minecraft:calcite",
+		"minecraft:netherrack",
+		"minecraft:soul_soil",
+		"minecraft:end_stone"
+	]
+}

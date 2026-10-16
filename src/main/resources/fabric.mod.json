@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "mcsource",
+	"version": "${version}",
+	"name": "MC:Source",
+	"description": "Minecraft that looks like Half-Life: Source-style rendering with smooth terrain and matching collision.",
+	"authors": [
+		"linus-code1"
+	],
+	"contact": {
+		"sources": "https://github.com/linus-code1/mcsource-fabric"
+	},
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.mcsource.McSource"
+		],
+		"client": [
+			"com.mcsource.client.McSourceClient"
+		]
+	},
+	"mixins": [
+		"mcsource.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
