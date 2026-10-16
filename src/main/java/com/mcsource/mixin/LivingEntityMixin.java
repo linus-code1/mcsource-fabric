@@ -34,10 +34,14 @@ public abstract class LivingEntityMixin {
 	@Shadow
 	public abstract boolean onClimbable();
 
+	@Shadow
+	protected abstract float getJumpPower();
+
 	private boolean mcsource$usesSourceMovement() {
 		LivingEntity self = (LivingEntity) (Object) this;
 		return self instanceof Player player && player.isLocalPlayer() && !player.getAbilities().flying && !player.isPassenger()
-				&& !self.shouldDiscardFriction() && !onClimbable() && !self.hasEffect(MobEffects.LEVITATION);
+				&& !self.shouldDiscardFriction() && !onClimbable() && !self.hasEffect(MobEffects.LEVITATION)
+				&& self.level().hasChunkAt(self.blockPosition());
 	}
 
 	@Inject(method = "travelInAir(Lnet/minecraft/world/phys/Vec3;)V", at = @At("HEAD"), cancellable = true)
@@ -73,21 +77,41 @@ public abstract class LivingEntityMixin {
 			surface = Mth.clamp((1.0 - slip) / 0.4, 0.02, 1.0);
 		}
 
+		// Run the Source step several times per tick at Source-like rates and
+		// move by the distance covered over all of them.
+		double gravity = SourceMovement.GRAVITY * getEffectiveGravity() / 0.08;
+		double dt = 0.05 / SourceMovement.SUBSTEPS;
 		double[] velocity = {motion.x * 20.0, motion.z * 20.0};
-		SourceMovement.step(velocity, wishX, wishZ, wishSpeed, grounded, surface, 0.05);
-		self.setDeltaMovement(velocity[0] / 20.0, motion.y, velocity[1] / 20.0);
-		self.move(MoverType.SELF, self.getDeltaMovement());
-
-		// Vertical motion as in vanilla: gravity, then air drag.
-		Vec3 moved = self.getDeltaMovement();
-		double y = moved.y;
-		if (!self.level().isClientSide() || self.level().hasChunkAt(self.blockPosition())) {
-			y -= getEffectiveGravity();
-		} else {
-			y = self.getY() > self.level().getMinY() ? -0.1 : 0.0;
+		double vertical = motion.y * 20.0;
+		double dx = 0.0;
+		double dy = 0.0;
+		double dz = 0.0;
+		for (int i = 0; i < SourceMovement.SUBSTEPS; i++) {
+			SourceMovement.step(velocity, wishX, wishZ, wishSpeed, grounded, surface, dt);
+			// Half the gravity before moving and half after, as Source does.
+			double before = vertical;
+			vertical = Math.max(vertical - gravity * dt, -SourceMovement.MAX_FALL_SPEED);
+			dx += velocity[0] * dt;
+			dy += (before + vertical) * 0.5 * dt;
+			dz += velocity[1] * dt;
 		}
-		self.setDeltaMovement(moved.x, y * 0.98, moved.z);
+		// Set the end velocity first: moving zeroes the parts that hit something.
+		self.setDeltaMovement(velocity[0] / 20.0, vertical / 20.0, velocity[1] / 20.0);
+		self.move(MoverType.SELF, new Vec3(dx, dy, dz));
 		ci.cancel();
+	}
+
+	/** Source jump: a fixed upward speed, scaled by jump boost. */
+	@Inject(method = "jumpFromGround()V", at = @At("TAIL"))
+	private void mcsource$sourceJump(CallbackInfo ci) {
+		if (!mcsource$usesSourceMovement()) {
+			return;
+		}
+		LivingEntity self = (LivingEntity) (Object) this;
+		double gravity = SourceMovement.GRAVITY * getEffectiveGravity() / 0.08;
+		double boost = getJumpPower() / LivingEntity.BASE_JUMP_POWER;
+		Vec3 motion = self.getDeltaMovement();
+		self.setDeltaMovement(motion.x, SourceMovement.jumpSpeed(gravity) * boost / 20.0, motion.z);
 	}
 
 	/** No free speed boost for jumping while sprinting; speed comes from strafing instead. */

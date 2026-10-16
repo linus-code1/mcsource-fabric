@@ -154,7 +154,9 @@ public final class SunLight {
 			}
 			if (state.is(BlockTags.LEAVES)) {
 				transmit *= LEAF_TRANSMIT;
-			} else if (state.canOcclude()) {
+			} else if (state.isSolidRender()) {
+				// Only full opaque cubes block the sun. Snow layers, slabs and
+				// plants would otherwise shade the very surface they lie on.
 				// Smoothed ground may sit up to half a block lower than its cell,
 				// so its top half only blocks the sun when buried.
 				if (state.is(SmoothTerrain.SMOOTH) && py - by >= 0.5F

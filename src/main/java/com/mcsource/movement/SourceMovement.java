@@ -6,7 +6,8 @@ package com.mcsource.movement;
  * friction that slows you towards a stop, acceleration towards the speed you
  * ask for, and air control that only adds speed sideways to your motion, which
  * makes air strafing and bunny hopping work. Vertical motion (gravity and the
- * jump itself) stays Minecraft's so jump heights don't change.
+ * jump itself) uses Half-Life 2's gravity, with the jump tuned to clear a
+ * block like Minecraft's.
  *
  * <p>Speeds are in blocks per second. One block is taken as 40 Source units,
  * which makes the player 72 units tall like in Half-Life 2.
@@ -22,17 +23,28 @@ public final class SourceMovement {
 	public static final double FRICTION = 4.0;
 	public static final double ACCELERATE = 10.0;
 	public static final double AIR_ACCELERATE = 10.0;
+	/** Air control only adds speed up to this along the wished direction (30 units/s). */
+	public static final double AIR_SPEED_CAP = 30.0 / UNITS_PER_BLOCK;
+	/** Half-Life 2's gravity, 600 units/s². */
+	public static final double GRAVITY = 600.0 / UNITS_PER_BLOCK;
+	/** Jump height. A little over Minecraft's 1.25 so one-block steps stay jumpable. */
+	public static final double JUMP_HEIGHT = 1.3;
+	/** Source's sv_maxvelocity, 3500 units/s, for falling. */
+	public static final double MAX_FALL_SPEED = 3500.0 / UNITS_PER_BLOCK;
 	/**
-	 * Air control only adds speed up to this along the wished direction. Source
-	 * uses 30 units/s at 66 steps a second; the speed gained by strafing grows
-	 * with the square of this cap times the step rate, so Minecraft's 20 steps
-	 * a second need the cap raised by sqrt(66 / 20) to strafe as quickly.
+	 * Movement is worked out in this many steps per game tick, so it runs at 60
+	 * steps a second, close to Source's 66, instead of Minecraft's 20.
 	 */
-	public static final double AIR_SPEED_CAP = 30.0 * Math.sqrt(66.0 / 20.0) / UNITS_PER_BLOCK;
+	public static final int SUBSTEPS = 3;
 	/** Hard limit so speed can't grow past what the server accepts. */
 	public static final double MAX_SPEED = 3500.0 / UNITS_PER_BLOCK / 4.0;
 
 	private SourceMovement() {
+	}
+
+	/** Upward speed that reaches {@link #JUMP_HEIGHT} under {@code gravity}. */
+	public static double jumpSpeed(double gravity) {
+		return Math.sqrt(2.0 * gravity * JUMP_HEIGHT);
 	}
 
 	/**

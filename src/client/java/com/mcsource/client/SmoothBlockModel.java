@@ -130,14 +130,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				float nx = normals[corner * 3];
 				float ny = normals[corner * 3 + 1];
 				float nz = normals[corner * 3 + 2];
-				if (nx != 0 || ny != 0 || nz != 0) {
-					quad.normal(i, nx, ny, nz);
-				} else {
+				if (nx == 0 && ny == 0 && nz == 0) {
 					Vector3fc face = quad.faceNormal();
 					nx = face.x();
 					ny = face.y();
 					nz = face.z();
 				}
+				// Every vertex gets a normal: a quad missing one is shaded flat
+				// from its face normal, which shows each facet.
+				quad.normal(i, nx, ny, nz);
 				int sun = SunLight.multiplier(level, pos.getX() + quad.x(i), pos.getY() + quad.y(i), pos.getZ() + quad.z(i), nx, ny, nz,
 						LightCoordsUtil.sky(light[corner]), LightCoordsUtil.block(light[corner]));
 				quad.color(i, ARGB.multiply(quad.color(i), sun));
@@ -207,8 +208,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/**
-	 * Smooth light for each of the block's eight corners: the average light of
-	 * the open blocks around that corner, so moved faces never sample light from
+	 * Smooth light for each of the block's eight corners: the light of the
+	 * brightest open block around that corner, so moved faces never sample light from
 	 * inside solid ground. Corners with less open space around them are shaded
 	 * slightly darker, standing in for ambient occlusion.
 	 */
@@ -230,21 +231,24 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			int cy = corner >> 1 & 1;
 			int cz = corner >> 2 & 1;
 			int count = 0;
-			int blockSum = 0;
-			int skySum = 0;
+			int blockMax = 0;
+			int skyMax = 0;
 			for (int oy = cy - 1; oy <= cy; oy++) {
 				for (int oz = cz - 1; oz <= cz; oz++) {
 					for (int ox = cx - 1; ox <= cx; ox++) {
 						if (SmoothTerrain.isOpen(classes, ox, oy, oz)) {
 							int cell = cellLight[ox + 1 + 3 * (oz + 1) + 9 * (oy + 1)];
 							count++;
-							blockSum += LightCoordsUtil.block(cell);
-							skySum += LightCoordsUtil.sky(cell);
+							blockMax = Math.max(blockMax, LightCoordsUtil.block(cell));
+							skyMax = Math.max(skyMax, LightCoordsUtil.sky(cell));
 						}
 					}
 				}
 			}
-			light[corner] = count == 0 ? fallback : LightCoordsUtil.smoothPack(blockSum * 16 / count, skySum * 16 / count);
+			// The brightest open cell, not the average: the renderer never lets a
+			// face be darker than the cell it faces, so an average would be raised
+			// on some faces and not others, and the facets would show.
+			light[corner] = count == 0 ? fallback : LightCoordsUtil.pack(blockMax, skyMax);
 			int gray = Math.round(255 * (0.8F + 0.2F * Math.min(count, 4) / 4.0F));
 			shade[corner] = ARGB.color(255, gray, gray, gray);
 		}

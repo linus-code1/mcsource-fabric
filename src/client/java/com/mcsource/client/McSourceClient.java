@@ -10,5 +10,6 @@ public class McSourceClient implements ClientModInitializer {
 		// position at mesh time from the block tags, which arrive with the world.
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake()
 				.register((model, modelContext) -> new SmoothBlockModel(model)));
+		SourceHud.register();
 	}
 }

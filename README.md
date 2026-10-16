@@ -39,9 +39,20 @@ world to try it in.
   Source game: you speed up to 190 units/s running or 320 sprinting (one block
   counts as 40 units), ground friction brings you to a quick stop, and in the
   air you keep your momentum and can only steer by strafing. Air strafing and
-  bunny hopping (hold jump to hop on landing with no friction) both work. Jump
-  height and gravity stay Minecraft's, and sprint-jumping no longer gives a
-  free burst of speed. Swimming, flying, ladders and elytra are unchanged.
+  bunny hopping (hold jump to hop on landing with no friction) both work.
+  Movement is worked out at 60 steps a second, close to Source's 66, and uses
+  Half-Life 2's gravity; the jump is tuned to clear one block. Sprint-jumping
+  no longer gives a free burst of speed. Swimming, flying, ladders and elytra
+  are unchanged.
+- **Half-Life 1 style textures.** Block textures are smoothly filtered up close
+  like the GoldSrc renderer's, and their colours are muted, warmed and reduced
+  to a paletted look. This is done in the shader from Minecraft's own textures.
+- **Source-style HUD.** Health, suit (armour) and food as large yellow numbers
+  in dark translucent panels at the bottom left, the held item's count or
+  durability at the bottom right, an oxygen meter underwater, a weapon
+  selection row along the top when you change slot, and a small crosshair.
+  The HUD font is DejaVu Sans Bold (license in
+  `assets/mcsource/font/dejavu_license.txt`).
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
@@ -93,6 +104,10 @@ client with the mod loaded.
 - `SourceMovement` holds the friction and acceleration math, and
   `LivingEntityMixin` uses it in place of Minecraft's walking and air
   movement for your own player.
+- `SourceHud` (client) replaces the vanilla health, armour, food, air,
+  experience and hotbar HUD elements, and the crosshair.
+- `assets/minecraft/shaders/include/texture_sampling.glsl` replaces how block
+  textures are sampled, for the Half-Life 1 look.
 - `TestHillsGenerator` is the test world's chunk generator.
 
 ## Known limits
@@ -106,6 +121,8 @@ client with the mod loaded.
   shadows reach about 14 blocks, and mobs aren't shadowed by it yet.
 - Lamp light still comes from Minecraft's light levels. Blocks keep
   Minecraft's fixed face shading on top of the sun.
-- The rest of the Source look (materials, bloom and full HDR, view model, HUD)
-  comes in later steps of the plan. Valve's SDK shader code is never copied in;
+- Mobs and items still use Minecraft's sharp textures; only blocks get the
+  Half-Life 1 look so far. Menus are still Minecraft's.
+- The rest of the Source look (materials, bloom and full HDR, view model,
+  menus) comes in later steps of the plan. Valve's SDK shader code is never copied in;
   techniques are rebuilt from Valve's public talks and documentation.
