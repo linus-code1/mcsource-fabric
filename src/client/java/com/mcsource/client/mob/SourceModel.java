@@ -216,6 +216,42 @@ public final class SourceModel {
 		return materialTextures;
 	}
 
+	private float[] areas;
+	private float smallArea;
+
+	/** Each triangle's area in the bind pose, in square model units. */
+	private float[] areas() {
+		if (areas == null) {
+			float[] out = new float[model.triangleCount()];
+			for (int i = 0; i < out.length; i++) {
+				int a = model.cornerVertex[i * 3] * 3;
+				int b = model.cornerVertex[i * 3 + 1] * 3;
+				int c = model.cornerVertex[i * 3 + 2] * 3;
+				float ux = posed[b] - posed[a];
+				float uy = posed[b + 1] - posed[a + 1];
+				float uz = posed[b + 2] - posed[a + 2];
+				float vx = posed[c] - posed[a];
+				float vy = posed[c + 1] - posed[a + 1];
+				float vz = posed[c + 2] - posed[a + 2];
+				float cx = uy * vz - uz * vy;
+				float cy = uz * vx - ux * vz;
+				float cz = ux * vy - uy * vx;
+				out[i] = 0.5F * (float) Math.sqrt(cx * cx + cy * cy + cz * cz);
+			}
+			float[] sorted = out.clone();
+			java.util.Arrays.sort(sorted);
+			// A quarter of the triangles are smaller than this.
+			smallArea = sorted.length == 0 ? 0.0F : sorted[sorted.length / 4] * 0.35F;
+			areas = out;
+		}
+		return areas;
+	}
+
+	private float smallArea() {
+		areas();
+		return smallArea;
+	}
+
 	/** Whether a material has see-through parts, such as leaves. */
 	public boolean cutout(int material) {
 		return model.textures[material].masked();
@@ -233,8 +269,14 @@ public final class SourceModel {
 		int count = model.triangleCount();
 		boolean thin = keep < 1.0F && cutout(material);
 		int threshold = (int) (keep * 65536.0F);
+		// Solid parts drop their smallest triangles (twigs and thin branches)
+		// as the tree gets further away; the trunk and big boughs stay.
+		float minArea = keep >= 1.0F || cutout(material) ? 0.0F : smallArea() / keep;
 		for (int i = 0; i < count; i++) {
 			if (model.triangleTexture[i] != material || hidden != null && hidden[i]) {
+				continue;
+			}
+			if (minArea > 0.0F && areas()[i] < minArea) {
 				continue;
 			}
 			// Leaf cards are pairs of triangles; keep or drop both halves together.

@@ -1,5 +1,7 @@
 package com.mcsource.client.menu;
 
+import java.util.function.Consumer;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
@@ -19,9 +21,13 @@ public class MenuButton extends AbstractButton {
 	public static final FontDescription FONT = new FontDescription.Resource(Identifier.fromNamespaceAndPath("mcsource", "menu"));
 	public static final int HEIGHT = 16;
 
-	private final Runnable action;
+	private final Consumer<InputWithModifiers> action;
 
 	public MenuButton(int x, int y, Component label, Runnable action) {
+		this(x, y, label, input -> action.run());
+	}
+
+	public MenuButton(int x, int y, Component label, Consumer<InputWithModifiers> action) {
 		super(x, y, Minecraft.getInstance().font.width(styled(label)) + 4, HEIGHT, label);
 		this.action = action;
 	}
@@ -32,7 +38,7 @@ public class MenuButton extends AbstractButton {
 
 	@Override
 	public void onPress(InputWithModifiers input) {
-		action.run();
+		action.accept(input);
 	}
 
 	@Override

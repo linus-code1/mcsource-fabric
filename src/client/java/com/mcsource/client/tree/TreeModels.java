@@ -69,11 +69,44 @@ public final class TreeModels {
 				LOGGER.info("Tree model {} left out: not an upright tree", path);
 				return false;
 			}
+			if (fleshy(model)) {
+				LOGGER.info("Tree model {} left out: its bark is pink like flesh, not wood", path);
+				return false;
+			}
 			return true;
 		} catch (Exception e) {
 			LOGGER.info("Tree model {} could not be read: {}", path, e.toString());
 			return false;
 		}
+	}
+
+	/**
+	 * Whether the model's main solid texture is pinkish red, as on alien
+	 * growths, rather than the browns and greys of bark.
+	 */
+	private static boolean fleshy(RiggedModel model) {
+		int[] uses = new int[model.textures.length];
+		for (int t : model.triangleTexture) {
+			uses[t]++;
+		}
+		int main = -1;
+		for (int i = 0; i < uses.length; i++) {
+			if (!model.textures[i].masked() && (main < 0 || uses[i] > uses[main])) {
+				main = i;
+			}
+		}
+		if (main < 0) {
+			return false;
+		}
+		long r = 0;
+		long g = 0;
+		long b = 0;
+		for (int p : model.textures[main].pixels()) {
+			r += p >> 16 & 0xFF;
+			g += p >> 8 & 0xFF;
+			b += p & 0xFF;
+		}
+		return r > g * 1.35 && b > g * 0.8;
 	}
 
 	/** Positions are x, y, z with z up, in Source units. */
@@ -139,7 +172,7 @@ public final class TreeModels {
 			}
 			boolean skip = false;
 			for (String word : SKIP) {
-				skip |= file.contains(word);
+				skip |= name.contains(word);
 			}
 			if (skip) {
 				continue;

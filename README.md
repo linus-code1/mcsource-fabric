@@ -69,18 +69,23 @@ world to try it in.
   chunks and trees grown from saplings are Half-Life 2 tree models instead of
   log and leaves blocks: spruces become pines, pale oaks bare trees and the
   rest broadleaf trees, at their real size. Only upright tree models are
-  used, so logs, stumps, cliff trees and alien plants are left out. Forests
+  used, so logs, stumps, cliff trees and alien plants (by name, or by pink
+  flesh-like bark) are left out. Forests
   are thinned out since these trees are bigger, and further trees draw fewer,
-  bigger leaf cards so they cost less. Only the trunk is solid; hit a tree five times to
+  bigger leaf cards and drop their thinnest branches so they cost less. Only the trunk is solid; hit a tree five times to
   fell it into logs and saplings. Set `hl2_trees=false` in
   `config/mcsource.properties` to keep block trees.
 - **Half-Life 2 sun and moon.** The sun is a small white-hot disc in a soft
   glow, like Half-Life 2's env_sun, using its glow sprite. The moon is a
   cooler, dimmer version with Minecraft's phases. Set `scary_sun=true` in
   `config/mcsource.properties` to give the sun a face.
-- **Half-Life 2 style main menu.** The title screen shows the name at the
-  top left and a column of plain menu words over the moving background,
-  without the logo, splash text or button boxes.
+- **Half-Life 2 style menus.** The title screen shows the name at the top
+  left and a column of plain menu words over the moving background, without
+  the logo, splash text or button boxes; the pause menu is the same column
+  over the game. All text uses DejaVu Sans (close to the Verdana of
+  Half-Life 2's menus; license in `assets/mcsource/font/dejavu_license.txt`).
+  Buttons, sliders, lists and inventories are recoloured into Half-Life 2's
+  dark grey scheme, with light labels, when the Half-Life 2 pack is built.
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
   like the GoldSrc renderer's, and their colours are muted and warmed. This is
   done in the shader, for Minecraft's textures and Half-Life 2's alike.

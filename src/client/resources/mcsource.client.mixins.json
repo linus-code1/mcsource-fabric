@@ -6,7 +6,9 @@
 		"AvatarRendererMixin",
 		"FirstPersonHandsMixin",
 		"LivingEntityRendererMixin",
+		"GuiGraphicsExtractorMixin",
 		"PackRepositoryMixin",
+		"PauseScreenMixin",
 		"TitleScreenMixin"
 	],
 	"injectors": {
