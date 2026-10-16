@@ -27,6 +27,13 @@ world to try it in.
   enough that you walk up slopes without jumping.
 - **Plants and snow follow the ground.** Grass, flowers, saplings, snow layers
   and similar blocks bend to the surface of the ground under them.
+- **Source-style lighting.** Torches and other lamps light a warm pool that
+  falls off with the square of distance, whiter near the flame and orange at
+  the edge. Daylight is split into a warm direct sun, which only reaches places
+  open to the sky, and a cooler blue sky fill, so overhangs and tree shade read
+  as cool shadow. Bright light rolls off softly instead of clipping. Mobs,
+  players and items use half-Lambert shading, so light wraps around them and
+  their dark side keeps its shape.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
@@ -68,6 +75,10 @@ client with the mod loaded.
   so raised ground is checked for collision.
 - `SmoothBlockModel` (client) wraps every block model and, for smoothed blocks,
   moves each vertex up or down with its corners before it is meshed.
+- `assets/minecraft/shaders/core/lightmap.fsh` replaces the light colour table
+  every block and mob is lit through, and
+  `assets/minecraft/shaders/include/light.glsl` replaces the directional
+  light used on mobs and items.
 - `TestHillsGenerator` is the test world's chunk generator.
 
 ## Known limits
@@ -77,6 +88,9 @@ client with the mod loaded.
   clients, which is a later step.
 - Cliffs taller than one block keep a vertical middle; only their top and
   foot are rounded off.
-- The Source look itself (lighting, materials, HDR, view model, HUD) comes in
-  later steps of the plan. Valve's SDK shader code is never copied in;
+- Lighting still comes from Minecraft's light levels, so shadows are as blocky
+  as Minecraft's and the sun doesn't cast directional shadows. Blocks keep
+  Minecraft's fixed face shading.
+- The rest of the Source look (materials, bloom and full HDR, view model, HUD)
+  comes in later steps of the plan. Valve's SDK shader code is never copied in;
   techniques are rebuilt from Valve's public talks and documentation.
