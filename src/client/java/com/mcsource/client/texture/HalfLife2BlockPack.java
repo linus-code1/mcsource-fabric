@@ -32,12 +32,22 @@ import com.mcsource.model.source.BlockTextures;
  * Half-Life 2 files (see {@link BlockTextures}). The pack is built in
  * {@code config/mcsource/hl2_block_pack} the first time the game starts with
  * Half-Life 2 found, and again whenever the list in
- * {@code config/mcsource/block_textures.txt} changes.
+ * {@code config/mcsource/block_textures.txt} (the player's changes to the
+ * list) or the mod's own list changes.
  */
 public final class HalfLife2BlockPack implements RepositorySource {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	/** Bump when the way textures are built changes, so old packs are rebuilt. */
-	private static final String VERSION = "1";
+	private static final String VERSION = "2";
+	private static final String USER_LIST = """
+			# Your changes to which Half-Life 2 material each Minecraft block texture uses.
+			# A line here replaces the mod's own line for that texture, for example:
+			#   dirt = nature/dirtfloor005c
+			# Materials are paths under materials/ in the game (without .vmt); * matches anything,
+			# and the first one found is used. hl2_block_pack/used_materials.txt shows what was picked.
+			# To keep Minecraft's texture for a block, list a material that doesn't exist, such as:
+			#   stone = none
+			""";
 	private static boolean built;
 
 	@Override
@@ -65,12 +75,21 @@ public final class HalfLife2BlockPack implements RepositorySource {
 
 	private static void build(Path root, Path pack) throws IOException {
 		Files.createDirectories(root);
+		// The player's own lines override the built-in list line by line.
 		Path listFile = root.resolve("block_textures.txt");
 		if (!Files.isRegularFile(listFile)) {
-			Files.writeString(listFile, BlockTextures.DEFAULTS, StandardCharsets.UTF_8);
+			Files.writeString(listFile, USER_LIST, StandardCharsets.UTF_8);
 		}
 		String list = Files.readString(listFile, StandardCharsets.UTF_8);
-		String stamp = VERSION + ":" + list.hashCode();
+		if (list.startsWith("# Half-Life 2 materials used for Minecraft block textures.")) {
+			// The first version saved the whole built-in list here; replace it so
+			// later improvements to the list reach the player.
+			list = USER_LIST;
+			Files.writeString(listFile, list, StandardCharsets.UTF_8);
+		}
+		Map<String, String[]> mapping = BlockTextures.parse(BlockTextures.DEFAULTS);
+		mapping.putAll(BlockTextures.parse(list));
+		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode();
 		Path stampFile = pack.resolve("built_from.txt");
 		if (Files.isRegularFile(stampFile) && Files.readString(stampFile).equals(stamp)) {
 			return;
@@ -78,7 +97,7 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		long start = System.currentTimeMillis();
 		Path fresh = root.resolve("hl2_block_pack.new");
 		delete(fresh);
-		Map<String, String> used = BlockTextures.generate(GameInstalls.source(), BlockTextures.parse(list), fresh);
+		Map<String, String> used = BlockTextures.generate(GameInstalls.source(), mapping, fresh);
 		List<String> missing = new ArrayList<>();
 		StringBuilder report = new StringBuilder();
 		for (Map.Entry<String, String> entry : used.entrySet()) {

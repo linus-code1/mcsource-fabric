@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,14 +41,16 @@ public final class BlockTextures {
 			".*(blend|water|sky|decal|tools/|dev/|_normal|_bump|ssbump|overlay|sprite|refract|glow|_mask|_spec|_phong|editor|nodraw|detail|_noise|_illum).*");
 
 	/**
-	 * The default list, one line per Minecraft block texture. It is saved to
-	 * the player's config folder, where it can be edited.
+	 * The built-in list, one line per Minecraft block texture. Lines in the
+	 * player's own list replace these.
 	 */
 	public static final String DEFAULTS = """
-			# Half-Life 2 materials used for Minecraft block textures.
+			# The mod's list of Half-Life 2 materials for Minecraft block textures.
 			# Each line: minecraft_texture = material material ...
 			# Materials are paths under materials/ in the game (without .vmt); * matches anything.
-			# The first one found is used. Delete a line to keep Minecraft's texture.
+			# The first one found is used.
+			# Grass, ferns and flowers are cut out of Half-Life 2's detail sprite sheet (its grass is sprites too).
+			plants = detail/detailsprites detail/detailsprites_2 detail/detailsprites*
 			grass_block_top = nature/grassfloor002a nature/grassfloor003a nature/grassfloor00* nature/*grass* *grass*
 			dirt = nature/dirtfloor003a nature/dirtfloor004a nature/dirtfloor00* nature/*dirt* *dirt*
 			coarse_dirt = nature/dirtfloor005c nature/dirtfloor006a nature/dirtfloor01* nature/*dirt* *dirt*
@@ -156,12 +159,16 @@ public final class BlockTextures {
 		Map<String, int[]> made = new LinkedHashMap<>();
 		for (Map.Entry<String, String[]> entry : mapping.entrySet()) {
 			String name = entry.getKey();
+			if (name.equals("plants")) {
+				plants(files, entry.getValue(), materials, folder, used);
+				continue;
+			}
 			String chosen = null;
 			int[] image = null;
 			for (String pattern : entry.getValue()) {
 				for (String material : candidates(pattern, materials)) {
 					RiggedModel.Texture texture = Materials.load(files, material, SIZE * 2);
-					if (texture != null) {
+					if (texture != null && suits(name, texture)) {
 						chosen = material;
 						image = square(texture);
 						break;
@@ -203,7 +210,39 @@ public final class BlockTextures {
 		return used;
 	}
 
+	/**
+	 * Whether a texture can stand in for a Minecraft one. Leaves and grass
+	 * must be mostly green and not too dark, so bare branches or dead grass
+	 * found by a pattern are passed over.
+	 */
+	private static boolean suits(String name, RiggedModel.Texture texture) {
+		if (tint(name) == 0) {
+			return true;
+		}
+		long r = 0;
+		long g = 0;
+		long b = 0;
+		int count = 0;
+		for (int p : texture.pixels()) {
+			if ((p >>> 24) < 128) {
+				continue;
+			}
+			r += p >> 16 & 255;
+			g += p >> 8 & 255;
+			b += p & 255;
+			count++;
+		}
+		if (count < texture.pixels().length / 4) {
+			return false;
+		}
+		return g >= r && g >= b && (r + g + b) / (3.0 * count) > 30;
+	}
+
 	private static List<String> candidates(String pattern, List<String> materials) {
+		return candidates(pattern, materials, true);
+	}
+
+	private static List<String> candidates(String pattern, List<String> materials, boolean skipSpecial) {
 		String lower = pattern.toLowerCase(Locale.ROOT);
 		if (!lower.contains("*")) {
 			return List.of(lower);
@@ -211,11 +250,254 @@ public final class BlockTextures {
 		Pattern regex = Pattern.compile(Pattern.quote(lower).replace("*", "\\E.*\\Q"));
 		List<String> out = new ArrayList<>();
 		for (String material : materials) {
-			if (regex.matcher(material).matches() && !SKIP.matcher(material).matches()) {
+			if (regex.matcher(material).matches() && !(skipSpecial && SKIP.matcher(material).matches())) {
 				out.add(material);
 				if (out.size() >= 8) {
 					break;
 				}
+			}
+		}
+		return out;
+	}
+
+	// ------------------------------------------------------------ plants
+
+	/** Plant textures and the kind of sprite each takes. */
+	private static final String[][] GREEN_PLANTS = {
+		{"short_grass", "wide"}, {"fern", "any"}, {"tall_grass", "tall"}, {"large_fern", "any"}, {"short_dry_grass", "wide"},
+		{"bush", "wide"}, {"sugar_cane", "tall"},
+	};
+	private static final String[][] FLOWERS = {
+		{"poppy", "red"}, {"red_tulip", "red"}, {"dandelion", "yellow"}, {"sunflower_front", "yellow"}, {"cornflower", "blue"},
+		{"blue_orchid", "blue"}, {"oxeye_daisy", "white"}, {"azure_bluet", "white"}, {"lily_of_the_valley", "white"},
+		{"white_tulip", "white"}, {"allium", "purple"}, {"pink_tulip", "purple"}, {"orange_tulip", "red"},
+	};
+	/** Plant textures Minecraft tints with the grass colour. */
+	private static final java.util.Set<String> GRASS_TINTED = java.util.Set.of("short_grass", "fern", "tall_grass_top",
+		"tall_grass_bottom", "large_fern_top", "large_fern_bottom", "sugar_cane", "bush");
+
+	/** One sprite on a sheet: its bounds and average colour. */
+	private record Sprite(int x, int y, int w, int h, int pixels, float r, float g, float b) {
+		String colour() {
+			float max = Math.max(r, Math.max(g, b));
+			float min = Math.min(r, Math.min(g, b));
+			if (max - min < 0.12F) {
+				return max > 0.6F ? "white" : "grey";
+			}
+			if (g >= r && g >= b) {
+				return r > g * 0.95F && b < g * 0.6F ? "yellow" : "green";
+			}
+			if (r >= g && r >= b) {
+				if (b > g * 1.1F) {
+					return "purple";
+				}
+				return g > r * 0.7F ? (b < g * 0.6F ? "yellow" : "brown") : "red";
+			}
+			return r > g ? "purple" : "blue";
+		}
+	}
+
+	/**
+	 * Cuts grass, ferns and flowers out of a sprite sheet: every separate
+	 * patch of opaque pixels is a sprite, and sprites are matched to plants
+	 * by colour and shape.
+	 */
+	private static void plants(GameFiles files, String[] patterns, List<String> materials, Path folder, Map<String, String> used)
+			throws IOException {
+		RiggedModel.Texture sheet = null;
+		String chosen = null;
+		for (String pattern : patterns) {
+			for (String material : candidates(pattern, materials, false)) {
+				RiggedModel.Texture texture = Materials.load(files, material, 1024, true);
+				if (texture != null) {
+					sheet = texture;
+					chosen = material;
+					break;
+				}
+			}
+			if (sheet != null) {
+				break;
+			}
+		}
+		if (sheet == null) {
+			used.put("plants", null);
+			return;
+		}
+		List<Sprite> sprites = findSprites(sheet);
+		List<Sprite> green = new ArrayList<>();
+		Map<String, List<Sprite>> coloured = new LinkedHashMap<>();
+		for (Sprite sprite : sprites) {
+			String colour = sprite.colour();
+			if (colour.equals("green")) {
+				green.add(sprite);
+			} else {
+				coloured.computeIfAbsent(colour, c -> new ArrayList<>()).add(sprite);
+			}
+		}
+		if (green.isEmpty()) {
+			used.put("plants", null);
+			return;
+		}
+		// Biggest first.
+		green.sort((a, b) -> Integer.compare(b.pixels, a.pixels));
+		int next = 0;
+		for (String[] plant : GREEN_PLANTS) {
+			Sprite pick = pickShape(green, plant[1], next++);
+			String name = plant[0];
+			if (name.equals("tall_grass") || name.equals("large_fern")) {
+				int[] tall = spriteImage(sheet, pick, SIZE, SIZE * 2);
+				writePlant(folder, name + "_top", java.util.Arrays.copyOfRange(tall, 0, SIZE * SIZE));
+				writePlant(folder, name + "_bottom", java.util.Arrays.copyOfRange(tall, SIZE * SIZE, SIZE * SIZE * 2));
+			} else {
+				writePlant(folder, name, spriteImage(sheet, pick, SIZE, SIZE));
+			}
+			used.put(name, chosen + " (sprite at " + pick.x + "," + pick.y + ")");
+		}
+		List<Sprite> brown = coloured.getOrDefault("brown", List.of());
+		if (!brown.isEmpty()) {
+			writePlant(folder, "dead_bush", spriteImage(sheet, brown.getFirst(), SIZE, SIZE));
+			used.put("dead_bush", chosen + " (sprite at " + brown.getFirst().x + "," + brown.getFirst().y + ")");
+		}
+		Map<String, Integer> nextOfColour = new HashMap<>();
+		for (String[] flower : FLOWERS) {
+			List<Sprite> options = coloured.getOrDefault(flower[1], List.of());
+			if (options.isEmpty()) {
+				used.put(flower[0], null);
+				continue;
+			}
+			int index = nextOfColour.merge(flower[1], 1, Integer::sum) - 1;
+			Sprite pick = options.get(index % options.size());
+			writePlant(folder, flower[0], spriteImage(sheet, pick, SIZE, SIZE));
+			used.put(flower[0], chosen + " (sprite at " + pick.x + "," + pick.y + ")");
+		}
+	}
+
+	/** The {@code index}th sprite of a shape among {@code sprites}, wrapping round when there are too few. */
+	private static Sprite pickShape(List<Sprite> sprites, String shape, int index) {
+		List<Sprite> fitting = new ArrayList<>();
+		for (Sprite sprite : sprites) {
+			boolean ok = switch (shape) {
+				case "wide" -> sprite.w >= sprite.h * 0.8F;
+				case "tall" -> sprite.h >= sprite.w * 1.3F;
+				default -> true;
+			};
+			if (ok) {
+				fitting.add(sprite);
+			}
+		}
+		if (fitting.isEmpty()) {
+			fitting = sprites;
+		}
+		return fitting.get(index % fitting.size());
+	}
+
+	private static void writePlant(Path folder, String name, int[] image) throws IOException {
+		if (GRASS_TINTED.contains(name)) {
+			untint(image, GRASS_TINT);
+		}
+		writePng(folder.resolve(name + ".png"), image, SIZE);
+	}
+
+	/** Separate patches of opaque pixels, small specks left out. */
+	private static List<Sprite> findSprites(RiggedModel.Texture sheet) {
+		int w = sheet.width();
+		int h = sheet.height();
+		int[] px = sheet.pixels();
+		// Grow the opaque area a little so the blades of one tuft join up.
+		boolean[] solid = new boolean[w * h];
+		int grow = Math.max(1, w / 256);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				if ((px[y * w + x] >>> 24) < 96) {
+					continue;
+				}
+				for (int dy = -grow; dy <= grow; dy++) {
+					for (int dx = -grow; dx <= grow; dx++) {
+						int nx = x + dx;
+						int ny = y + dy;
+						if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+							solid[ny * w + nx] = true;
+						}
+					}
+				}
+			}
+		}
+		int[] label = new int[w * h];
+		int[] stack = new int[w * h];
+		List<Sprite> out = new ArrayList<>();
+		int minSide = Math.max(4, w / 40);
+		int next = 1;
+		for (int start = 0; start < w * h; start++) {
+			if (!solid[start] || label[start] != 0) {
+				continue;
+			}
+			int top = 0;
+			stack[top++] = start;
+			label[start] = next;
+			int minX = w;
+			int minY = h;
+			int maxX = 0;
+			int maxY = 0;
+			int count = 0;
+			double r = 0;
+			double g = 0;
+			double b = 0;
+			while (top > 0) {
+				int i = stack[--top];
+				int x = i % w;
+				int y = i / w;
+				int p = px[i];
+				if ((p >>> 24) >= 96) {
+					// Bounds of the sprite's own pixels, not the grown area.
+					minX = Math.min(minX, x);
+					maxX = Math.max(maxX, x);
+					minY = Math.min(minY, y);
+					maxY = Math.max(maxY, y);
+					count++;
+					r += (p >> 16 & 255) / 255.0;
+					g += (p >> 8 & 255) / 255.0;
+					b += (p & 255) / 255.0;
+				}
+				int[][] steps = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+				for (int[] step : steps) {
+					int nx = x + step[0];
+					int ny = y + step[1];
+					if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+						int n = ny * w + nx;
+						if (solid[n] && label[n] == 0) {
+							label[n] = next;
+							stack[top++] = n;
+						}
+					}
+				}
+			}
+			next++;
+			int sw = maxX - minX + 1;
+			int sh = maxY - minY + 1;
+			if (sw >= minSide && sh >= minSide && count > 0) {
+				out.add(new Sprite(minX, minY, sw, sh, count, (float) (r / count), (float) (g / count), (float) (b / count)));
+			}
+		}
+		return out;
+	}
+
+	/** A sprite scaled to fit {@code w} by {@code h}, standing on the bottom edge and centred. */
+	private static int[] spriteImage(RiggedModel.Texture sheet, Sprite sprite, int w, int h) {
+		int[] out = new int[w * h];
+		float scale = Math.min((float) w / sprite.w, (float) h / sprite.h);
+		int dw = Math.max(1, Math.round(sprite.w * scale));
+		int dh = Math.max(1, Math.round(sprite.h * scale));
+		int ox = (w - dw) / 2;
+		int oy = h - dh;
+		int sheetW = sheet.width();
+		for (int y = 0; y < dh; y++) {
+			for (int x = 0; x < dw; x++) {
+				int sx = Math.min(sprite.x + (int) (x / scale), sprite.x + sprite.w - 1);
+				int sy = Math.min(sprite.y + (int) (y / scale), sprite.y + sprite.h - 1);
+				int p = sheet.pixels()[sy * sheetW + sx];
+				// Minecraft's cut-out drops pixels below 10% alpha; make edges firm.
+				int a = p >>> 24;
+				out[(oy + y) * w + ox + x] = a < 96 ? 0 : (p | 0xFF000000);
 			}
 		}
 		return out;

@@ -27,6 +27,11 @@ public final class Materials {
 	 * (such as shininess) there.
 	 */
 	public static RiggedModel.Texture load(GameFiles files, String path, int maxSize) throws IOException {
+		return load(files, path, maxSize, false);
+	}
+
+	/** As {@link #load(GameFiles, String, int)}, keeping the texture's alpha when {@code keepAlpha} even if the material is opaque. */
+	public static RiggedModel.Texture load(GameFiles files, String path, int maxSize, boolean keepAlpha) throws IOException {
 		String name = clean(path, ".vmt");
 		String text = null;
 		for (int depth = 0; depth < 4; depth++) {
@@ -48,7 +53,7 @@ public final class Materials {
 		if (!base.find()) {
 			return null;
 		}
-		boolean cutout = CUTOUT.matcher(text).find();
+		boolean cutout = keepAlpha || CUTOUT.matcher(text).find();
 		byte[] vtf = files.read("materials/" + clean(base.group(1), ".vtf") + ".vtf");
 		if (vtf == null) {
 			return null;

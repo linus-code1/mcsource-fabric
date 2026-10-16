@@ -39,9 +39,6 @@ public abstract class FirstPersonHandsMixin {
 	/** Source draws view models with a 54 degree field of view. */
 	private static final float VIEW_MODEL_FOV = 54.0F;
 	private static final float UNITS = 1.0F / 40.0F;
-	/** How far the hand is moved up and towards the middle of the screen, in blocks. */
-	private static final float HAND_UP = 0.12F;
-	private static final float HAND_IN = 0.05F;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
@@ -69,13 +66,15 @@ public abstract class FirstPersonHandsMixin {
 		model.skinning(pose, bones);
 
 		poseStack.pushPose();
-		// Without its weapon the hand sits low in the corner, so lift it and
-		// bring it in a little. It is lowered while switching items, as
-		// Minecraft lowers its arm.
-		poseStack.translate(arm == HumanoidArm.LEFT ? HAND_IN : -HAND_IN, HAND_UP + inverseArmHeight * -0.6F, 0.0F);
-		// Spread sideways and up so it fills the screen as it would at Source's view model field of view.
+		// Lowered while switching items, as Minecraft lowers its arm.
+		poseStack.translate(0.0F, inverseArmHeight * -0.6F, 0.0F);
+		// Spread sideways and up so it fills the screen as it would at Source's
+		// view model field of view. Source's is horizontal on a 4:3 screen and
+		// Minecraft's is vertical, so compare their vertical halves. Moving the
+		// model itself would show the open end of the sleeve.
 		float fov = Minecraft.getInstance().options.fov().get();
-		float spread = (float) (Math.tan(Math.toRadians(fov / 2.0F)) / Math.tan(Math.toRadians(VIEW_MODEL_FOV / 2.0F)));
+		double sourceHalf = Math.atan(Math.tan(Math.toRadians(VIEW_MODEL_FOV / 2.0F)) * 0.75);
+		float spread = (float) (Math.tan(Math.toRadians(fov / 2.0F)) / Math.tan(sourceHalf));
 		poseStack.scale(spread, spread, 1.0F);
 		// Source's forward (x) becomes the camera's forward (-z).
 		poseStack.rotateDegrees(Axis.YP, 180.0F);

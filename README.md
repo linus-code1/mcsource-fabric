@@ -54,9 +54,10 @@ world to try it in.
   (grass, dirt, stone, cobblestone, gravel, sand, planks, bricks, concrete
   and more) use the closest Half-Life 2 materials, built from your install
   into an always-on resource pack at `config/mcsource/hl2_block_pack` the
-  first time the game starts. The list of which material goes with which
-  block is `config/mcsource/block_textures.txt`; edit it and restart to change
-  a match, and see `hl2_block_pack/used_materials.txt` for what was picked.
+  first time the game starts. Grass, ferns and flowers are cut out of Half-Life
+  2's grass sprite sheet, since its grass is sprites too. See
+  `hl2_block_pack/used_materials.txt` for what was picked, and put your own
+  matches in `config/mcsource/block_textures.txt` (restart to apply).
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
   like the GoldSrc renderer's, and their colours are muted and warmed. This is
   done in the shader, for Minecraft's textures and Half-Life 2's alike.
@@ -75,12 +76,20 @@ world to try it in.
   (see *Half-Life models* below), idling and swinging with its own
   animations. Without it, the hand is the mod's own rigged suit hand: an
   orange sleeve and a black glove with a full finger skeleton.
-- **Zombie.** Zombies use Half-Life 2's classic zombie if you own Half-Life 2,
-  else Half-Life 1's zombie if you own that, read at run time from your
-  install; neither is ever shipped with this mod. Without either, zombies are
-  the mod's own rigged zombie scientist in a torn lab coat with a parasite on
-  its head and clawed hands. Every model plays its own idle, walk, attack and
-  death animations; the walk keeps pace with how fast the mob moves.
+- **Half-Life 2 mobs.** With Half-Life 2 installed, mobs use the closest
+  Half-Life 2 (and Episode One and Two) characters, read at run time from your
+  install and never shipped with this mod: zombies, drowned and zombie
+  villagers are classic zombies, husks fast zombies, witches and zombified
+  piglins poison zombies, creepers zombines, skeletons Combine soldiers,
+  wither skeletons and evokers Combine elites, pillagers and piglins Civil
+  Protection, spiders antlions, cave spiders antlion workers, silverfish and
+  endermites headcrabs, ravagers and wardens antlion guards, iron golems
+  vortigaunts, endermen stalkers, villagers citizens, chickens pigeons, bats
+  crows, parrots seagulls, phantoms scanners, vexes manhacks, guardians
+  ichthyosaurs and squid leeches (see `SourceRigs`). Each is sized to the
+  mob's height and plays its own idle, walk and attack animations. Mobs with
+  no match look as in Minecraft. Without Half-Life 2, zombies use Half-Life
+  1's zombie if you own it, else the mod's own rigged zombie scientist.
 - **Kart.** A drivable go-kart, found in the Tools & Utilities tab. Use it on
   the ground to place it, use the kart to get in, then drive with W and S and
   steer with A and D; it slides a little through fast corners and climbs
@@ -204,7 +213,8 @@ client with the mod loaded.
   glass, water and so on) keep Minecraft's textures, and one block shows a
   whole Half-Life 2 texture, so patterns look smaller than in Half-Life 2. Menus are still Minecraft's.
 - Half-Life 2's hands show only with an empty hand; held items still use
-  Minecraft's arm.
+  Minecraft's arm. Mobs drawn with Half-Life 2 models don't show armour or
+  held items, and their heads don't turn to look at you.
 - The rest of the Source look (materials, bloom and full HDR, weapon view
   models, menus) comes in later steps of the plan. Valve's SDK shader code is never copied in;
   techniques are rebuilt from Valve's public talks and documentation.

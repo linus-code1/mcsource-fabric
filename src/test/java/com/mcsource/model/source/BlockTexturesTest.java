@@ -66,6 +66,57 @@ class BlockTexturesTest {
 		assertTrue(Files.notExists(blocks.resolve("stone.png")));
 	}
 
+	@Test
+	void cutsPlantsFromSpriteSheet() throws IOException {
+		Map<String, byte[]> files = new HashMap<>();
+		// A 64x64 sheet: a green tuft on the left, a red flower on the right.
+		int size = 64;
+		int[] sheet = new int[size * size];
+		for (int y = 20; y < 60; y++) {
+			for (int x = 4; x < 28; x++) {
+				sheet[y * size + x] = 0xFF30A020;
+			}
+			for (int x = 40; x < 52; x++) {
+				sheet[y * size + x] = 0xFFC02020;
+			}
+		}
+		files.put("materials/detail/detailsprites.vmt",
+				"\"UnlitGeneric\" { \"$basetexture\" \"detail/detailsprites\" }".getBytes(StandardCharsets.US_ASCII));
+		files.put("materials/detail/detailsprites.vtf", vtf(size, sheet));
+		GameFiles game = new GameFiles() {
+			@Override
+			public byte[] read(String path) {
+				return files.get(path.toLowerCase());
+			}
+
+			@Override
+			public List<String> list(String folder) {
+				return new ArrayList<>(files.keySet());
+			}
+		};
+		Map<String, String> used = BlockTextures.generate(game, BlockTextures.parse("plants = detail/detailsprites\n"), dir);
+		assertTrue(used.get("short_grass").startsWith("detail/detailsprites"));
+		assertTrue(used.get("poppy").contains("sprite at 40,"));
+		assertNull(used.get("cornflower"));
+		Path blocks = dir.resolve("assets/minecraft/textures/block");
+		for (String name : new String[] {"short_grass", "tall_grass_top", "tall_grass_bottom", "fern", "poppy"}) {
+			assertTrue(Files.exists(blocks.resolve(name + ".png")));
+		}
+	}
+
+	private static byte[] vtf(int size, int[] argb) {
+		ByteBuffer b = ByteBuffer.allocate(80 + size * size * 4).order(ByteOrder.LITTLE_ENDIAN);
+		b.putInt(0, 0x00465456).putInt(4, 7).putInt(8, 2).putInt(12, 80);
+		b.putShort(16, (short) size).putShort(18, (short) size).putShort(24, (short) 1);
+		b.putInt(52, 12); // BGRA8888
+		b.put(56, (byte) 1).putInt(57, -1).putShort(63, (short) 1);
+		for (int i = 0; i < argb.length; i++) {
+			int p = argb[i];
+			b.put(80 + i * 4, (byte) p).put(81 + i * 4, (byte) (p >> 8)).put(82 + i * 4, (byte) (p >> 16)).put(83 + i * 4, (byte) (p >>> 24));
+		}
+		return b.array();
+	}
+
 	/** A material and its 4x4 single-colour texture. */
 	private static void material(Map<String, byte[]> files, String name, int argb) {
 		files.put("materials/" + name + ".vmt",

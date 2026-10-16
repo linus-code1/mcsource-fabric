@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.textures.FilterMode;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
@@ -133,7 +135,13 @@ public final class SourceModel {
 			}
 		}
 		texture = Identifier.fromNamespaceAndPath("mcsource", "model/" + textureCount++);
-		Minecraft.getInstance().getTextureManager().register(texture, new DynamicTexture(() -> "MC:Source model " + source, image));
+		DynamicTexture dynamic = new DynamicTexture(() -> "MC:Source model " + source, image) {
+			{
+				// Smoothly filtered, as Source and GoldSrc draw model textures.
+				sampler = RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR);
+			}
+		};
+		Minecraft.getInstance().getTextureManager().register(texture, dynamic);
 
 		// Texture coordinates wrap inside their own texture's band of the image.
 		int corners = model.cornerVertex.length;
