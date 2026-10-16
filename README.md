@@ -20,7 +20,8 @@ world to try it in.
 - **Sharp built blocks.** Anything not in that tag (planks, bricks, cobblestone,
   glass and so on) stays a sharp cube. Corners touching a built block or lava
   don't move, so the two meet cleanly. Ground under water is smoothed like
-  ground under air.
+  ground under air, except along the water's surface, so shores meet the
+  water without a gap.
 - **Matching collision.** The same corner heights drive collision, the block
   outline and ray picking on both the client and the server, so you walk up the
   slope you see. Collision is built from 8×8 columns that follow the drawn
@@ -42,9 +43,7 @@ world to try it in.
   sun or in the shadow of trees, hills and buildings keep only the blue fill;
   shadows have soft edges and leaves let some light through. Bright light rolls off softly instead of clipping. Mobs,
   players and items use half-Lambert shading, so light wraps around them and
-  their dark side keeps its shape. Mob and player shadows are cast by the same
-  sun: a darker, longer shadow that falls away from it, like Source's
-  projected shadows.
+  their dark side keeps its shape.
 - **Source movement.** On land and in the air the player moves like in a
   Source game: you speed up to 190 units/s running or 320 sprinting (one block
   counts as 40 units), ground friction brings you to a quick stop, and in the
@@ -65,6 +64,20 @@ world to try it in.
   leaf cards, like Source trees, instead of cubes. See
   `hl2_block_pack/used_materials.txt` for what was picked, and put your own
   matches in `config/mcsource/block_textures.txt` (restart to apply).
+- **Half-Life 2 trees.** With Half-Life 2 installed, trees in newly made
+  chunks and trees grown from saplings are Half-Life 2 tree models instead of
+  log and leaves blocks: spruces become pines, pale oaks bare trees and the
+  rest broadleaf trees, at their real size. Forests are thinned out since
+  these trees are bigger. Only the trunk is solid; hit a tree five times to
+  fell it into logs and saplings. Set `hl2_trees=false` in
+  `config/mcsource.properties` to keep block trees.
+- **Half-Life 2 sun and moon.** The sun is a small white-hot disc in a soft
+  glow, like Half-Life 2's env_sun, using its glow sprite. The moon is a
+  cooler, dimmer version with Minecraft's phases. Set `scary_sun=true` in
+  `config/mcsource.properties` to give the sun a face.
+- **Half-Life 2 style main menu.** The title screen shows the name at the
+  top left and a column of plain menu words over the moving background,
+  without the logo, splash text or button boxes.
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
   like the GoldSrc renderer's, and their colours are muted and warmed. This is
   done in the shader, for Minecraft's textures and Half-Life 2's alike.
@@ -209,14 +222,15 @@ client with the mod loaded.
 
 ## Known limits
 
+- Trees in chunks made before `hl2_trees` was on stay as blocks. Tree models
+  are drawn on the CPU each frame, so big forests cost frame rate.
 - Natural block types are always smoothed, including ones a player places.
   Telling placed blocks from generated ones needs per-block data synced to
   clients, which is a later step.
 - Cliffs taller than one block keep a vertical middle; only their top and
   foot are rounded off.
 - The sun direction is fixed and doesn't follow the sun in the sky. Sun
-  shadows reach about 14 blocks, and mobs don't cast them on the terrain;
-  their own shadow is a stretched blob.
+  shadows reach about 14 blocks, and mobs aren't shadowed by it.
 - Lamp light still comes from Minecraft's light levels. Blocks keep
   Minecraft's fixed face shading on top of the sun.
 - Mobs and items still use Minecraft's sharp textures; only blocks get the

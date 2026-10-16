@@ -193,6 +193,20 @@ public final class GameInstalls {
 		}
 	}
 
+	/** A yes/no setting from {@code config/mcsource.properties} (true, yes, on or 1), or {@code fallback} if unset. */
+	public static boolean flag(String key, boolean fallback) {
+		synchronized (SETTINGS_LOCK) {
+			if (cachedSettings == null) {
+				cachedSettings = settings();
+			}
+		}
+		String value = cachedSettings.getProperty(key, "").trim().toLowerCase(java.util.Locale.ROOT);
+		if (value.isEmpty()) {
+			return fallback;
+		}
+		return value.equals("true") || value.equals("yes") || value.equals("on") || value.equals("1");
+	}
+
 	private static final Object SETTINGS_LOCK = new Object();
 	private static Properties cachedSettings;
 
@@ -214,7 +228,9 @@ public final class GameInstalls {
 				{"viewmodel_fov", "Field of view of the first-person hands, as in Source (54 in Half-Life 2; higher shows more)."},
 				{"viewmodel_offset_x", "Moves the hands right (negative: left), in Source units."},
 				{"viewmodel_offset_y", "Moves the hands forward, in Source units."},
-				{"viewmodel_offset_z", "Moves the hands up, in Source units."}}) {
+				{"viewmodel_offset_z", "Moves the hands up, in Source units."},
+				{"scary_sun", "true gives the sun a scary face (restart to apply)."},
+				{"hl2_trees", "false keeps Minecraft's block trees in new chunks instead of Half-Life 2 tree models."}}) {
 			if (!properties.containsKey(entry[0])) {
 				properties.setProperty(entry[0], "");
 				changed = true;

@@ -1,0 +1,11 @@
+{
+	"providers": [
+		{
+			"type": "ttf",
+			"file": "mcsource:dejavu_sans_bold.ttf",
+			"size": 9.0,
+			"oversample": 4.0,
+			"shift": [0.0, 0.0]
+		}
+	]
+}

@@ -34,7 +34,7 @@ public final class SmoothTerrain {
 	/**
 	 * Air, plants, snow layers, water and other replaceable blocks, but not
 	 * lava. Water counts as open so the ground under lakes and the sea is
-	 * smoothed like the ground under air.
+	 * smoothed like the ground under air, all but the top layer of water.
 	 */
 	public static boolean isOpen(BlockState state) {
 		return state.canBeReplaced() && (state.getFluidState().isEmpty() || state.getFluidState().is(FluidTags.WATER));
@@ -45,6 +45,20 @@ public final class SmoothTerrain {
 			return OPEN;
 		}
 		return state.is(SMOOTH) ? TERRAIN : BUILT;
+	}
+
+	/**
+	 * Like {@link #classify(BlockState)}, but the top layer of water pins the
+	 * corners round it. The water surface is drawn flat at the top of its
+	 * block, so a shore lowered beside it would leave a gap under the water's
+	 * edge.
+	 */
+	private static int classify(BlockGetter level, BlockPos pos, BlockState state) {
+		int kind = classify(state);
+		if (kind == OPEN && !state.getFluidState().isEmpty() && level.getFluidState(pos.above()).isEmpty()) {
+			return BUILT;
+		}
+		return kind;
 	}
 
 	private static boolean applies(BlockGetter level, BlockState state) {
@@ -62,8 +76,13 @@ public final class SmoothTerrain {
 			int dy = dy0 + layer;
 			for (int dz = -1; dz <= 1; dz++) {
 				for (int dx = -1; dx <= 1; dx++) {
-					BlockState state = dx == 0 && dy == 0 && dz == 0 ? self : level.getBlockState(cursor.setWithOffset(pos, dx, dy, dz));
-					classes[dx + 1 + 3 * (dz + 1) + 9 * layer] = classify(state);
+					int index = dx + 1 + 3 * (dz + 1) + 9 * layer;
+					if (dx == 0 && dy == 0 && dz == 0) {
+						classes[index] = classify(self);
+					} else {
+						cursor.setWithOffset(pos, dx, dy, dz);
+						classes[index] = classify(level, cursor, level.getBlockState(cursor));
+					}
 				}
 			}
 		}

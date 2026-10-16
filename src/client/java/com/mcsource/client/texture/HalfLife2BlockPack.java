@@ -26,6 +26,7 @@ import net.minecraft.world.flag.FeatureFlagSet;
 
 import com.mcsource.client.mob.GameInstalls;
 import com.mcsource.model.source.BlockTextures;
+import com.mcsource.model.source.SkyTextures;
 
 /**
  * An always-on resource pack of block textures made from the player's own
@@ -38,7 +39,7 @@ import com.mcsource.model.source.BlockTextures;
 public final class HalfLife2BlockPack implements RepositorySource {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	/** Bump when the way textures are built changes, so old packs are rebuilt. */
-	private static final String VERSION = "3";
+	private static final String VERSION = "4";
 	private static final String USER_LIST = """
 			# Your changes to which Half-Life 2 material each Minecraft block texture uses.
 			# A line here replaces the mod's own line for that texture, for example:
@@ -89,7 +90,8 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		}
 		Map<String, String[]> mapping = BlockTextures.parse(BlockTextures.DEFAULTS);
 		mapping.putAll(BlockTextures.parse(list));
-		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode();
+		boolean scary = GameInstalls.flag("scary_sun", false);
+		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode() + ":" + scary;
 		Path stampFile = pack.resolve("built_from.txt");
 		if (Files.isRegularFile(stampFile) && Files.readString(stampFile).equals(stamp)) {
 			return;
@@ -113,6 +115,12 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			LOGGER.info("No Half-Life 2 materials found for block textures; keeping Minecraft's");
 			delete(fresh);
 			return;
+		}
+		try {
+			String glow = SkyTextures.generate(GameInstalls.source(), fresh, scary);
+			report.append("sun and moon = ").append(glow == null ? "(drawn glow)" : glow).append(scary ? ", scary face" : "").append('\n');
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not make the sun and moon", e);
 		}
 		Files.writeString(fresh.resolve("used_materials.txt"), report.toString());
 		Files.writeString(fresh.resolve("built_from.txt"), stamp);

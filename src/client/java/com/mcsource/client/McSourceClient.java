@@ -7,9 +7,13 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.shapes.Shapes;
 
+import com.mcsource.client.mob.GameInstalls;
 import com.mcsource.client.mob.KartRenderer;
+import com.mcsource.client.tree.TreeModels;
+import com.mcsource.client.tree.TreeRenderer;
 import com.mcsource.kart.Karts;
 import com.mcsource.terrain.SmoothTerrain;
+import com.mcsource.tree.Trees;
 
 public class McSourceClient implements ClientModInitializer {
 	@Override
@@ -20,6 +24,13 @@ public class McSourceClient implements ClientModInitializer {
 				.register((model, modelContext) -> new SmoothBlockModel(model)));
 		SourceHud.register();
 		EntityRendererRegistry.register(Karts.KART, KartRenderer::new);
+		EntityRendererRegistry.register(Trees.TREE, TreeRenderer::new);
+		// New trees are tree models when there are tree models to draw them with.
+		// Reading the models takes a moment, so it's done while the game loads.
+		Thread finder = new Thread(() -> Trees.setEnabled(GameInstalls.flag("hl2_trees", true) && TreeModels.available()),
+				"MC:Source tree models");
+		finder.setDaemon(true);
+		finder.start();
 		// Smoothed ground has no block outline, as in Source; its stepped
 		// collision columns would otherwise show as little stairs.
 		LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, outline) -> {

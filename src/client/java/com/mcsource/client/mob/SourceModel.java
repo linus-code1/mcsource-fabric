@@ -185,6 +185,62 @@ public final class SourceModel {
 		this.height = high > low ? high - low : 0.0F;
 	}
 
+	/** One texture per material with wrapping coordinates, for {@link #emitMaterial}; made when first asked for. */
+	private Identifier[] materialTextures;
+
+	/**
+	 * Each of the model's textures on its own, repeating, so texture
+	 * coordinates that run past one tile (as on a tree's bark) wrap properly.
+	 */
+	public Identifier[] materialTextures() {
+		if (materialTextures == null) {
+			materialTextures = new Identifier[model.textures.length];
+			for (int i = 0; i < model.textures.length; i++) {
+				RiggedModel.Texture t = model.textures[i];
+				NativeImage image = new NativeImage(Math.max(1, t.width()), Math.max(1, t.height()), true);
+				for (int y = 0; y < t.height(); y++) {
+					for (int x = 0; x < t.width(); x++) {
+						image.setPixel(x, y, t.pixels()[y * t.width() + x]);
+					}
+				}
+				Identifier id = Identifier.fromNamespaceAndPath("mcsource", "model/" + textureCount++);
+				String name = source + " " + t.name();
+				Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(() -> "MC:Source model " + name, image) {
+					{
+						sampler = RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR);
+					}
+				});
+				materialTextures[i] = id;
+			}
+		}
+		return materialTextures;
+	}
+
+	/**
+	 * Like {@link #emit}, but only the triangles of one material, with their
+	 * own texture coordinates for {@link #materialTextures()}.
+	 */
+	public void emitMaterial(PoseStack.Pose pose, VertexConsumer consumer, int material, float scale, int light, int overlay) {
+		int count = model.triangleCount();
+		for (int i = 0; i < count; i++) {
+			if (model.triangleTexture[i] != material || hidden != null && hidden[i]) {
+				continue;
+			}
+			for (int c = 0; c < 4; c++) {
+				int corner = i * 3 + (c == 3 ? 2 : c);
+				int v = model.cornerVertex[corner] * 3;
+				int n = model.cornerNormal[corner] * 3;
+				// Half-Life's z-up axes to Minecraft's y-up ones.
+				consumer.addVertex(pose, posed[v + 1] * scale, posed[v + 2] * scale, posed[v] * scale)
+						.setColor(-1)
+						.setUv(model.cornerUv[corner * 2], model.cornerUv[corner * 2 + 1])
+						.setOverlay(overlay)
+						.setLight(light)
+						.setNormal(pose, posedNormals[n + 1], posedNormals[n + 2], posedNormals[n]);
+			}
+		}
+	}
+
 	/** Triangles left out when drawing, or null for none. */
 	private boolean[] hidden;
 
