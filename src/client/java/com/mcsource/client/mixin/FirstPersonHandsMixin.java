@@ -40,13 +40,14 @@ public abstract class FirstPersonHandsMixin {
 	};
 	private static final float UNITS = 1.0F / 40.0F;
 	/**
-	 * Defaults for the view model settings: a wider field of view than Half-
-	 * Life 2's 54 and a lift, because with the crowbar left out the empty hand
-	 * would otherwise sit mostly below the screen.
+	 * Defaults for the view model settings: Half-Life 2's own field of view of
+	 * 54, and a lift and a step in towards the middle, because with the
+	 * crowbar left out the empty hand would otherwise sit mostly below the
+	 * screen.
 	 */
-	private static final float DEFAULT_FOV = 68.0F;
-	private static final float DEFAULT_OFFSET_X = -1.0F;
-	private static final float DEFAULT_OFFSET_Z = 3.0F;
+	private static final float DEFAULT_FOV = 54.0F;
+	private static final float DEFAULT_OFFSET_X = -2.5F;
+	private static final float DEFAULT_OFFSET_Z = 9.0F;
 	private static SourceModel trimmed;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)

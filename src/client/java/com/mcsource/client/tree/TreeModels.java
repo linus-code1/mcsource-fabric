@@ -39,6 +39,7 @@ public final class TreeModels {
 	public static synchronized SourceModel pick(String wood, long seed) {
 		find();
 		List<String> kind = wood.contains("spruce") ? conifers : wood.contains("pale_oak") ? bare : broadleaf;
+		// Bare trees only stand in for pale oaks, or when there is nothing else.
 		for (List<String> list : List.of(kind, broadleaf, conifers, bare)) {
 			if (list.isEmpty()) {
 				continue;

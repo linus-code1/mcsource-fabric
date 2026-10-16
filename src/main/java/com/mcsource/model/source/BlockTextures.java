@@ -50,6 +50,7 @@ public final class BlockTextures {
 			# Materials are paths under materials/ in the game (without .vmt); * matches anything.
 			# The first one found is used.
 			# Grass, ferns and flowers are cut out of Half-Life 2's detail sprite sheet (its grass is sprites too).
+			# Mossy cobblestone and mossy stone bricks are made from cobblestone and stone bricks with the grass grown into them.
 			plants = detail/detailsprites detail/detailsprites_2 detail/detailsprites*
 			# Water is made from the ripple normal map of one of Half-Life 2's water materials.
 			water = nature/water_canals_water2 nature/water_canals03 nature/water_coast01 nature/water_* nature/*water* *water*
@@ -71,10 +72,8 @@ public final class BlockTextures {
 			cobbled_deepslate = stone/stonefloor0* nature/*cobble* *cobble* nature/rockfloor0*
 			bedrock = nature/rockwall_cave* nature/rockwall0* *rock*
 			cobblestone = nature/cobble* stone/*cobble* *cobble* stone/stonefloor00* nature/rockfloor00*
-			mossy_cobblestone = stone/*moss* nature/*moss* *moss* *cobble*
 			smooth_stone = concrete/concretefloor001a concrete/concretefloor0* concrete/*
 			stone_bricks = stone/stonewall0* stone/*wall* stone/* *stonewall*
-			mossy_stone_bricks = stone/*moss* *moss* stone/stonewall0*
 			cracked_stone_bricks = stone/*crack* *crack* stone/stonewall0*
 			chiseled_stone_bricks = stone/stonewall0* stone/*
 			bricks = brick/brickwall001a brick/brickwall0* brick/* *brick*
@@ -148,7 +147,6 @@ public final class BlockTextures {
 			dirt_path_side = nature/dirtfloor0* nature/*dirt* *dirt*
 			podzol_side = nature/dirtfloor0* nature/*dirt*
 			mycelium_side = nature/dirtfloor0* nature/*dirt*
-			mossy_cobblestone_wall = stone/*moss* *moss* *cobble*
 			smooth_sandstone = stone/*sand* *sandstone* concrete/concretefloor0*
 			cut_sandstone = stone/*sand* *sandstone* concrete/concretewall0*
 			chiseled_sandstone = stone/*sand* *sandstone* concrete/concretewall0*
@@ -280,7 +278,8 @@ public final class BlockTextures {
 			String name = entry.getKey();
 			try {
 				if (name.equals("plants")) {
-					plants(files, entry.getValue(), materials, folder, used);
+					// Done last, so the grass can take the colour of the ground.
+					continue;
 				} else if (name.equals("water")) {
 					water(files, entry.getValue(), materials, folder, used);
 				} else {
@@ -292,6 +291,16 @@ public final class BlockTextures {
 				errors.put(name, e.toString());
 			}
 		}
+		if (mapping.containsKey("plants")) {
+			try {
+				plants(files, mapping.get("plants"), materials, folder, used, made.get("grass_block_top"), packRoot);
+			} catch (IOException | RuntimeException e) {
+				used.put("plants", null);
+				errors.put("plants", e.toString());
+			}
+		}
+		mossy(made, "cobblestone", "mossy_cobblestone", folder, used);
+		mossy(made, "stone_bricks", "mossy_stone_bricks", folder, used);
 		if (made.keySet().stream().anyMatch(name -> name.endsWith("_leaves"))) {
 			Path models = packRoot.resolve("assets/minecraft/models/block");
 			Files.createDirectories(models);
@@ -590,8 +599,9 @@ public final class BlockTextures {
 	 * patch of opaque pixels is a sprite, and sprites are matched to plants
 	 * by colour and shape.
 	 */
-	private static void plants(GameFiles files, String[] patterns, List<String> materials, Path folder, Map<String, String> used)
-			throws IOException {
+	private static void plants(GameFiles files, String[] patterns, List<String> materials, Path folder, Map<String, String> used,
+			int[] ground, Path packRoot) throws IOException {
+		groundColour = ground == null ? 0 : average(ground);
 		RiggedModel.Texture sheet = null;
 		String chosen = null;
 		for (String pattern : patterns) {
@@ -645,6 +655,24 @@ public final class BlockTextures {
 			}
 			used.put(name, chosen + " (sprite at " + pick.x + "," + pick.y + ")");
 		}
+		// More tufts for short grass and ferns, so a meadow is not one sprite
+		// over and over. They are picked at random by grass_tufts below.
+		List<Sprite> wide = new ArrayList<>();
+		for (Sprite sprite : green) {
+			if (sprite.w >= sprite.h * 0.8F) {
+				wide.add(sprite);
+			}
+		}
+		if (wide.isEmpty()) {
+			wide = green;
+		}
+		for (int v = 1; v < TUFTS; v++) {
+			Sprite pick = wide.get((v * 3) % wide.size());
+			writePlant(folder, "short_grass_" + v, spriteImage(sheet, pick, SIZE, SIZE));
+			Sprite fern = green.get((v * 5 + 1) % green.size());
+			writePlant(folder, "fern_" + v, spriteImage(sheet, fern, SIZE, SIZE));
+		}
+		grassTufts(packRoot);
 		List<Sprite> brown = coloured.getOrDefault("brown", List.of());
 		if (!brown.isEmpty()) {
 			writePlant(folder, "dead_bush", spriteImage(sheet, brown.getFirst(), SIZE, SIZE));
@@ -697,7 +725,9 @@ public final class BlockTextures {
 	}
 
 	private static void writePlant(Path folder, String name, int[] image) throws IOException {
-		if (GRASS_TINTED.contains(name)) {
+		String base = name.replaceAll("_\\d+$", "");
+		if (GRASS_TINTED.contains(base)) {
+			blendWithGround(image);
 			untint(image, GRASS_TINT);
 		}
 		writePng(folder.resolve(name + ".png"), image, SIZE);
@@ -806,6 +836,166 @@ public final class BlockTextures {
 			}
 		}
 		return out;
+	}
+
+	/** How many textures short grass and ferns each get. */
+	private static final int TUFTS = 4;
+	/** Average colour of the grass block top, untinted, or 0 when unknown; set while plants are made. */
+	private static int groundColour;
+
+	/** Average colour of the opaque pixels of an image. */
+	static int average(int[] image) {
+		long r = 0;
+		long g = 0;
+		long b = 0;
+		int n = 0;
+		for (int p : image) {
+			if ((p >>> 24) >= 128) {
+				r += p >> 16 & 255;
+				g += p >> 8 & 255;
+				b += p & 255;
+				n++;
+			}
+		}
+		return n == 0 ? 0 : (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n);
+	}
+
+	/**
+	 * Brings a grass sprite towards the colour of the ground it grows from:
+	 * the whole sprite part of the way, and its lower half more and darker,
+	 * so a tuft rises out of the grass floor instead of sitting on it.
+	 */
+	static void blendWithGround(int[] image) {
+		if (groundColour == 0) {
+			return;
+		}
+		int top = SIZE;
+		int bottom = -1;
+		for (int i = 0; i < image.length; i++) {
+			if ((image[i] >>> 24) >= 128) {
+				top = Math.min(top, i / SIZE);
+				bottom = Math.max(bottom, i / SIZE);
+			}
+		}
+		if (bottom < top) {
+			return;
+		}
+		int own = average(image);
+		float[] shift = new float[3];
+		for (int c = 0; c < 3; c++) {
+			shift[c] = (groundColour >> (16 - 8 * c) & 255) - (own >> (16 - 8 * c) & 255);
+		}
+		for (int i = 0; i < image.length; i++) {
+			int p = image[i];
+			if ((p >>> 24) < 128) {
+				continue;
+			}
+			// 0 at the tips, 1 at the root.
+			float down = bottom == top ? 1.0F : (i / SIZE - top) / (float) (bottom - top);
+			float toward = 0.35F + 0.45F * down * down;
+			float dark = 1.0F - 0.3F * down * down;
+			int out = p & 0xFF000000;
+			for (int c = 0; c < 3; c++) {
+				int shiftBits = 16 - 8 * c;
+				float v = ((p >> shiftBits & 255) + shift[c] * toward) * dark;
+				out |= Math.max(0, Math.min(255, Math.round(v))) << shiftBits;
+			}
+			image[i] = out;
+		}
+	}
+
+	/**
+	 * Short grass and ferns as Half-Life 2 style tufts: three cards in a star
+	 * rather than Minecraft's crossed pair, each block picking one of several
+	 * sprites and turnings at random, and many blocks left bare so the grass
+	 * grows in scattered clumps.
+	 */
+	private static void grassTufts(Path packRoot) throws IOException {
+		Path models = packRoot.resolve("assets/mcsource/models/block");
+		Path states = packRoot.resolve("assets/minecraft/blockstates");
+		Files.createDirectories(models);
+		Files.createDirectories(states);
+		Files.writeString(models.resolve("no_plant.json"), "{\"textures\": {\"particle\": \"minecraft:block/short_grass\"}, \"elements\": []}");
+		for (String plant : new String[] {"short_grass", "fern"}) {
+			StringBuilder variants = new StringBuilder();
+			for (int v = 0; v < TUFTS; v++) {
+				String texture = "minecraft:block/" + plant + (v == 0 ? "" : "_" + v);
+				for (int size = 0; size < 2; size++) {
+					String name = plant + "_tuft_" + v + "_" + size;
+					Files.writeString(models.resolve(name + ".json"), tuftModel(texture, size == 0 ? 0 : 3));
+					for (int turn = 0; turn < 360; turn += 90) {
+						variants.append(variants.isEmpty() ? "" : ",\n\t\t").append("{\"model\": \"mcsource:block/").append(name)
+								.append("\", \"y\": ").append(turn).append("}");
+					}
+				}
+			}
+			// About half the blocks are left bare (weight equal to all the tufts together).
+			variants.append(",\n\t\t{\"model\": \"mcsource:block/no_plant\", \"weight\": ").append(TUFTS * 2 * 4).append("}");
+			Files.writeString(states.resolve(plant + ".json"), "{\"variants\": {\"\": [\n\t\t" + variants + "\n\t]}}");
+		}
+	}
+
+	/** Three two-sided cards in a star, {@code grow} sixteenths wider and taller than a block. */
+	private static String tuftModel(String texture, int grow) {
+		int low = -grow / 2;
+		int high = 16 + grow - grow / 2;
+		int top = 14 + grow;
+		return "{\"ambientocclusion\": false, \"textures\": {\"particle\": \"" + texture + "\", \"all\": \"" + texture + "\"},\n"
+				+ "\"elements\": [\n" + plantCard(low, 0, 8, high, top, 8, -22.5F) + ",\n" + plantCard(low, 0, 8, high, top, 8, 45.0F) + ",\n"
+				+ plantCard(8, 0, low, 8, top, high, 22.5F) + "\n]}";
+	}
+
+	/** One two-sided, grass-tinted card turned about the block's middle. */
+	private static String plantCard(int x1, int y1, int z1, int x2, int y2, int z2, float angle) {
+		String a = x1 == x2 ? "east" : "north";
+		String b = x1 == x2 ? "west" : "south";
+		String face = "{\"uv\": [0, 0, 16, 16], \"texture\": \"#all\", \"tintindex\": 0}";
+		return "{\"from\": [" + x1 + ", " + y1 + ", " + z1 + "], \"to\": [" + x2 + ", " + y2 + ", " + z2 + "], \"shade\": false, "
+				+ "\"rotation\": {\"origin\": [8, 8, 8], \"axis\": \"y\", \"angle\": " + angle + ", \"rescale\": false}, "
+				+ "\"faces\": {\"" + a + "\": " + face + ", \"" + b + "\": " + face + "}}";
+	}
+
+	/**
+	 * Makes a mossy texture from a plain one: the grass floor grows into its
+	 * cracks and in soft patches, keeping the stone's own light and shade.
+	 */
+	private static void mossy(Map<String, int[]> made, String from, String to, Path folder, Map<String, String> used) throws IOException {
+		int[] stone = made.get(from);
+		int[] grass = made.get("grass_block_top");
+		if (stone == null || grass == null) {
+			return;
+		}
+		int[] moss = grass.clone();
+		retint(moss, GRASS_TINT);
+		float mean = brightness(average(stone));
+		int[] out = new int[stone.length];
+		for (int y = 0; y < SIZE; y++) {
+			for (int x = 0; x < SIZE; x++) {
+				int p = stone[y * SIZE + x];
+				float light = brightness(p);
+				// Patches that repeat with the texture, so blocks still join up.
+				double u = x * 2 * Math.PI / SIZE;
+				double v = y * 2 * Math.PI / SIZE;
+				float patch = (float) (0.5 + 0.22 * Math.sin(3 * u + v + 0.7) + 0.18 * Math.sin(2 * u - 4 * v + 2.1)
+						+ 0.1 * Math.sin(7 * u + 5 * v + 4.0));
+				float crack = mean <= 0.0F ? 0.0F : (mean - light) / mean;
+				float w = Math.max(0.0F, Math.min(0.85F, (patch - 0.55F) * 3.0F + crack * 1.6F));
+				int m = moss[y * SIZE + x];
+				float shade = mean <= 0.0F ? 1.0F : Math.min(1.3F, light / mean * 0.8F + 0.2F);
+				int o = 0xFF000000;
+				for (int shift = 0; shift <= 16; shift += 8) {
+					float c = (p >> shift & 255) * (1.0F - w) + (m >> shift & 255) * shade * w;
+					o |= Math.max(0, Math.min(255, Math.round(c))) << shift;
+				}
+				out[y * SIZE + x] = o;
+			}
+		}
+		writePng(folder.resolve(to + ".png"), out, SIZE);
+		used.put(to, used.get(from) + " (with moss from " + used.get("grass_block_top") + ")");
+	}
+
+	private static float brightness(int p) {
+		return ((p >> 16 & 255) + (p >> 8 & 255) + (p & 255)) / 765.0F;
 	}
 
 	/**

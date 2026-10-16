@@ -219,18 +219,53 @@ public final class SourceHud {
 		graphics.fill(x, y + radius, x + width, y + height - radius, color);
 	}
 
+	/**
+	 * Half-Life 2's crosshair: a small ring of four dots round a centre dot,
+	 * drawn in screen pixels so it stays fine at any GUI scale, between two
+	 * faint arcs like its quick-info brackets, the left one filled with
+	 * health and the right with food.
+	 */
 	private static void crosshair(GuiGraphicsExtractor graphics, DeltaTracker delta) {
 		Minecraft minecraft = Minecraft.getInstance();
-		if (!minecraft.options.getCameraType().isFirstPerson() || minecraft.player == null || minecraft.player.isSpectator()) {
+		LocalPlayer player = minecraft.player;
+		if (!minecraft.options.getCameraType().isFirstPerson() || player == null || player.isSpectator()) {
 			return;
 		}
-		int cx = graphics.guiWidth() / 2;
-		int cy = graphics.guiHeight() / 2;
-		int color = 0xCCFFDC00;
-		// Four short ticks around an open centre.
-		graphics.fill(cx - 5, cy, cx - 2, cy + 1, color);
-		graphics.fill(cx + 2, cy, cx + 5, cy + 1, color);
-		graphics.fill(cx, cy - 5, cx + 1, cy - 2, color);
-		graphics.fill(cx, cy + 2, cx + 1, cy + 5, color);
+		float guiScale = (float) minecraft.getWindow().getGuiScale();
+		// Work in real pixels from here.
+		graphics.pose().pushMatrix();
+		graphics.pose().scale(1.0F / guiScale, 1.0F / guiScale);
+		int cx = Math.round(graphics.guiWidth() * guiScale / 2.0F);
+		int cy = Math.round(graphics.guiHeight() * guiScale / 2.0F);
+		int unit = Math.max(1, Math.round(guiScale / 2.0F));
+		int color = 0xC8FFDC00;
+		graphics.fill(cx - unit / 2, cy - unit / 2, cx - unit / 2 + unit, cy - unit / 2 + unit, color);
+		int ring = 5 * unit;
+		for (int i = 0; i < 4; i++) {
+			int dx = i == 0 ? ring : i == 1 ? -ring : 0;
+			int dy = i == 2 ? ring : i == 3 ? -ring : 0;
+			graphics.fill(cx + dx - unit / 2, cy + dy - unit / 2, cx + dx - unit / 2 + unit, cy + dy - unit / 2 + unit, color);
+		}
+		if (minecraft.gameMode != null && minecraft.gameMode.canHurtPlayer()) {
+			float health = Mth.clamp(player.getHealth() / player.getMaxHealth(), 0.0F, 1.0F);
+			float food = player.getFoodData().getFoodLevel() / 20.0F;
+			arc(graphics, cx, cy, 16 * unit, unit, true, health, health <= 0.25F ? 0xC8FF3020 : color);
+			arc(graphics, cx, cy, 16 * unit, unit, false, food, food <= 0.3F ? 0xC8FF3020 : color);
+		}
+		graphics.pose().popMatrix();
+	}
+
+	/** One quick-info bracket: a thin arc left or right of the centre, lit from the bottom up to {@code fraction}. */
+	private static void arc(GuiGraphicsExtractor graphics, int cx, int cy, int radius, int unit, boolean left, float fraction, int lit) {
+		int dim = 0x30FFDC00;
+		int steps = radius * 2;
+		// From 50 degrees below the horizontal to 50 above.
+		for (int i = 0; i <= steps; i++) {
+			float t = i / (float) steps;
+			double angle = Math.toRadians(-50.0 + 100.0 * t);
+			int x = cx + (int) Math.round((left ? -1 : 1) * Math.cos(angle) * radius);
+			int y = cy - (int) Math.round(Math.sin(angle) * radius);
+			graphics.fill(x, y, x + unit, y + unit, t <= fraction ? lit : dim);
+		}
 	}
 }

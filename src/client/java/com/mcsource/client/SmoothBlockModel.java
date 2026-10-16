@@ -184,17 +184,24 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/**
-	 * The surface offset at a point in the block: a smooth curve through the
-	 * corner offsets (which collision follows exactly), so ramps round off
-	 * into the flat ground at their top and foot instead of creasing.
+	 * The surface offset at a point in the block: across the ground a smooth
+	 * curve through the corner offsets (which collision follows exactly), so
+	 * ramps round off into the flat ground at their top and foot instead of
+	 * creasing.
 	 */
 	private static float smoothOffset(float[] grid, float x, float y, float z) {
 		float[] wx = new float[4];
 		float[] wy = new float[4];
 		float[] wz = new float[4];
 		weights(x, wx);
-		weights(y, wy);
 		weights(z, wz);
+		// Straight up and down the offset is blended linearly. A curve would
+		// bulge the side of a smoothed step out past the slope above it, and
+		// that sliver of side shows as a thin dark line along every step.
+		wy[0] = 0.0F;
+		wy[1] = 1.0F - y;
+		wy[2] = y;
+		wy[3] = 0.0F;
 		float sum = 0.0F;
 		for (int j = 0; j < 4; j++) {
 			for (int k = 0; k < 4; k++) {

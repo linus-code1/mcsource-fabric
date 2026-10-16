@@ -262,12 +262,15 @@ public final class SourceModel {
 	 * own texture coordinates for {@link #materialTextures()}. For a level of
 	 * detail, a cut-out material (leaves) can be thinned to about
 	 * {@code keep} of its triangles, each kept one grown by {@code grow}
-	 * about its middle so the crown stays about as full.
+	 * about its middle so the crown stays about as full. Cut-out cards are lit
+	 * as if facing up, as Source lights its foliage, so the crown is not
+	 * patchy light and dark where cards face away from the light.
 	 */
 	public void emitMaterial(PoseStack.Pose pose, VertexConsumer consumer, int material, float scale, int light, int overlay, float keep,
 			float grow) {
 		int count = model.triangleCount();
-		boolean thin = keep < 1.0F && cutout(material);
+		boolean leaves = cutout(material);
+		boolean thin = keep < 1.0F && leaves;
 		int threshold = (int) (keep * 65536.0F);
 		// Solid parts drop their smallest triangles (twigs and thin branches)
 		// as the tree gets further away; the trunk and big boughs stay.
@@ -308,7 +311,7 @@ public final class SourceModel {
 						.setUv(model.cornerUv[corner * 2], model.cornerUv[corner * 2 + 1])
 						.setOverlay(overlay)
 						.setLight(light)
-						.setNormal(pose, posedNormals[n + 1], posedNormals[n + 2], posedNormals[n]);
+						.setNormal(pose, leaves ? 0.0F : posedNormals[n + 1], leaves ? 1.0F : posedNormals[n + 2], leaves ? 0.0F : posedNormals[n]);
 			}
 		}
 	}

@@ -60,7 +60,11 @@ world to try it in.
   into an always-on resource pack at `config/mcsource/hl2_block_pack` the
   first time the game starts. Grass, ferns and flowers are cut out of Half-Life
   2's grass sprite sheet, since its grass is sprites too (it has no flowers,
-  so flowers become its weeds and tufts), and water is made
+  so flowers become its weeds and tufts). Short grass and ferns are star-shaped
+  tufts of several different sprites, shaded into the ground colour at the
+  root, and only about half the grass blocks grow one. Mossy cobblestone and
+  mossy stone bricks are the cobblestone and stone bricks with the grass grown
+  into their cracks. Water is made
   from the ripples of a Half-Life 2 water material in its murky canal colour.
   Leaves use Half-Life 2's foliage textures and are drawn as clumps of crossed
   leaf cards, like Source trees, instead of cubes. See
@@ -94,7 +98,8 @@ world to try it in.
   reference screen and scaled to the window: health, suit (armour) and food as
   large glowing yellow numbers in rounded dark panels at the bottom left, the
   held item's count or durability as AMMO at the bottom right, an oxygen meter underwater, a weapon
-  selection row along the top when you change slot, and a small crosshair.
+  selection row along the top when you change slot, and Half-Life 2's crosshair:
+  a fine ring of dots between two quick-info arcs that fill with health and food.
   The HUD font is DejaVu Sans Bold (license in
   `assets/mcsource/font/dejavu_license.txt`).
 - **Half-Life 2 style sky and haze.** Minecraft's blocky clouds are replaced
@@ -104,7 +109,7 @@ world to try it in.
   is the HEV suit hand from Half-Life 2's view models, read from your install
   (see *Half-Life models* below), idling and swinging with its own
   animations. Its size and place on screen can be tuned in
-  `config/mcsource.properties`: `viewmodel_fov` (default 68, smaller makes it
+  `config/mcsource.properties`: `viewmodel_fov` (default 54, smaller makes it
   bigger) and `viewmodel_offset_x`, `viewmodel_offset_y` and
   `viewmodel_offset_z` in Source units (right, forward and up). Without it, the hand is the mod's own rigged suit hand: an
   orange sleeve and a black glove with a full finger skeleton.

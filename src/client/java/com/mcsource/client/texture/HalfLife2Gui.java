@@ -18,9 +18,9 @@ import net.minecraft.client.Minecraft;
 import com.mcsource.model.source.BlockTextures;
 
 /**
- * Menu and inventory textures in Half-Life 2's dark grey scheme: every grey
- * of Minecraft's light grey panels, slots, buttons and lists is made darker,
- * keeping its shading, while coloured icons stay as they are. The vanilla
+ * Menu and inventory textures in Half-Life 2's dark grey scheme: panels and
+ * slots flat and dark, buttons and text boxes as flat boxes with thin
+ * borders, other greys made darker, while coloured icons stay as they are. The vanilla
  * textures listed in {@code assets/mcsource/gui/recolor.txt} are read from
  * the game and written, recoloured, into the pack.
  */
@@ -60,10 +60,15 @@ final class HalfLife2Gui {
 						int lift = path.contains("highlighted") ? 28 : 0;
 						int w = image.getWidth();
 						int h = image.getHeight();
-						int[] pixels = new int[w * h];
-						for (int y = 0; y < h; y++) {
-							for (int x = 0; x < w; x++) {
-								pixels[y * w + x] = recolor(image.getPixel(x, y), lift);
+						int[] pixels = flatWidget(path, w, h);
+						// Inventories and their slots lose their bevels.
+						boolean flat = path.contains("/container/") || path.endsWith("recipe_book.png");
+						if (pixels == null) {
+							pixels = new int[w * h];
+							for (int y = 0; y < h; y++) {
+								for (int x = 0; x < w; x++) {
+									pixels[y * w + x] = recolor(image.getPixel(x, y), lift, flat);
+								}
 							}
 						}
 						BlockTextures.writePng(out, pixels, w, h);
@@ -77,8 +82,58 @@ final class HalfLife2Gui {
 		return count;
 	}
 
-	/** Darkens a grey pixel (ARGB); coloured ones are kept. */
-	static int recolor(int argb, int lift) {
+	// Half-Life 2's VGUI scheme: flat dark panels with thin lighter borders.
+	private static final int PANEL = 0xF0383634;
+	private static final int SLOT = 0xFF1E1D1C;
+	private static final int SLOT_EDGE = 0xFF4A4846;
+
+	/**
+	 * Buttons, sliders and text boxes drawn flat in Half-Life 2's style, the
+	 * same size as Minecraft's so its nine-slice settings still fit: a dark
+	 * translucent fill and a one-pixel border that brightens on hover. Null
+	 * for other textures.
+	 */
+	static int[] flatWidget(String path, int w, int h) {
+		String name = path.substring(path.lastIndexOf('/') + 1).replace(".png", "");
+		if (name.equals("menu_background") || name.equals("inworld_menu_background")) {
+			// The dark veil over the world behind menus, thicker so the menus read as panels.
+			return box(w, h, 0x9A141312, 0x9A141312);
+		}
+		if (!path.contains("/widget/")) {
+			return null;
+		}
+		boolean hover = name.contains("highlighted");
+		return switch (name) {
+			case "button", "button_highlighted", "realms_button", "realms_button_highlighted" ->
+				box(w, h, hover ? 0xE6585654 : 0xD2403E3C, hover ? 0xFFC8C4BE : 0xFF6E6A66);
+			case "button_disabled", "realms_button_disabled" -> box(w, h, 0xB42A2928, 0xFF403E3C);
+			case "slider", "slider_highlighted" -> box(w, h, 0xD21A1918, hover ? 0xFFC8C4BE : 0xFF5A5652);
+			case "slider_handle", "slider_handle_highlighted" -> box(w, h, hover ? 0xFFA09C96 : 0xFF7C7874, hover ? 0xFFE6E2DC : 0xFFB4B0AA);
+			case "text_field", "text_field_highlighted" -> box(w, h, 0xE6141312, hover ? 0xFFDCD8D2 : 0xFF6E6A66);
+			case "scroller" -> box(w, h, 0xFF6E6A66, 0xFF8C8884);
+			case "scroller_background" -> box(w, h, 0xB4141312, 0xFF3C3A38);
+			default -> null;
+		};
+	}
+
+	private static int[] box(int w, int h, int fill, int border) {
+		int[] out = new int[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				boolean edge = x == 0 || y == 0 || x == w - 1 || y == h - 1;
+				out[y * w + x] = edge ? border : fill;
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Darkens a grey pixel (ARGB); coloured ones are kept. With {@code flat},
+	 * Minecraft's exact panel greys are flattened first: the white and dark grey bevels round
+	 * panels and slots become plain panel colour and a thin slot border, so
+	 * inventories look flat like Half-Life 2's dialogs instead of embossed.
+	 */
+	static int recolor(int argb, int lift, boolean flat) {
 		int a = argb >>> 24;
 		int r = argb >> 16 & 0xFF;
 		int g = argb >> 8 & 0xFF;
@@ -87,6 +142,21 @@ final class HalfLife2Gui {
 		int min = Math.min(r, Math.min(g, b));
 		if (a == 0 || max - min > 14) {
 			return argb;
+		}
+		if (flat && a == 255 && max == min) {
+			switch (max) {
+				case 198, 255, 85 -> {
+					return PANEL;
+				}
+				case 139 -> {
+					return SLOT;
+				}
+				case 55 -> {
+					return SLOT_EDGE;
+				}
+				default -> {
+				}
+			}
 		}
 		float light = (r + g + b) / 765.0F;
 		// Minecraft's panel grey (198) becomes about 69, slots (139) about 42,

@@ -73,14 +73,18 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		poseStack.rotateDegrees(Axis.YP, -state.yaw);
 		Identifier[] textures = model.materialTextures();
 		int light = state.lightCoords;
-		// Level of detail: further trees draw fewer, bigger leaf cards.
+		// Level of detail: further trees drop their thinnest branches, and the
+		// furthest draw fewer, bigger leaf cards. Leaves are kept in full at
+		// middle distance, or the crowns look bare.
 		float distance = (float) Math.sqrt(state.distanceToCameraSq);
-		float keep = distance < NEAR ? 1.0F : distance < FAR ? 0.35F : 0.12F;
-		float grow = keep < 1.0F ? Math.max(1.0F, 0.85F / (float) Math.sqrt(keep)) : 1.0F;
+		float keep = distance < NEAR ? 1.0F : distance < FAR ? 0.5F : 0.25F;
+		float leafKeep = distance < FAR ? 1.0F : 0.6F;
+		float grow = leafKeep < 1.0F ? 1.0F / (float) Math.sqrt(leafKeep) : 1.0F;
 		for (int i = 0; i < textures.length; i++) {
 			int material = i;
 			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textures[i]),
-					(pose, consumer) -> model.emitMaterial(pose, consumer, material, drawScale, light, OverlayTexture.NO_OVERLAY, keep, grow));
+					(pose, consumer) -> model.emitMaterial(pose, consumer, material, drawScale, light, OverlayTexture.NO_OVERLAY,
+							model.cutout(material) ? leafKeep : keep, grow));
 		}
 		poseStack.popPose();
 		super.submit(state, poseStack, collector, camera);
