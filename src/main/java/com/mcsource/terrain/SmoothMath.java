@@ -24,19 +24,25 @@ public final class SmoothMath {
 	}
 
 	/**
-	 * Vertical offset in eighths for a grid corner surrounded by {@code terrain}
-	 * smoothed blocks (out of 8), when none of the 8 is a built block or liquid.
-	 * Exactly half full (flat ground, a straight cliff face) stays put. Any
-	 * emptier corner sinks half a block and any fuller corner rises half a
-	 * block, so the top and foot of every one-block step meet, whether the
-	 * step runs straight or diagonally. Corners never move further than that,
-	 * so neighbouring corners can meet but never cross.
+	 * Vertical offset in eighths for a grid corner with {@code lower} smoothed
+	 * blocks among the four just below it and {@code upper} among the four just
+	 * above, when none of the eight is a built block or liquid.
+	 *
+	 * <p>Exactly half full (flat ground, a flat ceiling, a straight wall) stays
+	 * put. Otherwise the corner moves half a block toward the side that closes
+	 * a one-block step: on ground (more terrain below) emptier corners sink and
+	 * fuller corners rise; on ceilings (more terrain above) the opposite. The
+	 * top and foot of every one-block step therefore meet, straight or diagonal,
+	 * above or below. Corners never move further than half a block, so
+	 * neighbouring corners can meet but never cross.
 	 */
-	public static int cornerOffset(int terrain) {
-		if (terrain <= 0 || terrain >= 8 || terrain == 4) {
+	public static int cornerOffset(int lower, int upper) {
+		int terrain = lower + upper;
+		if (terrain <= 0 || terrain >= 8 || terrain == 4 || lower == upper) {
 			return 0;
 		}
-		return terrain < 4 ? -4 : 4;
+		int towardFuller = terrain < 4 ? -4 : 4;
+		return lower > upper ? towardFuller : -towardFuller;
 	}
 
 	public static int pack(int h00, int h10, int h01, int h11) {

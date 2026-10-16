@@ -70,7 +70,8 @@ public final class SmoothTerrain {
 	 * neighbourhood whose lowest layer is at {@code pos.y + dy0}.
 	 */
 	private static int cornerOffset(int[] classes, int dy0, int cx, int cy, int cz) {
-		int terrain = 0;
+		int lower = 0;
+		int upper = 0;
 		for (int oy = cy - 1; oy <= cy; oy++) {
 			for (int oz = cz - 1; oz <= cz; oz++) {
 				for (int ox = cx - 1; ox <= cx; ox++) {
@@ -80,24 +81,36 @@ public final class SmoothTerrain {
 						return 0;
 					}
 					if (kind == TERRAIN) {
-						terrain++;
+						if (oy < cy) {
+							lower++;
+						} else {
+							upper++;
+						}
 					}
 				}
 			}
 		}
-		return SmoothMath.cornerOffset(terrain);
+		return SmoothMath.cornerOffset(lower, upper);
+	}
+
+	/**
+	 * The 3x3x3 block classes around a smoothed block, for meshing, or null when
+	 * the block is not smoothed.
+	 */
+	public static int[] meshNeighbourhood(BlockGetter level, BlockPos pos, BlockState state) {
+		return applies(level, state) ? neighbourhood(level, pos, state, -1, 3) : null;
+	}
+
+	/** Whether the block at {@code pos + (dx, dy, dz)} in a mesh neighbourhood is open. */
+	public static boolean isOpen(int[] classes, int dx, int dy, int dz) {
+		return classes[dx + 1 + 3 * (dz + 1) + 9 * (dy + 1)] == OPEN;
 	}
 
 	/**
 	 * Offsets (eighths) of all eight corners of a smoothed block, index
-	 * {@code cx + 2 * cy + 4 * cz}, or null when the block is not smoothed or
-	 * nothing moves. Used by the client mesher.
+	 * {@code cx + 2 * cy + 4 * cz}, or null when nothing moves.
 	 */
-	public static int[] cornerOffsets(BlockGetter level, BlockPos pos, BlockState state) {
-		if (!applies(level, state)) {
-			return null;
-		}
-		int[] classes = neighbourhood(level, pos, state, -1, 3);
+	public static int[] cornerOffsets(int[] classes) {
 		int[] offsets = new int[8];
 		boolean moved = false;
 		for (int i = 0; i < 8; i++) {
@@ -105,6 +118,42 @@ public final class SmoothTerrain {
 			moved |= offsets[i] != 0;
 		}
 		return moved ? offsets : null;
+	}
+
+	/**
+	 * A smooth surface normal at each of the eight corners (x, y, z per corner),
+	 * pointing away from the solid blocks around it. Every block sharing a
+	 * corner gets the same normal, so shading is continuous across blocks.
+	 * A corner with no clear direction gets a zero vector.
+	 */
+	public static float[] cornerNormals(int[] classes) {
+		float[] normals = new float[24];
+		for (int i = 0; i < 8; i++) {
+			int cx = i & 1;
+			int cy = i >> 1 & 1;
+			int cz = i >> 2 & 1;
+			float gx = 0;
+			float gy = 0;
+			float gz = 0;
+			for (int oy = cy - 1; oy <= cy; oy++) {
+				for (int oz = cz - 1; oz <= cz; oz++) {
+					for (int ox = cx - 1; ox <= cx; ox++) {
+						if (classes[ox + 1 + 3 * (oz + 1) + 9 * (oy + 1)] != OPEN) {
+							gx += ox - cx + 0.5F;
+							gy += oy - cy + 0.5F;
+							gz += oz - cz + 0.5F;
+						}
+					}
+				}
+			}
+			float length = (float) Math.sqrt(gx * gx + gy * gy + gz * gz);
+			if (length > 1.0E-4F) {
+				normals[i * 3] = -gx / length;
+				normals[i * 3 + 1] = -gy / length;
+				normals[i * 3 + 2] = -gz / length;
+			}
+		}
+		return normals;
 	}
 
 	/**

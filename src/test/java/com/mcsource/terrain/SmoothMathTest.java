@@ -27,31 +27,39 @@ class SmoothMathTest {
 
 	@Test
 	void cornerOffsets() {
-		// Flat ground: four terrain blocks below the corner, four open above.
-		assertEquals(0, SmoothMath.cornerOffset(4));
+		// Flat ground, flat ceiling and straight walls stay put.
+		assertEquals(0, SmoothMath.cornerOffset(4, 0));
+		assertEquals(0, SmoothMath.cornerOffset(0, 4));
+		assertEquals(0, SmoothMath.cornerOffset(2, 2));
 		// Fully buried or fully open corners never move.
-		assertEquals(0, SmoothMath.cornerOffset(0));
-		assertEquals(0, SmoothMath.cornerOffset(8));
-		// Emptier corners sink and fuller corners rise, by half a block.
-		assertEquals(-4, SmoothMath.cornerOffset(1));
-		assertEquals(-4, SmoothMath.cornerOffset(3));
-		assertEquals(4, SmoothMath.cornerOffset(5));
-		assertEquals(4, SmoothMath.cornerOffset(7));
+		assertEquals(0, SmoothMath.cornerOffset(0, 0));
+		assertEquals(0, SmoothMath.cornerOffset(4, 4));
+		// On ground, emptier corners sink and fuller corners rise, by half a block.
+		assertEquals(-4, SmoothMath.cornerOffset(1, 0));
+		assertEquals(-4, SmoothMath.cornerOffset(3, 0));
+		assertEquals(4, SmoothMath.cornerOffset(4, 1));
+		assertEquals(4, SmoothMath.cornerOffset(4, 3));
+		// On ceilings it is the other way round.
+		assertEquals(4, SmoothMath.cornerOffset(0, 2));
+		assertEquals(-4, SmoothMath.cornerOffset(2, 4));
 	}
 
 	/**
-	 * A one-block step: the top edge of the high side sinks half a block and the
-	 * foot of the step rises half a block, so they meet and the step's vertical
-	 * face closes into a ramp. Straight steps put 2 of 8 blocks around the top
-	 * edge and 6 around the foot; diagonal steps put 1 or 3 and 5 or 7.
+	 * A one-block step: on ground the top edge sinks and the foot rises half a
+	 * block; under a ceiling the lower edge rises and the upper edge sinks. Either
+	 * way the two corners meet and the step's vertical face closes into a ramp.
+	 * Pairs are (lower, upper) block counts around the upper and lower corner.
 	 */
 	@Test
 	void oneBlockStepsBecomeRamps() {
-		int[][] topAndFoot = {{2, 6}, {1, 5}, {3, 7}, {1, 7}, {3, 5}};
-		for (int[] pair : topAndFoot) {
-			float topEdge = 1 + SmoothMath.cornerOffset(pair[0]) / 8.0F;
-			float foot = SmoothMath.cornerOffset(pair[1]) / 8.0F;
-			assertEquals(topEdge, foot, 1e-6);
+		int[][][] steps = {
+				{{2, 0}, {4, 2}}, {{1, 0}, {4, 1}}, {{3, 0}, {4, 3}}, // ground: straight, outer, inner
+				{{2, 4}, {0, 2}}, {{3, 4}, {0, 3}}, {{1, 4}, {0, 1}}, // ceiling: straight, outer, inner
+		};
+		for (int[][] step : steps) {
+			float upperCorner = 1 + SmoothMath.cornerOffset(step[0][0], step[0][1]) / 8.0F;
+			float lowerCorner = SmoothMath.cornerOffset(step[1][0], step[1][1]) / 8.0F;
+			assertEquals(upperCorner, lowerCorner, 1e-6);
 		}
 	}
 

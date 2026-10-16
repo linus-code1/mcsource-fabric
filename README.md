@@ -12,8 +12,11 @@ world to try it in.
   in `data/mcsource/tags/block/smooth_terrain.json`) form one continuous
   surface: every grid corner where blocks meet moves up or down by up to half a
   block depending on how much terrain surrounds it. Every one-block step,
-  straight or diagonal, becomes a ramp, flat ground stays flat, and textures, grass tint and
-  side overlays bend with the surface.
+  straight or diagonal, on the ground or on a cave ceiling, becomes a ramp,
+  flat ground stays flat, and textures, grass tint and
+  side overlays bend with the surface. Each corner also gets a smooth normal
+  and light from the open air around it, so slopes shade evenly across block
+  borders.
 - **Sharp built blocks.** Anything not in that tag (planks, bricks, cobblestone,
   glass and so on) stays a sharp cube. Corners touching a built block or a
   liquid don't move, so the two meet cleanly.

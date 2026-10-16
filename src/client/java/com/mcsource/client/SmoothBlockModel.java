@@ -3,7 +3,9 @@ package com.mcsource.client;
 import java.util.function.Predicate;
 
 import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode;
 import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -21,8 +23,8 @@ import com.mcsource.terrain.SmoothTerrain;
 /**
  * Draws smoothed terrain by bending the block's own quads: each vertex moves up
  * or down with the grid corners around it, so textures, grass tint and overlays
- * all follow, and neighbouring blocks stay joined. Plants on top move with the
- * ground under them.
+ * all follow, and neighbouring blocks stay joined. Plants and snow on top bend
+ * with the ground under them.
  */
 public final class SmoothBlockModel extends WrapperBlockStateModel {
 	public SmoothBlockModel(BlockStateModel wrapped) {
@@ -34,31 +36,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			Predicate<Direction> cullTest) {
 		if (level != BlockAndTintGetter.EMPTY) {
 			if (state.is(SmoothTerrain.SMOOTH)) {
-				int[] offsets = SmoothTerrain.cornerOffsets(level, pos, state);
+				int[] classes = SmoothTerrain.meshNeighbourhood(level, pos, state);
+				int[] offsets = classes == null ? null : SmoothTerrain.cornerOffsets(classes);
 				if (offsets != null) {
-					int[] light = new int[8];
-					int[] shade = new int[8];
-					cornerLighting(level, pos, light, shade);
-					emitter.pushTransform(quad -> {
-						for (int i = 0; i < 4; i++) {
-							float x = Mth.clamp(quad.x(i), 0.0F, 1.0F);
-							float y = Mth.clamp(quad.y(i), 0.0F, 1.0F);
-							float z = Mth.clamp(quad.z(i), 0.0F, 1.0F);
-							int corner = (x > 0.5F ? 1 : 0) + (y > 0.5F ? 2 : 0) + (z > 0.5F ? 4 : 0);
-							quad.pos(i, quad.x(i), quad.y(i) + SmoothMath.offsetAt(offsets, x, y, z), quad.z(i));
-							quad.lightmap(i, LightCoordsUtil.max(quad.lightmap(i), light[corner]));
-							quad.color(i, ARGB.multiply(quad.color(i), shade[corner]));
-						}
-						// Vanilla ambient occlusion assumes faces lie on the block's sides and
-						// darkens moved faces wrongly; light comes from cornerLighting instead.
-						quad.ambientOcclusion(TriState.FALSE);
-						return true;
-					});
-					try {
-						super.emitQuads(emitter, level, pos, state, random, cullTest);
-					} finally {
-						emitter.popTransform();
-					}
+					emitBent(emitter, level, pos, state, random, cullTest, classes, offsets);
 					return;
 				}
 			} else if (state.is(SmoothTerrain.FOLLOWS)) {
@@ -88,24 +69,107 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		super.emitQuads(emitter, level, pos, state, random, cullTest);
 	}
 
+	private void emitBent(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
+			Predicate<Direction> cullTest, int[] classes, int[] offsets) {
+		float[] normals = SmoothTerrain.cornerNormals(classes);
+		int[] light = new int[8];
+		int[] shade = new int[8];
+		cornerLighting(level, pos, classes, light, shade);
+
+		emitter.pushTransform(quad -> {
+			for (int i = 0; i < 4; i++) {
+				float x = Mth.clamp(quad.x(i), 0.0F, 1.0F);
+				float y = Mth.clamp(quad.y(i), 0.0F, 1.0F);
+				float z = Mth.clamp(quad.z(i), 0.0F, 1.0F);
+				int corner = (x > 0.5F ? 1 : 0) + (y > 0.5F ? 2 : 0) + (z > 0.5F ? 4 : 0);
+				quad.pos(i, quad.x(i), quad.y(i) + SmoothMath.offsetAt(offsets, x, y, z), quad.z(i));
+				quad.lightmap(i, LightCoordsUtil.max(quad.lightmap(i), light[corner]));
+				quad.color(i, ARGB.multiply(quad.color(i), shade[corner]));
+				float nx = normals[corner * 3];
+				float ny = normals[corner * 3 + 1];
+				float nz = normals[corner * 3 + 2];
+				if (nx != 0 || ny != 0 || nz != 0) {
+					quad.normal(i, nx, ny, nz);
+				}
+			}
+			// Vanilla ambient occlusion assumes faces lie on the block's sides and
+			// darkens moved faces wrongly; light comes from cornerLighting instead.
+			// Enhanced shading lights each vertex by its smooth normal, so slopes
+			// shade evenly across block borders.
+			quad.ambientOcclusion(TriState.FALSE);
+			quad.shadeMode(ShadeMode.ENHANCED);
+			splitAlongFlatterDiagonal(quad);
+			return true;
+		});
+		try {
+			super.emitQuads(emitter, level, pos, state, random, cullTest);
+		} finally {
+			emitter.popTransform();
+		}
+	}
+
+	/**
+	 * A bent quad is drawn as two triangles split along the 0-2 diagonal. When
+	 * the other diagonal is flatter, rotate the vertices so the fold runs along
+	 * it; that keeps ridges and valleys following the terrain and avoids
+	 * stretched creases across the texture.
+	 */
+	private static void splitAlongFlatterDiagonal(MutableQuadView quad) {
+		float diagonal02 = Math.abs(quad.y(0) - quad.y(2));
+		float diagonal13 = Math.abs(quad.y(1) - quad.y(3));
+		if (diagonal02 <= diagonal13 + 1.0E-4F) {
+			return;
+		}
+		float[] px = new float[4];
+		float[] py = new float[4];
+		float[] pz = new float[4];
+		float[] u = new float[4];
+		float[] v = new float[4];
+		int[] color = new int[4];
+		int[] lightmap = new int[4];
+		float[] nx = new float[4];
+		float[] ny = new float[4];
+		float[] nz = new float[4];
+		boolean[] hasNormal = new boolean[4];
+		for (int i = 0; i < 4; i++) {
+			px[i] = quad.x(i);
+			py[i] = quad.y(i);
+			pz[i] = quad.z(i);
+			u[i] = quad.u(i);
+			v[i] = quad.v(i);
+			color[i] = quad.color(i);
+			lightmap[i] = quad.lightmap(i);
+			hasNormal[i] = quad.hasNormal(i);
+			nx[i] = quad.normalX(i);
+			ny[i] = quad.normalY(i);
+			nz[i] = quad.normalZ(i);
+		}
+		for (int i = 0; i < 4; i++) {
+			int from = (i + 1) & 3;
+			quad.pos(i, px[from], py[from], pz[from]);
+			quad.uv(i, u[from], v[from]);
+			quad.color(i, color[from]);
+			quad.lightmap(i, lightmap[from]);
+			if (hasNormal[from]) {
+				quad.normal(i, nx[from], ny[from], nz[from]);
+			}
+		}
+	}
+
 	/**
 	 * Smooth light for each of the block's eight corners: the average light of
 	 * the open blocks around that corner, so moved faces never sample light from
 	 * inside solid ground. Corners with less open space around them are shaded
-	 * darker, standing in for ambient occlusion.
+	 * slightly darker, standing in for ambient occlusion.
 	 */
-	private static void cornerLighting(BlockAndTintGetter level, BlockPos pos, int[] light, int[] shade) {
+	private static void cornerLighting(BlockAndTintGetter level, BlockPos pos, int[] classes, int[] light, int[] shade) {
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		boolean[] open = new boolean[27];
 		int[] cellLight = new int[27];
 		for (int dy = -1; dy <= 1; dy++) {
 			for (int dz = -1; dz <= 1; dz++) {
 				for (int dx = -1; dx <= 1; dx++) {
-					int i = dx + 1 + 3 * (dz + 1) + 9 * (dy + 1);
-					cursor.setWithOffset(pos, dx, dy, dz);
-					open[i] = SmoothTerrain.isOpen(level.getBlockState(cursor));
-					if (open[i]) {
-						cellLight[i] = LightCoordsUtil.getLightCoords(level, cursor);
+					if (SmoothTerrain.isOpen(classes, dx, dy, dz)) {
+						cellLight[dx + 1 + 3 * (dz + 1) + 9 * (dy + 1)] = LightCoordsUtil.getLightCoords(level, cursor.setWithOffset(pos, dx, dy, dz));
 					}
 				}
 			}
@@ -121,17 +185,17 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			for (int oy = cy - 1; oy <= cy; oy++) {
 				for (int oz = cz - 1; oz <= cz; oz++) {
 					for (int ox = cx - 1; ox <= cx; ox++) {
-						int i = ox + 1 + 3 * (oz + 1) + 9 * (oy + 1);
-						if (open[i]) {
+						if (SmoothTerrain.isOpen(classes, ox, oy, oz)) {
+							int cell = cellLight[ox + 1 + 3 * (oz + 1) + 9 * (oy + 1)];
 							count++;
-							blockSum += LightCoordsUtil.block(cellLight[i]);
-							skySum += LightCoordsUtil.sky(cellLight[i]);
+							blockSum += LightCoordsUtil.block(cell);
+							skySum += LightCoordsUtil.sky(cell);
 						}
 					}
 				}
 			}
 			light[corner] = count == 0 ? fallback : LightCoordsUtil.smoothPack(blockSum * 16 / count, skySum * 16 / count);
-			int gray = Math.round(255 * Mth.clamp(0.55F + 0.45F * count / 4.0F, 0.55F, 1.0F));
+			int gray = Math.round(255 * (0.8F + 0.2F * Math.min(count, 4) / 4.0F));
 			shade[corner] = ARGB.color(255, gray, gray, gray);
 		}
 	}
