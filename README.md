@@ -55,7 +55,8 @@ world to try it in.
   and more) use the closest Half-Life 2 materials, built from your install
   into an always-on resource pack at `config/mcsource/hl2_block_pack` the
   first time the game starts. Grass, ferns and flowers are cut out of Half-Life
-  2's grass sprite sheet, since its grass is sprites too. See
+  2's grass sprite sheet, since its grass is sprites too, and water is made
+  from the ripples of a Half-Life 2 water material in its murky canal colour. See
   `hl2_block_pack/used_materials.txt` for what was picked, and put your own
   matches in `config/mcsource/block_textures.txt` (restart to apply).
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close

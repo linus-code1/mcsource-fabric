@@ -11,6 +11,8 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.joml.Matrix4f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.joml.Quaternionf;
 import org.joml.Vector4f;
 
@@ -48,6 +50,9 @@ public final class StudioModel {
 	private static final int ANIM_RAWROT2 = 0x20;
 
 	private static final int SEQ_LOOPING = 0x1;
+	private static final int ANIMDESC_ALLZEROS = 0x20;
+	private static final int ANIMDESC_FRAMEANIM = 0x40;
+	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	private static final int MAX_TEXTURE = 512;
 
 
@@ -336,6 +341,7 @@ public final class StudioModel {
 				sequences.add(new RiggedModel.Sequence(label, activity, fps > 0 ? fps : 30.0F, looping, movement(mdl, desc), frames));
 			} catch (RuntimeException | IOException e) {
 				// A sequence that can't be decoded is left out.
+				LOGGER.warn("Left out animation {} of {}: {}", label, base, e.toString());
 			}
 		}
 		return new Skeleton(bones, sequences);
@@ -357,6 +363,18 @@ public final class StudioModel {
 	private static float[][] readAnimation(ByteBuffer mdl, ByteBuffer ani, int blockIndex, int blockCount, int desc, Bone[] bones)
 			throws IOException {
 		int frameCount = Math.max(1, mdl.getInt(desc + 16));
+		int flags = mdl.getInt(desc + 12);
+		if ((flags & ANIMDESC_ALLZEROS) != 0) {
+			// No data: every bone stays in its bind pose.
+			float[][] frames = new float[frameCount][];
+			for (int f = 0; f < frameCount; f++) {
+				frames[f] = decodeFrame(mdl, -1, 0, bones);
+			}
+			return frames;
+		}
+		if ((flags & ANIMDESC_FRAMEANIM) != 0) {
+			throw new IOException("frame-based animation data (newer games) is not supported");
+		}
 		int block = mdl.getInt(desc + 52);
 		int index = mdl.getInt(desc + 56);
 		int sectionIndex = mdl.getInt(desc + 80);
@@ -396,6 +414,9 @@ public final class StudioModel {
 		for (int b = 0; b < bones.length; b++) {
 			System.arraycopy(bones[b].pos, 0, out, b * 7, 3);
 			System.arraycopy(bones[b].quat, 0, out, b * 7 + 3, 4);
+		}
+		if (start < 0) {
+			return out;
 		}
 		Quaternionf q = new Quaternionf();
 		int at = start;

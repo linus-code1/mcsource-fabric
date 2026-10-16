@@ -51,6 +51,8 @@ public final class BlockTextures {
 			# The first one found is used.
 			# Grass, ferns and flowers are cut out of Half-Life 2's detail sprite sheet (its grass is sprites too).
 			plants = detail/detailsprites detail/detailsprites_2 detail/detailsprites*
+			# Water is made from the ripple normal map of one of Half-Life 2's water materials.
+			water = nature/water_canals_water2 nature/water_canals03 nature/water_coast01 nature/water_* nature/*water* *water*
 			grass_block_top = nature/grassfloor002a nature/grassfloor003a nature/grassfloor00* nature/*grass* *grass*
 			dirt = nature/dirtfloor003a nature/dirtfloor004a nature/dirtfloor00* nature/*dirt* *dirt*
 			coarse_dirt = nature/dirtfloor005c nature/dirtfloor006a nature/dirtfloor01* nature/*dirt* *dirt*
@@ -157,37 +159,25 @@ public final class BlockTextures {
 
 		Map<String, String> used = new LinkedHashMap<>();
 		Map<String, int[]> made = new LinkedHashMap<>();
+		Map<String, String> errors = new LinkedHashMap<>();
 		for (Map.Entry<String, String[]> entry : mapping.entrySet()) {
 			String name = entry.getKey();
-			if (name.equals("plants")) {
-				plants(files, entry.getValue(), materials, folder, used);
-				continue;
-			}
-			String chosen = null;
-			int[] image = null;
-			for (String pattern : entry.getValue()) {
-				for (String material : candidates(pattern, materials)) {
-					RiggedModel.Texture texture = Materials.load(files, material, SIZE * 2);
-					if (texture != null && suits(name, texture)) {
-						chosen = material;
-						image = square(texture);
-						break;
-					}
+			try {
+				if (name.equals("plants")) {
+					plants(files, entry.getValue(), materials, folder, used);
+				} else if (name.equals("water")) {
+					water(files, entry.getValue(), materials, folder, used);
+				} else {
+					one(files, name, entry.getValue(), materials, folder, used, made);
 				}
-				if (image != null) {
-					break;
-				}
+			} catch (IOException | RuntimeException e) {
+				// One texture failing leaves the rest.
+				used.put(name, null);
+				errors.put(name, e.toString());
 			}
-			used.put(name, chosen);
-			if (image == null) {
-				continue;
-			}
-			int tint = tint(name);
-			if (tint != 0) {
-				untint(image, tint);
-			}
-			made.put(name, image);
-			writePng(folder.resolve(name + ".png"), image, SIZE);
+		}
+		if (!errors.isEmpty()) {
+			used.put("errors", errors.toString());
 		}
 
 		// Grass and snowy grass block sides: the dirt with a band of the top
@@ -208,6 +198,148 @@ public final class BlockTextures {
 			}
 		}
 		return used;
+	}
+
+	/** One ordinary block texture: the first of its materials found. */
+	private static void one(GameFiles files, String name, String[] patterns, List<String> materials, Path folder, Map<String, String> used,
+			Map<String, int[]> made) throws IOException {
+		String chosen = null;
+		int[] image = null;
+		for (String pattern : patterns) {
+			for (String material : candidates(pattern, materials)) {
+				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, false);
+				if (texture != null && suits(name, texture)) {
+					chosen = material;
+					image = square(texture);
+					break;
+				}
+			}
+			if (image != null) {
+				break;
+			}
+		}
+		used.put(name, chosen);
+		if (image == null) {
+			return;
+		}
+		int tint = tint(name);
+		if (tint != 0) {
+			untint(image, tint);
+		}
+		made.put(name, image);
+		writePng(folder.resolve(name + ".png"), image, SIZE);
+	}
+
+	/** A material, or null if it is missing or can't be read (a broken one is passed over). */
+	private static RiggedModel.Texture tryLoad(GameFiles files, String material, int maxSize, boolean keepAlpha) {
+		try {
+			return Materials.load(files, material, maxSize, keepAlpha);
+		} catch (IOException | RuntimeException e) {
+			return null;
+		}
+	}
+
+	// ------------------------------------------------------------ water
+
+	private static final Pattern NORMAL_MAP = Pattern.compile("\"?\\$(normalmap|bumpmap)\"?\\s+\"?([^\"\\s}]+)", Pattern.CASE_INSENSITIVE);
+	private static final int WATER_SIZE = 64;
+	private static final int WATER_FRAMES = 32;
+	/** Minecraft's default water colour, divided back out. */
+	private static final int WATER_TINT = 0x3F76E4;
+	/** The murky green-brown of Half-Life 2's canal water. */
+	private static final int WATER_COLOUR = 0x3A4A3A;
+
+	/**
+	 * Water from a Half-Life 2 water material's ripple normal map: two layers
+	 * of ripples drifting past each other, lit from above, in the murky colour
+	 * of Half-Life 2's canals. Written as animation strips for still and
+	 * flowing water.
+	 */
+	private static void water(GameFiles files, String[] patterns, List<String> materials, Path folder, Map<String, String> used)
+			throws IOException {
+		Vtf normals = null;
+		String chosen = null;
+		for (String pattern : patterns) {
+			for (String material : candidates(pattern, materials, false)) {
+				byte[] vmt = files.read("materials/" + material + ".vmt");
+				if (vmt == null) {
+					continue;
+				}
+				java.util.regex.Matcher m = NORMAL_MAP.matcher(new String(vmt, StandardCharsets.ISO_8859_1));
+				if (!m.find()) {
+					continue;
+				}
+				String path = m.group(2).replace('\\', '/').toLowerCase(Locale.ROOT);
+				if (path.startsWith("materials/")) {
+					path = path.substring("materials/".length());
+				}
+				if (path.endsWith(".vtf")) {
+					path = path.substring(0, path.length() - 4);
+				}
+				byte[] vtf = files.read("materials/" + path + ".vtf");
+				if (vtf == null) {
+					continue;
+				}
+				try {
+					normals = Vtf.decode(vtf, 256);
+					chosen = material + " (ripples " + path + ")";
+					break;
+				} catch (IOException | RuntimeException e) {
+					// Try the next one.
+				}
+			}
+			if (normals != null) {
+				break;
+			}
+		}
+		used.put("water", chosen);
+		if (normals == null) {
+			return;
+		}
+		int s = WATER_SIZE;
+		int[] strip = new int[s * s * WATER_FRAMES];
+		float lx = 0.35F;
+		float ly = 0.45F;
+		float lz = 0.82F;
+		float[] base = new float[3];
+		for (int c = 0; c < 3; c++) {
+			int shift = 16 - c * 8;
+			base[c] = Math.min(1.0F, (WATER_COLOUR >> shift & 255) / (float) (WATER_TINT >> shift & 255));
+		}
+		for (int f = 0; f < WATER_FRAMES; f++) {
+			float t = (float) f / WATER_FRAMES;
+			for (int y = 0; y < s; y++) {
+				for (int x = 0; x < s; x++) {
+					float u = (float) x / s;
+					float v = (float) y / s;
+					float[] a = normal(normals, u + t, v + t * 0.5F);
+					float[] b = normal(normals, u * 0.7F - t, v * 0.7F + t);
+					float nx = a[0] + b[0];
+					float ny = a[1] + b[1];
+					float nz = a[2] + b[2];
+					float length = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+					float light = Math.max(0.0F, (nx * lx + ny * ly + nz * lz) / Math.max(length, 1.0E-4F));
+					float shade = 0.55F + 0.6F * light * light;
+					int r = Math.min(255, Math.round(base[0] * shade * 255));
+					int g = Math.min(255, Math.round(base[1] * shade * 255));
+					int bl = Math.min(255, Math.round(base[2] * shade * 255));
+					strip[(f * s + y) * s + x] = 0xD0000000 | r << 16 | g << 8 | bl;
+				}
+			}
+		}
+		String meta = "{\"animation\": {\"frametime\": 3, \"interpolate\": true}}\n";
+		for (String name : new String[] {"water_still", "water_flow"}) {
+			writePng(folder.resolve(name + ".png"), strip, s, s * WATER_FRAMES);
+			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
+		}
+	}
+
+	/** The normal at a wrapped position on a normal map, each part from -1 to 1. */
+	private static float[] normal(Vtf map, float u, float v) {
+		int x = Math.floorMod((int) Math.floor(u * map.width), map.width);
+		int y = Math.floorMod((int) Math.floor(v * map.height), map.height);
+		int p = map.pixels[y * map.width + x];
+		return new float[] {(p >> 16 & 255) / 127.5F - 1.0F, (p >> 8 & 255) / 127.5F - 1.0F, (p & 255) / 127.5F - 1.0F};
 	}
 
 	/**
@@ -278,22 +410,45 @@ public final class BlockTextures {
 
 	/** One sprite on a sheet: its bounds and average colour. */
 	private record Sprite(int x, int y, int w, int h, int pixels, float r, float g, float b) {
+		/**
+		 * What the sprite looks like: green (grass and leaves, including the
+		 * dry yellow-green grass of Half-Life 2's coast), a flower colour, or
+		 * other (stones, dirt, bare twigs).
+		 */
 		String colour() {
 			float max = Math.max(r, Math.max(g, b));
 			float min = Math.min(r, Math.min(g, b));
-			if (max - min < 0.12F) {
-				return max > 0.6F ? "white" : "grey";
+			float saturation = max <= 0.0F ? 0.0F : (max - min) / max;
+			float hue;
+			if (max - min < 1.0E-4F) {
+				hue = 0.0F;
+			} else if (max == r) {
+				hue = 60.0F * (((g - b) / (max - min) + 6.0F) % 6.0F);
+			} else if (max == g) {
+				hue = 60.0F * ((b - r) / (max - min) + 2.0F);
+			} else {
+				hue = 60.0F * ((r - g) / (max - min) + 4.0F);
 			}
-			if (g >= r && g >= b) {
-				return r > g * 0.95F && b < g * 0.6F ? "yellow" : "green";
+			if (saturation < 0.2F) {
+				return max > 0.7F ? "white" : "other";
 			}
-			if (r >= g && r >= b) {
-				if (b > g * 1.1F) {
-					return "purple";
-				}
-				return g > r * 0.7F ? (b < g * 0.6F ? "yellow" : "brown") : "red";
+			if (hue >= 45.0F && hue < 170.0F) {
+				// Bright, strongly yellow sprites are flowers; duller ones grass.
+				return hue < 62.0F && saturation > 0.6F && max > 0.7F ? "yellow" : "green";
 			}
-			return r > g ? "purple" : "blue";
+			if (saturation < 0.35F) {
+				return hue < 45.0F ? "brown" : "other";
+			}
+			if (hue < 18.0F || hue >= 330.0F) {
+				return "red";
+			}
+			if (hue < 45.0F) {
+				return max > 0.6F ? "yellow" : "brown";
+			}
+			if (hue >= 185.0F && hue < 260.0F) {
+				return "blue";
+			}
+			return hue >= 260.0F ? "purple" : "other";
 		}
 	}
 
@@ -334,8 +489,12 @@ public final class BlockTextures {
 				coloured.computeIfAbsent(colour, c -> new ArrayList<>()).add(sprite);
 			}
 		}
+		used.put("plants", chosen + " (" + sprites.size() + " sprites: " + green.size() + " green, others " + summary(coloured) + ")");
 		if (green.isEmpty()) {
-			used.put("plants", null);
+			// No green sprites: use the biggest of any kind for grass.
+			green.addAll(sprites);
+		}
+		if (green.isEmpty()) {
 			return;
 		}
 		// Biggest first.
@@ -370,6 +529,14 @@ public final class BlockTextures {
 			writePlant(folder, flower[0], spriteImage(sheet, pick, SIZE, SIZE));
 			used.put(flower[0], chosen + " (sprite at " + pick.x + "," + pick.y + ")");
 		}
+	}
+
+	private static String summary(Map<String, List<Sprite>> coloured) {
+		StringBuilder out = new StringBuilder();
+		for (Map.Entry<String, List<Sprite>> entry : coloured.entrySet()) {
+			out.append(out.isEmpty() ? "" : ", ").append(entry.getValue().size()).append(' ').append(entry.getKey());
+		}
+		return out.isEmpty() ? "none" : out.toString();
 	}
 
 	/** The {@code index}th sprite of a shape among {@code sprites}, wrapping round when there are too few. */
@@ -592,12 +759,17 @@ public final class BlockTextures {
 
 	/** Writes ARGB pixels as an 8-bit RGBA PNG. */
 	public static void writePng(Path file, int[] argb, int size) throws IOException {
-		byte[] raw = new byte[size * (size * 4 + 1)];
+		writePng(file, argb, size, size);
+	}
+
+	/** Writes ARGB pixels as an 8-bit RGBA PNG of any size. */
+	public static void writePng(Path file, int[] argb, int width, int height) throws IOException {
+		byte[] raw = new byte[height * (width * 4 + 1)];
 		int at = 0;
-		for (int y = 0; y < size; y++) {
+		for (int y = 0; y < height; y++) {
 			raw[at++] = 0; // no filter
-			for (int x = 0; x < size; x++) {
-				int p = argb[y * size + x];
+			for (int x = 0; x < width; x++) {
+				int p = argb[y * width + x];
 				raw[at++] = (byte) (p >> 16);
 				raw[at++] = (byte) (p >> 8);
 				raw[at++] = (byte) p;
@@ -617,7 +789,7 @@ public final class BlockTextures {
 		ByteArrayOutputStream png = new ByteArrayOutputStream();
 		png.writeBytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'});
 		ByteBuffer header = ByteBuffer.allocate(13);
-		header.putInt(size).putInt(size).put((byte) 8).put((byte) 6).put((byte) 0).put((byte) 0).put((byte) 0);
+		header.putInt(width).putInt(height).put((byte) 8).put((byte) 6).put((byte) 0).put((byte) 0).put((byte) 0);
 		chunk(png, "IHDR", header.array());
 		chunk(png, "IDAT", compressed.toByteArray());
 		chunk(png, "IEND", new byte[0]);

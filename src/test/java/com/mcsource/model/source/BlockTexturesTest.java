@@ -104,6 +104,36 @@ class BlockTexturesTest {
 		}
 	}
 
+	@Test
+	void makesWaterFromRipples() throws IOException {
+		Map<String, byte[]> files = new HashMap<>();
+		int size = 16;
+		int[] ripples = new int[size * size];
+		for (int i = 0; i < ripples.length; i++) {
+			ripples[i] = 0xFF8080FF ^ (i % 7) << 16;
+		}
+		files.put("materials/nature/water_test.vmt",
+				"\"Water\" { \"$normalmap\" \"nature/water_test_normal\" }".getBytes(StandardCharsets.US_ASCII));
+		files.put("materials/nature/water_test_normal.vtf", vtf(size, ripples));
+		GameFiles game = new GameFiles() {
+			@Override
+			public byte[] read(String path) {
+				return files.get(path.toLowerCase());
+			}
+
+			@Override
+			public List<String> list(String folder) {
+				return new ArrayList<>(files.keySet());
+			}
+		};
+		Map<String, String> used = BlockTextures.generate(game, BlockTextures.parse("water = nature/water_*\n"), dir);
+		assertTrue(used.get("water").startsWith("nature/water_test"));
+		Path blocks = dir.resolve("assets/minecraft/textures/block");
+		assertTrue(Files.exists(blocks.resolve("water_still.png.mcmeta")));
+		byte[] png = Files.readAllBytes(blocks.resolve("water_flow.png"));
+		assertEquals(64 * 32, ByteBuffer.wrap(png, 20, 4).getInt());
+	}
+
 	private static byte[] vtf(int size, int[] argb) {
 		ByteBuffer b = ByteBuffer.allocate(80 + size * size * 4).order(ByteOrder.LITTLE_ENDIAN);
 		b.putInt(0, 0x00465456).putInt(4, 7).putInt(8, 2).putInt(12, 80);

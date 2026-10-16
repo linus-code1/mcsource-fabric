@@ -92,8 +92,15 @@ public final class SourceModel {
 				LOGGER.info("Model {} not found", reference);
 				return Optional.empty();
 			}
-			LOGGER.info("Using model {} ({} bones, {} triangles, {} animations)", reference, model.boneCount(), model.triangleCount(),
-					model.sequences.length);
+			StringBuilder animations = new StringBuilder();
+			for (RiggedModel.Sequence sequence : model.sequences) {
+				animations.append(animations.isEmpty() ? "" : ", ").append(sequence.label());
+				if (!sequence.activity().isEmpty()) {
+					animations.append(" (").append(sequence.activity()).append(')');
+				}
+			}
+			LOGGER.info("Using model {} ({} bones, {} triangles, {} textures, animations: {})", reference, model.boneCount(),
+					model.triangleCount(), model.textures.length, animations);
 			return Optional.of(new SourceModel(reference, model));
 		} catch (Exception e) {
 			LOGGER.warn("Could not read model {}", reference, e);

@@ -39,6 +39,8 @@ public abstract class FirstPersonHandsMixin {
 	/** Source draws view models with a 54 degree field of view. */
 	private static final float VIEW_MODEL_FOV = 54.0F;
 	private static final float UNITS = 1.0F / 40.0F;
+	/** How much of Source's view model spread to apply, from 0 (none) to 1 (all). */
+	private static final float SPREAD = 0.5F;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
@@ -50,13 +52,18 @@ public abstract class FirstPersonHandsMixin {
 		RiggedModel model = hands.model;
 		RiggedModel.Pose pose = new RiggedModel.Pose(model);
 		RiggedModel.Sequence idle = model.find("idle01", "idle", "act_vm_idle");
+		RiggedModel.Sequence draw = model.find("draw", "act_vm_draw", "deploy");
+		RiggedModel.Sequence swing = model.find("misscenter1", "hitcenter1", "act_vm_misscenter", "act_vm_hitcenter", "attack");
 		float seconds = Util.getMillis() / 1000.0F;
-		if (idle != null) {
+		boolean drawing = draw != null && inverseArmHeight > 0.0F;
+		if (drawing) {
+			// Bringing the hand up after switching items plays Half-Life 2's draw.
+			model.pose(draw, (1.0F - inverseArmHeight) * (draw.frameCount() - 1), pose);
+		} else if (idle != null) {
 			model.pose(idle, seconds * idle.fps(), pose);
 		} else {
 			model.bindPose(pose);
 		}
-		RiggedModel.Sequence swing = model.find("hitcenter1", "misscenter1", "act_vm_hitcenter", "act_vm_misscenter", "attack");
 		if (swing != null && attackValue > 0.0F) {
 			RiggedModel.Pose swinging = new RiggedModel.Pose(model);
 			model.pose(swing, attackValue * (swing.frameCount() - 1), swinging);
@@ -66,15 +73,17 @@ public abstract class FirstPersonHandsMixin {
 		model.skinning(pose, bones);
 
 		poseStack.pushPose();
-		// Lowered while switching items, as Minecraft lowers its arm.
-		poseStack.translate(0.0F, inverseArmHeight * -0.6F, 0.0F);
-		// Spread sideways and up so it fills the screen as it would at Source's
-		// view model field of view. Source's is horizontal on a 4:3 screen and
-		// Minecraft's is vertical, so compare their vertical halves. Moving the
-		// model itself would show the open end of the sleeve.
+		if (!drawing) {
+			// Without a draw animation, lowered while switching items as Minecraft lowers its arm.
+			poseStack.translate(0.0F, inverseArmHeight * -0.6F, 0.0F);
+		}
+		// Spread sideways and up a little towards how it would fill the screen
+		// at Source's narrower view model field of view. Fully spread, the
+		// empty hand sits mostly off screen; not spread, the open end of the
+		// sleeve shows.
 		float fov = Minecraft.getInstance().options.fov().get();
-		double sourceHalf = Math.atan(Math.tan(Math.toRadians(VIEW_MODEL_FOV / 2.0F)) * 0.75);
-		float spread = (float) (Math.tan(Math.toRadians(fov / 2.0F)) / Math.tan(sourceHalf));
+		float full = (float) (Math.tan(Math.toRadians(fov / 2.0F)) / Math.tan(Math.toRadians(VIEW_MODEL_FOV / 2.0F)));
+		float spread = 1.0F + (full - 1.0F) * SPREAD;
 		poseStack.scale(spread, spread, 1.0F);
 		// Source's forward (x) becomes the camera's forward (-z).
 		poseStack.rotateDegrees(Axis.YP, 180.0F);

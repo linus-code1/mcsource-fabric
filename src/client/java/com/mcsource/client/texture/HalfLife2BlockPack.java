@@ -38,7 +38,7 @@ import com.mcsource.model.source.BlockTextures;
 public final class HalfLife2BlockPack implements RepositorySource {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	/** Bump when the way textures are built changes, so old packs are rebuilt. */
-	private static final String VERSION = "2";
+	private static final String VERSION = "3";
 	private static final String USER_LIST = """
 			# Your changes to which Half-Life 2 material each Minecraft block texture uses.
 			# A line here replaces the mod's own line for that texture, for example:
@@ -103,11 +103,12 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		for (Map.Entry<String, String> entry : used.entrySet()) {
 			if (entry.getValue() == null) {
 				missing.add(entry.getKey());
+				report.append(entry.getKey()).append(" = (nothing found, Minecraft's is kept)\n");
 			} else {
 				report.append(entry.getKey()).append(" = ").append(entry.getValue()).append('\n');
 			}
 		}
-		if (report.isEmpty()) {
+		if (missing.size() == used.size()) {
 			// No Half-Life 2 materials found: keep whatever was built before.
 			LOGGER.info("No Half-Life 2 materials found for block textures; keeping Minecraft's");
 			delete(fresh);
