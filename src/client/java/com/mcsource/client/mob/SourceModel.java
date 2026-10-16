@@ -185,6 +185,40 @@ public final class SourceModel {
 		this.height = high > low ? high - low : 0.0F;
 	}
 
+	/** Triangles left out when drawing, or null for none. */
+	private boolean[] hidden;
+
+	/**
+	 * Leaves out triangles whose corners all mostly follow bones with one of
+	 * these words in their names (lower case), such as the upper arm of a
+	 * view model, whose open end would otherwise show.
+	 */
+	public void hideBones(String... words) {
+		boolean[] boneHidden = new boolean[model.boneCount()];
+		for (int b = 0; b < boneHidden.length; b++) {
+			String name = model.boneNames[b].toLowerCase(java.util.Locale.ROOT);
+			for (String word : words) {
+				boneHidden[b] |= name.contains(word);
+			}
+		}
+		boolean[] mask = new boolean[model.triangleCount()];
+		for (int t = 0; t < mask.length; t++) {
+			boolean all = true;
+			for (int k = 0; k < 3 && all; k++) {
+				int v = model.cornerVertex[t * 3 + k];
+				int best = 0;
+				for (int w = 1; w < 3; w++) {
+					if (model.positionWeights[v * 3 + w] > model.positionWeights[v * 3 + best]) {
+						best = w;
+					}
+				}
+				all = boneHidden[model.positionBones[v * 3 + best]];
+			}
+			mask[t] = all;
+		}
+		hidden = mask;
+	}
+
 	/** Moves every vertex and normal with its bones. */
 	public void skin(Matrix4f[] bones) {
 		skinArray(bones, model.positions, model.positionBones, model.positionWeights, posed, true);
@@ -247,6 +281,9 @@ public final class SourceModel {
 		int count = model.triangleCount();
 		boolean mirrored = axes == Axes.MIRRORED || axes == Axes.HALF_LIFE_MIRRORED;
 		for (int i = 0; i < count; i++) {
+			if (hidden != null && hidden[i]) {
+				continue;
+			}
 			for (int c = 0; c < 4; c++) {
 				// A mirrored mesh is wound the other way round.
 				int k = c == 3 ? 2 : mirrored ? 2 - c : c;

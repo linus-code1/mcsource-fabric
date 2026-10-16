@@ -101,12 +101,91 @@ public final class BlockTextures {
 			spruce_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
 			birch_log = nature/*birch* *birch* nature/*bark* *bark*
 			birch_log_top = wood/*stump* *stump* wood/woodfloor0*
-			oak_leaves = nature/*leaves* *leaves* *foliage* *leaf*
-			birch_leaves = nature/*leaves* *leaves* *foliage* *leaf*
-			spruce_leaves = nature/*leaves* *leaves* *foliage* *leaf*
-			jungle_leaves = nature/*leaves* *leaves* *foliage* *leaf*
-			acacia_leaves = nature/*leaves* *leaves* *foliage* *leaf*
-			dark_oak_leaves = nature/*leaves* *leaves* *foliage* *leaf*
+			oak_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			birch_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			spruce_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			jungle_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			acacia_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			dark_oak_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			jungle_log = nature/*bark* wood/*bark* *bark* wood/woodbeam*
+			jungle_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
+			acacia_log = nature/*bark* wood/*bark* *bark* wood/woodbeam*
+			acacia_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
+			dark_oak_log = nature/*bark* wood/*bark* *bark* wood/woodbeam*
+			dark_oak_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
+			mangrove_log = nature/*bark* wood/*bark* *bark* wood/woodbeam*
+			mangrove_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
+			cherry_log = nature/*bark* wood/*bark* *bark* wood/woodbeam*
+			cherry_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
+			pale_oak_log = nature/*bark* wood/*bark* *bark* wood/woodbeam*
+			pale_oak_log_top = wood/*stump* *stump* wood/*end* wood/woodfloor0*
+			stripped_oak_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_oak_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_spruce_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_spruce_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_birch_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_birch_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_jungle_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_jungle_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_acacia_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_acacia_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_dark_oak_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_dark_oak_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_mangrove_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_mangrove_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_cherry_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_cherry_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			stripped_pale_oak_log = wood/woodbeam* wood/*beam* wood/woodwall0* wood/*
+			stripped_pale_oak_log_top = wood/*stump* wood/*end* wood/woodfloor0*
+			mangrove_planks = wood/woodfloor0* wood/*floor* wood/*
+			cherry_planks = wood/woodfloor0* wood/*floor* wood/*
+			pale_oak_planks = wood/woodfloor0* wood/*floor* wood/*
+			bamboo_planks = wood/woodfloor0* wood/*floor* wood/*
+			mangrove_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			cherry_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			pale_oak_leaves = models/props_foliage/*leaves* models/props_foliage/*leaf* models/props_foliage/*bush* models/props_foliage/*tree* nature/*leaves* *leaves* *foliage*
+			dirt_path_top = nature/dirtfloor0* nature/*dirt* *dirt*
+			dirt_path_side = nature/dirtfloor0* nature/*dirt* *dirt*
+			podzol_side = nature/dirtfloor0* nature/*dirt*
+			mycelium_side = nature/dirtfloor0* nature/*dirt*
+			mossy_cobblestone_wall = stone/*moss* *moss* *cobble*
+			smooth_sandstone = stone/*sand* *sandstone* concrete/concretefloor0*
+			cut_sandstone = stone/*sand* *sandstone* concrete/concretewall0*
+			chiseled_sandstone = stone/*sand* *sandstone* concrete/concretewall0*
+			red_sandstone = stone/*sand* *sandstone* brick/*
+			polished_tuff = concrete/concretefloor0* stone/*
+			tuff_bricks = stone/stonewall0* brick/*
+			deepslate_bricks = stone/stonewall0* brick/*
+			deepslate_tiles = tile/tilefloor0* stone/*
+			polished_deepslate = concrete/concretefloor0* stone/*
+			mud_bricks = brick/brickwall0* brick/*
+			hay_block_side = *hay* *straw* nature/*grass*
+			hay_block_top = *hay* *straw* nature/*grass*
+			white_terracotta = plaster/plasterwall0* plaster/*
+			white_wool = *fabric* *cloth* plaster/*
+			stone_bricks_wall = stone/stonewall0*
+			calcite = stone/*white* plaster/* concrete/*
+			dripstone_block = nature/rock* stone/*
+			moss_block = nature/*moss* *moss* nature/*grass*
+			rooted_dirt = nature/dirtfloor006a nature/*dirt* *dirt*
+			iron_bars = metal/*grate* metal/*fence* *grate*
+			iron_door_top = metal/metaldoor0* metal/*door* metal/*
+			iron_door_bottom = metal/metaldoor0* metal/*door* metal/*
+			oak_door_top = wood/*door* wood/woodwall0*
+			oak_door_bottom = wood/*door* wood/woodwall0*
+			spruce_door_top = wood/*door* wood/woodwall0*
+			spruce_door_bottom = wood/*door* wood/woodwall0*
+			anvil = metal/*
+			coal_block = nature/*coal* stone/*dark* metal/*dark*
+			gold_block = metal/*gold* *brass* metal/*
+			copper_block = metal/*copper* *copper* metal/*rust*
+			oxidized_copper = metal/*green* metal/*copper* *copper*
+			netherrack = nature/*lava* nature/rockfloor0* *rock*
+			blackstone = nature/rockwall_cave* stone/*dark* *rock*
+			basalt_side = nature/rockwall0* *rock*
+			basalt_top = nature/rockfloor0* *rock*
+			end_stone = nature/sandfloor0* nature/rock*
+			obsidian = nature/*obsidian* stone/*black* nature/rockwall_cave*
 			terracotta = plaster/plasterwall0* plaster/* *plaster*
 			white_concrete = concrete/concretewall001a concrete/concretewall0* concrete/*
 			light_gray_concrete = concrete/concretewall0* concrete/*
@@ -120,6 +199,43 @@ public final class BlockTextures {
 			""";
 
 	private BlockTextures() {
+	}
+
+	/**
+	 * Every leaves block drawn as a clump of crossed foliage cards reaching a
+	 * little past the block, the way Source trees are built from leaf cards,
+	 * instead of a cube. Replaces the model all leaves share.
+	 */
+	private static final String LEAVES_MODEL = """
+			{
+				"parent": "minecraft:block/block",
+				"ambientocclusion": false,
+				"textures": {"particle": "#all"},
+				"elements": [
+					%s,
+					%s,
+					%s,
+					%s,
+					%s
+				]
+			}
+			""".formatted(
+			card(-4, -2, 8, 20, 18, 8, "y", 45),
+			card(-4, -2, 8, 20, 18, 8, "y", -45),
+			card(8, -3, -4, 8, 19, 20, "y", 0),
+			card(-4, -3, 8, 20, 19, 8, "y", 0),
+			"{\"from\": [-4, 9, -4], \"to\": [20, 9, 20], \"shade_direction_override\": \"up\", \"faces\": {"
+					+ "\"up\": {\"uv\": [0, 0, 16, 16], \"texture\": \"#all\", \"tintindex\": 0}, "
+					+ "\"down\": {\"uv\": [0, 0, 16, 16], \"texture\": \"#all\", \"tintindex\": 0}}}");
+
+	/** One flat, two-sided foliage card. */
+	private static String card(int x1, int y1, int z1, int x2, int y2, int z2, String axis, int angle) {
+		String a = x1 == x2 ? "east" : "north";
+		String b = x1 == x2 ? "west" : "south";
+		String face = "{\"uv\": [0, 0, 16, 16], \"texture\": \"#all\", \"tintindex\": 0}";
+		return "{\"from\": [" + x1 + ", " + y1 + ", " + z1 + "], \"to\": [" + x2 + ", " + y2 + ", " + z2 + "], \"shade_direction_override\": \"up\", "
+				+ "\"rotation\": {\"origin\": [8, 8, 8], \"axis\": \"" + axis + "\", \"angle\": " + angle + ", \"rescale\": true}, "
+				+ "\"faces\": {\"" + a + "\": " + face + ", \"" + b + "\": " + face + "}}";
 	}
 
 	/** Reads a list in the {@link #DEFAULTS} format. */
@@ -176,6 +292,11 @@ public final class BlockTextures {
 				errors.put(name, e.toString());
 			}
 		}
+		if (made.keySet().stream().anyMatch(name -> name.endsWith("_leaves"))) {
+			Path models = packRoot.resolve("assets/minecraft/models/block");
+			Files.createDirectories(models);
+			Files.writeString(models.resolve("leaves.json"), LEAVES_MODEL);
+		}
 		if (!errors.isEmpty()) {
 			used.put("errors", errors.toString());
 		}
@@ -207,7 +328,8 @@ public final class BlockTextures {
 		int[] image = null;
 		for (String pattern : patterns) {
 			for (String material : candidates(pattern, materials)) {
-				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, false);
+				// Leaves keep the cut-out of Half-Life 2's foliage cards.
+				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, name.endsWith("_leaves"));
 				if (texture != null && suits(name, texture)) {
 					chosen = material;
 					image = square(texture);
@@ -225,6 +347,9 @@ public final class BlockTextures {
 		int tint = tint(name);
 		if (tint != 0) {
 			untint(image, tint);
+		}
+		if (name.endsWith("_leaves")) {
+			fillGaps(image);
 		}
 		made.put(name, image);
 		writePng(folder.resolve(name + ".png"), image, SIZE);
@@ -365,6 +490,10 @@ public final class BlockTextures {
 			count++;
 		}
 		if (count < texture.pixels().length / 4) {
+			return false;
+		}
+		if (name.endsWith("_leaves") && count > texture.pixels().length * 97 / 100) {
+			// A leaf texture with no gaps is a solid wall, not a foliage card.
 			return false;
 		}
 		return g >= r && g >= b && (r + g + b) / (3.0 * count) > 30;
@@ -668,6 +797,35 @@ public final class BlockTextures {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * Gives the see-through pixels of a foliage card a darker leaf colour.
+	 * With Minecraft's leaves drawn solid (fast graphics), they show as dense
+	 * shaded leaves instead of black.
+	 */
+	private static void fillGaps(int[] image) {
+		long r = 0;
+		long g = 0;
+		long b = 0;
+		int count = 0;
+		for (int p : image) {
+			if ((p >>> 24) >= 128) {
+				r += p >> 16 & 255;
+				g += p >> 8 & 255;
+				b += p & 255;
+				count++;
+			}
+		}
+		if (count == 0) {
+			return;
+		}
+		int fill = (int) (r / count * 6 / 10) << 16 | (int) (g / count * 6 / 10) << 8 | (int) (b / count * 6 / 10);
+		for (int i = 0; i < image.length; i++) {
+			if ((image[i] >>> 24) < 128) {
+				image[i] = fill;
+			}
+		}
 	}
 
 	/** Tinted textures: Minecraft multiplies them by the biome colour. */

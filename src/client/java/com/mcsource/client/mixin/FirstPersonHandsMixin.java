@@ -15,9 +15,11 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.HumanoidArm;
 
+import com.mcsource.client.mob.GameInstalls;
 import com.mcsource.client.mob.SourceModel;
 import com.mcsource.model.RiggedModel;
 
@@ -36,11 +38,16 @@ public abstract class FirstPersonHandsMixin {
 		"source:models/weapons/v_crowbar.mdl#hand,glove,arm",
 		"source:models/weapons/v_physcannon.mdl#hand,glove,arm",
 	};
-	/** Source draws view models with a 54 degree field of view. */
-	private static final float VIEW_MODEL_FOV = 54.0F;
 	private static final float UNITS = 1.0F / 40.0F;
-	/** How much of Source's view model spread to apply, from 0 (none) to 1 (all). */
-	private static final float SPREAD = 0.5F;
+	/**
+	 * Defaults for the view model settings: a wider field of view than Half-
+	 * Life 2's 54 and a lift, because with the crowbar left out the empty hand
+	 * would otherwise sit mostly below the screen.
+	 */
+	private static final float DEFAULT_FOV = 68.0F;
+	private static final float DEFAULT_OFFSET_X = -1.0F;
+	private static final float DEFAULT_OFFSET_Z = 3.0F;
+	private static SourceModel trimmed;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
@@ -48,6 +55,12 @@ public abstract class FirstPersonHandsMixin {
 		SourceModel hands = SourceModel.first(HANDS);
 		if (hands == null) {
 			return;
+		}
+		if (hands != trimmed) {
+			// The upper arm reaches past the edge of the screen in Source; with
+			// the hands moved into view its open end would show.
+			hands.hideBones("upperarm", "clavicle", "bicep", "shoulder");
+			trimmed = hands;
 		}
 		RiggedModel model = hands.model;
 		RiggedModel.Pose pose = new RiggedModel.Pose(model);
@@ -77,16 +90,21 @@ public abstract class FirstPersonHandsMixin {
 			// Without a draw animation, lowered while switching items as Minecraft lowers its arm.
 			poseStack.translate(0.0F, inverseArmHeight * -0.6F, 0.0F);
 		}
-		// Spread sideways and up a little towards how it would fill the screen
-		// at Source's narrower view model field of view. Fully spread, the
-		// empty hand sits mostly off screen; not spread, the open end of the
-		// sleeve shows.
+		// Spread sideways and up so it fills the screen as it would at the view
+		// model field of view. Source's is horizontal on a 4:3 screen and
+		// Minecraft's is vertical, so compare their vertical halves.
 		float fov = Minecraft.getInstance().options.fov().get();
-		float full = (float) (Math.tan(Math.toRadians(fov / 2.0F)) / Math.tan(Math.toRadians(VIEW_MODEL_FOV / 2.0F)));
-		float spread = 1.0F + (full - 1.0F) * SPREAD;
+		float viewModelFov = Mth.clamp(GameInstalls.setting("viewmodel_fov", DEFAULT_FOV), 20.0F, 120.0F);
+		double sourceHalf = Math.atan(Math.tan(Math.toRadians(viewModelFov / 2.0F)) * 0.75);
+		float spread = (float) (Math.tan(Math.toRadians(fov / 2.0F)) / Math.tan(sourceHalf));
 		poseStack.scale(spread, spread, 1.0F);
 		// Source's forward (x) becomes the camera's forward (-z).
 		poseStack.rotateDegrees(Axis.YP, 180.0F);
+		// viewmodel_offset_x/y/z as in Counter-Strike: right, forward, up, in
+		// Source units; here x is left, y up and z forward.
+		float side = GameInstalls.setting("viewmodel_offset_x", DEFAULT_OFFSET_X) * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F);
+		poseStack.translate(-side * UNITS, GameInstalls.setting("viewmodel_offset_z", DEFAULT_OFFSET_Z) * UNITS,
+				GameInstalls.setting("viewmodel_offset_y", 0.0F) * UNITS);
 		SourceModel.Axes axes = arm == HumanoidArm.LEFT ? SourceModel.Axes.HALF_LIFE_MIRRORED : SourceModel.Axes.HALF_LIFE;
 		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(hands.texture), (matrices, consumer) -> {
 			hands.skin(bones);

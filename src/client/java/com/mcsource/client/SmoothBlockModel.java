@@ -52,10 +52,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			} else if (state.is(SmoothTerrain.FOLLOWS)) {
 				int ground = SmoothTerrain.groundCorners(level, pos);
 				boolean thinSnow = state.is(Blocks.SNOW) && state.getValue(SnowLayerBlock.LAYERS) == 1;
-				if (ground != SmoothMath.FULL || thinSnow) {
-					emitFollowing(emitter, level, pos, state, random, cullTest, ground, thinSnow);
-					return;
-				}
+				// Plants always go this way, even on flat ground, so they are lit
+				// evenly as Source lights its grass sprites.
+				emitFollowing(emitter, level, pos, state, random, cullTest, ground, thinSnow);
+				return;
 			}
 		}
 		if (level == BlockAndTintGetter.EMPTY) {
@@ -98,6 +98,14 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				quad.color(i, ARGB.multiply(quad.color(i), sun));
 			}
 			quad.ambientOcclusion(TriState.FALSE);
+			if (!state.is(Blocks.SNOW)) {
+				// Every blade lit as if facing up, whichever way its quad turns;
+				// otherwise the crossed quads of one tuft come out light and dark.
+				quad.shadeDirectionOverride(Direction.UP);
+				for (int i = 0; i < 4; i++) {
+					quad.normal(i, 0.0F, 1.0F, 0.0F);
+				}
+			}
 			return true;
 		});
 		try {

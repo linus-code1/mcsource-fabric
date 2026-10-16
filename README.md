@@ -18,8 +18,9 @@ world to try it in.
   and light from the open air around it, so slopes shade evenly across block
   borders.
 - **Sharp built blocks.** Anything not in that tag (planks, bricks, cobblestone,
-  glass and so on) stays a sharp cube. Corners touching a built block or a
-  liquid don't move, so the two meet cleanly.
+  glass and so on) stays a sharp cube. Corners touching a built block or lava
+  don't move, so the two meet cleanly. Ground under water is smoothed like
+  ground under air.
 - **Matching collision.** The same corner heights drive collision, the block
   outline and ray picking on both the client and the server, so you walk up the
   slope you see. Collision is built from 8×8 columns that follow the drawn
@@ -28,7 +29,8 @@ world to try it in.
 - **Plants and snow follow the ground.** Grass, flowers, saplings, snow layers
   and similar blocks bend to the surface of the ground under them. A single
   snow layer is drawn as a thin sheet lying on the ground without the little
-  walls round its edges.
+  walls round its edges. Grass and flowers are lit as if they faced up, like
+  the ground they grow from, instead of darkening on their sides.
 - **No stairs on slopes.** Movement is applied in pieces shorter than a
   collision column, so you walk up slopes at full speed instead of stalling on
   every little ledge, and walking down keeps you on the ground, as in Source.
@@ -40,7 +42,9 @@ world to try it in.
   sun or in the shadow of trees, hills and buildings keep only the blue fill;
   shadows have soft edges and leaves let some light through. Bright light rolls off softly instead of clipping. Mobs,
   players and items use half-Lambert shading, so light wraps around them and
-  their dark side keeps its shape.
+  their dark side keeps its shape. Mob and player shadows are cast by the same
+  sun: a darker, longer shadow that falls away from it, like Source's
+  projected shadows.
 - **Source movement.** On land and in the air the player moves like in a
   Source game: you speed up to 190 units/s running or 320 sprinting (one block
   counts as 40 units), ground friction brings you to a quick stop, and in the
@@ -56,7 +60,9 @@ world to try it in.
   into an always-on resource pack at `config/mcsource/hl2_block_pack` the
   first time the game starts. Grass, ferns and flowers are cut out of Half-Life
   2's grass sprite sheet, since its grass is sprites too, and water is made
-  from the ripples of a Half-Life 2 water material in its murky canal colour. See
+  from the ripples of a Half-Life 2 water material in its murky canal colour.
+  Leaves use Half-Life 2's foliage textures and are drawn as clumps of crossed
+  leaf cards, like Source trees, instead of cubes. See
   `hl2_block_pack/used_materials.txt` for what was picked, and put your own
   matches in `config/mcsource/block_textures.txt` (restart to apply).
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
@@ -75,7 +81,10 @@ world to try it in.
 - **Half-Life 2 hands.** If you own Half-Life 2, your empty first-person hand
   is the HEV suit hand from Half-Life 2's view models, read from your install
   (see *Half-Life models* below), idling and swinging with its own
-  animations. Without it, the hand is the mod's own rigged suit hand: an
+  animations. Its size and place on screen can be tuned in
+  `config/mcsource.properties`: `viewmodel_fov` (default 68, smaller makes it
+  bigger) and `viewmodel_offset_x`, `viewmodel_offset_y` and
+  `viewmodel_offset_z` in Source units (right, forward and up). Without it, the hand is the mod's own rigged suit hand: an
   orange sleeve and a black glove with a full finger skeleton.
 - **Half-Life 2 mobs.** With Half-Life 2 installed, mobs use the closest
   Half-Life 2 (and Episode One and Two) characters, read at run time from your
@@ -206,7 +215,8 @@ client with the mod loaded.
 - Cliffs taller than one block keep a vertical middle; only their top and
   foot are rounded off.
 - The sun direction is fixed and doesn't follow the sun in the sky. Sun
-  shadows reach about 14 blocks, and mobs aren't shadowed by it yet.
+  shadows reach about 14 blocks, and mobs don't cast them on the terrain;
+  their own shadow is a stretched blob.
 - Lamp light still comes from Minecraft's light levels. Blocks keep
   Minecraft's fixed face shading on top of the sun.
 - Mobs and items still use Minecraft's sharp textures; only blocks get the

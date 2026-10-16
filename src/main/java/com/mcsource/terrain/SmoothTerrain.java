@@ -3,6 +3,7 @@ package com.mcsource.terrain;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -30,9 +31,13 @@ public final class SmoothTerrain {
 		return TagKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath("mcsource", path));
 	}
 
-	/** Air, plants, snow layers and other replaceable blocks, but not liquids. */
+	/**
+	 * Air, plants, snow layers, water and other replaceable blocks, but not
+	 * lava. Water counts as open so the ground under lakes and the sea is
+	 * smoothed like the ground under air.
+	 */
 	public static boolean isOpen(BlockState state) {
-		return state.canBeReplaced() && state.getFluidState().isEmpty();
+		return state.canBeReplaced() && (state.getFluidState().isEmpty() || state.getFluidState().is(FluidTags.WATER));
 	}
 
 	private static int classify(BlockState state) {

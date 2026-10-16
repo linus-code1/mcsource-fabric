@@ -79,6 +79,21 @@ public final class SunLight {
 	private SunLight() {
 	}
 
+	/** East-west part of the direction towards the sun. */
+	public static float sunX() {
+		return SUN_X;
+	}
+
+	/** Height part of the direction towards the sun. */
+	public static float sunY() {
+		return SUN_Y;
+	}
+
+	/** North-south part of the direction towards the sun. */
+	public static float sunZ() {
+		return SUN_Z;
+	}
+
 	/**
 	 * Colour multiplier (opaque ARGB) for a vertex at world position
 	 * {@code (x, y, z)} with normal {@code (nx, ny, nz)}, given the sky and block

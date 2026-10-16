@@ -4,9 +4,11 @@
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"AvatarRendererMixin",
+		"EntityRendererMixin",
 		"FirstPersonHandsMixin",
 		"LivingEntityRendererMixin",
-		"PackRepositoryMixin"
+		"PackRepositoryMixin",
+		"ShadowFeatureRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

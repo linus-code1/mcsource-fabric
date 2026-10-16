@@ -178,6 +178,24 @@ public final class GameInstalls {
 		return roots;
 	}
 
+	/** A number from {@code config/mcsource.properties}, or {@code fallback} if unset or not a number. */
+	public static float setting(String key, float fallback) {
+		synchronized (SETTINGS_LOCK) {
+			if (cachedSettings == null) {
+				cachedSettings = settings();
+			}
+		}
+		try {
+			String value = cachedSettings.getProperty(key, "").trim();
+			return value.isEmpty() ? fallback : Float.parseFloat(value);
+		} catch (NumberFormatException e) {
+			return fallback;
+		}
+	}
+
+	private static final Object SETTINGS_LOCK = new Object();
+	private static Properties cachedSettings;
+
 	private static Properties settings() {
 		Path file = FabricLoader.getInstance().getConfigDir().resolve("mcsource.properties");
 		Properties properties = new Properties();
@@ -192,7 +210,11 @@ public final class GameInstalls {
 		for (String[] entry : new String[][] {
 				{"halflife_path", "Folder of your Half-Life install (the one holding the 'valve' folder)."},
 				{"halflife2_path", "Folder of your Half-Life 2 install (the one holding the 'hl2' folder)."},
-				{"source_paths", "Other Source game folders, separated by commas."}}) {
+				{"source_paths", "Other Source game folders, separated by commas."},
+				{"viewmodel_fov", "Field of view of the first-person hands, as in Source (54 in Half-Life 2; higher shows more)."},
+				{"viewmodel_offset_x", "Moves the hands right (negative: left), in Source units."},
+				{"viewmodel_offset_y", "Moves the hands forward, in Source units."},
+				{"viewmodel_offset_z", "Moves the hands up, in Source units."}}) {
 			if (!properties.containsKey(entry[0])) {
 				properties.setProperty(entry[0], "");
 				changed = true;
