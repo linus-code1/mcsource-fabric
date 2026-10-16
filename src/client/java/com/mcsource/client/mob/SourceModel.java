@@ -23,13 +23,17 @@ import net.minecraft.util.Mth;
 import com.mcsource.model.GoldSrcModel;
 
 /**
- * One of the mod's rigged models ({@code assets/mcsource/models/<name>.mdl}),
- * ready to draw: its textures packed into one image on the GPU and its
- * triangles' texture coordinates mapped into that image.
+ * A rigged model, ready to draw: Valve's own {@code <name>.mdl} from the
+ * player's Half-Life install when it is there, otherwise the mod's built-in
+ * stand-in ({@code assets/mcsource/models/<name>.mdl}). Either way its
+ * textures are packed into one image on the GPU and its triangles' texture
+ * coordinates mapped into that image.
  */
 public final class SourceModel {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	private static final Map<String, Optional<SourceModel>> CACHE = new HashMap<>();
+	/** Models that Half-Life itself has, so the real one is looked for first. */
+	private static final java.util.Set<String> HALF_LIFE_MODELS = java.util.Set.of("zombie");
 
 	public final GoldSrcModel model;
 	public final Identifier texture;
@@ -47,6 +51,17 @@ public final class SourceModel {
 	}
 
 	private static Optional<SourceModel> load(String name) {
+		// The real Half-Life model from the player's own install wins when there is one.
+		java.nio.file.Path installed = HALF_LIFE_MODELS.contains(name) ? HalfLifeFiles.model(name + ".mdl") : null;
+		if (installed != null) {
+			try {
+				SourceModel model = new SourceModel(name, GoldSrcModel.load(installed));
+				LOGGER.info("Using {} from your Half-Life files", installed);
+				return Optional.of(model);
+			} catch (Exception e) {
+				LOGGER.warn("Could not read {}; using the built-in model", installed, e);
+			}
+		}
 		Identifier location = Identifier.fromNamespaceAndPath("mcsource", "models/" + name + ".mdl");
 		try {
 			Optional<Resource> resource = Minecraft.getInstance().getResourceManager().getResource(location);

@@ -66,7 +66,10 @@ world to try it in.
 - **Suit hand.** Your first-person arm is a rigged hand model: an orange
   hazard-suit sleeve with an armour plate, a ribbed cuff, and a black glove
   with a full finger skeleton (17 bones) resting in a slowly breathing curl.
-- **Zombie.** Zombies are a rigged zombie scientist in a torn lab coat with a
+- **Zombie.** If you own Half-Life 1, zombies use Valve's real zombie model,
+  read at run time from your install (see *Half-Life models* below); it is
+  never shipped with this mod. Without it, zombies are the mod's own rigged
+  zombie scientist in a torn lab coat with a
   parasite on its head and clawed hands, with its own idle, walk, attack and
   death animations; the walk keeps pace with how fast it moves.
 - **Kart.** A drivable go-kart, found in the Tools & Utilities tab. Use it on
@@ -92,6 +95,14 @@ world to try it in.
 4. Put both jars in `~/Library/Application Support/minecraft/mods`.
 5. Start the Fabric profile, choose **Create New World → More → World Type →
    MC:Source Test Hills**, and create the world.
+
+## Half-Life models
+
+The mod looks for `valve/models/zombie.mdl` in Steam's usual Half-Life
+folder, `~/Library/Application Support/Steam/steamapps/common/Half-Life` on a
+Mac. If Half-Life is somewhere else, set its folder as `halflife_path` in
+`config/mcsource.properties` (created on first launch), or copy `zombie.mdl`
+into `config/mcsource/models`. The game log says which model it used.
 
 ## Build
 
