@@ -22,8 +22,13 @@ public final class SourceMovement {
 	public static final double FRICTION = 4.0;
 	public static final double ACCELERATE = 10.0;
 	public static final double AIR_ACCELERATE = 10.0;
-	/** Air control only adds speed up to this along the wished direction (30 units/s). */
-	public static final double AIR_SPEED_CAP = 30.0 / UNITS_PER_BLOCK;
+	/**
+	 * Air control only adds speed up to this along the wished direction. Source
+	 * uses 30 units/s at 66 steps a second; the speed gained by strafing grows
+	 * with the square of this cap times the step rate, so Minecraft's 20 steps
+	 * a second need the cap raised by sqrt(66 / 20) to strafe as quickly.
+	 */
+	public static final double AIR_SPEED_CAP = 30.0 * Math.sqrt(66.0 / 20.0) / UNITS_PER_BLOCK;
 	/** Hard limit so speed can't grow past what the server accepts. */
 	public static final double MAX_SPEED = 3500.0 / UNITS_PER_BLOCK / 4.0;
 
