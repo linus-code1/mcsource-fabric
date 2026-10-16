@@ -3,10 +3,11 @@
 
 // MC:Source lightmap. Builds the 16x16 light colour table that every block and
 // mob is lit through, styled after the look of Source engine maps: warm lamps
-// that fall off with the square of distance, direct sunlight that only reaches
-// places open to the sky, cool blue sky light in the shade, and soft highlights
-// instead of hard clipping. Written for this mod from the published
-// descriptions of Source lighting; no Valve code is used.
+// that fall off with the square of distance, daylight made of a warm sun and a
+// cool blue sky fill, and soft highlights instead of hard clipping. Sun
+// direction and shadows are baked into block vertices by SunLight, which takes
+// away the sun share where it does not reach. Written for this mod from the
+// published descriptions of Source lighting; no Valve code is used.
 
 layout(std140) uniform LightmapInfo {
     float SkyFactor;
@@ -35,12 +36,15 @@ const float LAMP_FALLOFF = 0.10;
 // Lamps are slightly overbright right next to the source.
 const float LAMP_INTENSITY = 1.35;
 
-// Daylight is split in two: a warm direct sun that only lands where the sky is
-// fully open, and a cooler sky fill that also reaches covered places.
+// Daylight under open sky: a cool sky fill plus a warm sun. SunLight uses the
+// same numbers to work out how much is left in shadow.
 const vec3 SUN_COLOR = vec3(1.06, 0.98, 0.86);
 const vec3 SKY_FILL_COLOR = vec3(0.78, 0.87, 1.06);
-const float SUN_STRENGTH = 0.55;
-const float SKY_FILL_STRENGTH = 0.58;
+const float SUN_STRENGTH = 0.6;
+const float SKY_FILL_STRENGTH = 0.7;
+// Overall daylight level, scaled so open ground in full sun lands just under
+// white after the soft clip.
+const float DAYLIGHT = 0.9;
 
 float lamp_brightness(float level) {
     float distance = (1.0 - level) * 15.0;
@@ -75,11 +79,9 @@ void main() {
     vec3 nightVision = lightmapInfo.NightVisionColor * lightmapInfo.NightVisionFactor;
     vec3 color = max(lightmapInfo.AmbientColor, nightVision);
 
-    // Sky: blue fill fades in gently with how much sky is visible, the sun only
-    // in the last few levels, so overhangs and tree shade read as cool shadow.
-    float skyFill = pow(skyLevel, 1.6) * SKY_FILL_STRENGTH;
-    float sun = smoothstep(11.0 / 15.0, 1.0, skyLevel) * SUN_STRENGTH;
-    vec3 daylight = SKY_FILL_COLOR * skyFill + SUN_COLOR * sun;
+    // Sky light fades in gently with how much sky is visible, so the edge of
+    // cover is a soft gradient rather than a step.
+    vec3 daylight = (SKY_FILL_COLOR * SKY_FILL_STRENGTH + SUN_COLOR * SUN_STRENGTH) * DAYLIGHT * pow(skyLevel, 1.5);
     color += lightmapInfo.SkyLightColor * daylight * lightmapInfo.SkyFactor;
 
     // Lamps: inverse square falloff, whiter near the flame. The dimension's

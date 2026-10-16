@@ -29,9 +29,10 @@ world to try it in.
   and similar blocks bend to the surface of the ground under them.
 - **Source-style lighting.** Torches and other lamps light a warm pool that
   falls off with the square of distance, whiter near the flame and orange at
-  the edge. Daylight is split into a warm direct sun, which only reaches places
-  open to the sky, and a cooler blue sky fill, so overhangs and tree shade read
-  as cool shadow. Bright light rolls off softly instead of clipping. Mobs,
+  the edge. Daylight is a warm sun from a fixed direction, like a Source map's
+  light_environment, plus a cooler blue sky fill. Surfaces facing away from the
+  sun or in the shadow of trees, hills and buildings keep only the blue fill;
+  shadows have soft edges and leaves let some light through. Bright light rolls off softly instead of clipping. Mobs,
   players and items use half-Lambert shading, so light wraps around them and
   their dark side keeps its shape.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
@@ -79,6 +80,9 @@ client with the mod loaded.
   every block and mob is lit through, and
   `assets/minecraft/shaders/include/light.glsl` replaces the directional
   light used on mobs and items.
+- `SunLight` (client) traces a few rays from each block vertex towards the
+  sun while the chunk is meshed and darkens the vertex colour where the sun is
+  blocked or the surface faces away.
 - `TestHillsGenerator` is the test world's chunk generator.
 
 ## Known limits
@@ -88,9 +92,10 @@ client with the mod loaded.
   clients, which is a later step.
 - Cliffs taller than one block keep a vertical middle; only their top and
   foot are rounded off.
-- Lighting still comes from Minecraft's light levels, so shadows are as blocky
-  as Minecraft's and the sun doesn't cast directional shadows. Blocks keep
-  Minecraft's fixed face shading.
+- The sun direction is fixed and doesn't follow the sun in the sky. Sun
+  shadows reach about 14 blocks, and mobs aren't shadowed by it yet.
+- Lamp light still comes from Minecraft's light levels. Blocks keep
+  Minecraft's fixed face shading on top of the sun.
 - The rest of the Source look (materials, bloom and full HDR, view model, HUD)
   comes in later steps of the plan. Valve's SDK shader code is never copied in;
   techniques are rebuilt from Valve's public talks and documentation.

@@ -17,6 +17,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 
+import org.joml.Vector3fc;
+
 import com.mcsource.terrain.SmoothMath;
 import com.mcsource.terrain.SmoothTerrain;
 
@@ -66,7 +68,47 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				}
 			}
 		}
-		super.emitQuads(emitter, level, pos, state, random, cullTest);
+		if (level == BlockAndTintGetter.EMPTY) {
+			super.emitQuads(emitter, level, pos, state, random, cullTest);
+			return;
+		}
+		emitter.pushTransform(quad -> {
+			applySun(quad, level, pos);
+			return true;
+		});
+		try {
+			super.emitQuads(emitter, level, pos, state, random, cullTest);
+		} finally {
+			emitter.popTransform();
+		}
+	}
+
+	/** Sun and shadow for an ordinary block face, lit by the cell it faces. */
+	private static void applySun(MutableQuadView quad, BlockAndTintGetter level, BlockPos pos) {
+		Vector3fc normal = quad.faceNormal();
+		Direction face = quad.lightFace();
+		int light = LightCoordsUtil.getLightCoords(level, quad.cullFace() == null && !touchesSide(quad, face) ? pos : pos.relative(face));
+		int sky = LightCoordsUtil.sky(light);
+		if (sky == 0) {
+			return;
+		}
+		int block = LightCoordsUtil.block(light);
+		for (int i = 0; i < 4; i++) {
+			int sun = SunLight.multiplier(level, pos.getX() + quad.x(i), pos.getY() + quad.y(i), pos.getZ() + quad.z(i),
+					normal.x(), normal.y(), normal.z(), sky, block);
+			quad.color(i, ARGB.multiply(quad.color(i), sun));
+		}
+	}
+
+	/** Whether a quad lies on the block's outer side in the given direction. */
+	private static boolean touchesSide(MutableQuadView quad, Direction face) {
+		float edge = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1.0F : 0.0F;
+		for (int i = 0; i < 4; i++) {
+			if (Math.abs(quad.posByIndex(i, face.getAxis().ordinal()) - edge) > 1.0E-3F) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private void emitBent(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
@@ -90,7 +132,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				float nz = normals[corner * 3 + 2];
 				if (nx != 0 || ny != 0 || nz != 0) {
 					quad.normal(i, nx, ny, nz);
+				} else {
+					Vector3fc face = quad.faceNormal();
+					nx = face.x();
+					ny = face.y();
+					nz = face.z();
 				}
+				int sun = SunLight.multiplier(level, pos.getX() + quad.x(i), pos.getY() + quad.y(i), pos.getZ() + quad.z(i), nx, ny, nz,
+						LightCoordsUtil.sky(light[corner]), LightCoordsUtil.block(light[corner]));
+				quad.color(i, ARGB.multiply(quad.color(i), sun));
 			}
 			// Vanilla ambient occlusion assumes faces lie on the block's sides and
 			// darkens moved faces wrongly; light comes from cornerLighting instead.
