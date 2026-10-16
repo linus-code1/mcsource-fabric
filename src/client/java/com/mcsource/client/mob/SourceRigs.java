@@ -21,9 +21,10 @@ public final class SourceRigs {
 	/**
 	 * A mob's model. Animation names are matched against sequence names (by
 	 * prefix) and activity names, first match wins. {@code scale} turns model
-	 * units into blocks.
+	 * units into blocks; with {@code fitHeight} the model is instead scaled so
+	 * that standing it is as tall as the mob.
 	 */
-	public record Rig(String[] models, float scale, String[] idle, String[] walk, String[] attack, String[] death) {
+	public record Rig(String[] models, float scale, boolean fitHeight, String[] idle, String[] walk, String[] attack, String[] death) {
 		public SourceModel model() {
 			return SourceModel.first(models);
 		}
@@ -36,13 +37,13 @@ public final class SourceRigs {
 	static {
 		RIGS.put(EntityTypes.ZOMBIE, new Rig(
 				new String[] {"source:models/zombie/classic.mdl", "halflife:models/zombie.mdl", "builtin:zombie"},
-				UNITS,
+				UNITS, true,
 				new String[] {"idle01", "idle1", "idle", "act_idle"},
 				new String[] {"walk", "act_walk"},
 				new String[] {"attacka", "attack1", "attack", "act_melee_attack1"},
 				new String[] {"dieforward", "diesimple", "dieheadshot", "die", "act_die"}));
 		// The kart is built small; this makes it big enough to sit in.
-		RIGS.put(Karts.KART, new Rig(new String[] {"builtin:kart"}, UNITS * 1.7F,
+		RIGS.put(Karts.KART, new Rig(new String[] {"builtin:kart"}, UNITS * 1.7F, false,
 				new String[] {"idle"},
 				new String[] {"drive"},
 				new String[0],

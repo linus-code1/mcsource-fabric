@@ -9,8 +9,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -52,8 +50,6 @@ public final class StudioModel {
 	private static final int SEQ_LOOPING = 0x1;
 	private static final int MAX_TEXTURE = 512;
 
-	private static final Pattern BASE_TEXTURE = Pattern.compile("\"?\\$basetexture\"?\\s+\"?([^\"\\s}]+)", Pattern.CASE_INSENSITIVE);
-	private static final Pattern CUTOUT = Pattern.compile("\"?\\$(alphatest|translucent)\"?\\s+\"?1", Pattern.CASE_INSENSITIVE);
 
 	private StudioModel() {
 	}
@@ -669,29 +665,10 @@ public final class StudioModel {
 		for (String folder : searchPaths.length == 0 ? new String[] {""} : searchPaths) {
 			String prefix = folder.isEmpty() || folder.endsWith("/") ? folder : folder + "/";
 			try {
-				byte[] vmt = files.read("materials/" + prefix + clean + ".vmt");
-				if (vmt == null) {
-					continue;
+				RiggedModel.Texture texture = Materials.load(files, prefix + clean, MAX_TEXTURE);
+				if (texture != null) {
+					return new RiggedModel.Texture(clean, texture.width(), texture.height(), texture.pixels(), texture.masked());
 				}
-				String text = new String(vmt, StandardCharsets.ISO_8859_1);
-				Matcher base = BASE_TEXTURE.matcher(text);
-				if (!base.find()) {
-					continue;
-				}
-				boolean cutout = CUTOUT.matcher(text).find();
-				byte[] vtf = files.read("materials/" + base.group(1).replace('\\', '/') + ".vtf");
-				if (vtf == null) {
-					continue;
-				}
-				Vtf image = Vtf.decode(vtf, MAX_TEXTURE);
-				int[] pixels = image.pixels;
-				if (!cutout) {
-					// Opaque materials keep other data (such as shininess) in alpha.
-					for (int i = 0; i < pixels.length; i++) {
-						pixels[i] |= 0xFF000000;
-					}
-				}
-				return new RiggedModel.Texture(clean, image.width, image.height, pixels, cutout);
 			} catch (IOException e) {
 				// Try the next folder.
 			}

@@ -9,8 +9,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -208,21 +210,49 @@ public final class GameInstalls {
 	}
 
 	private static GameFiles loose(Path folder) {
-		return path -> {
-			Path file = folder.resolve(path.replace('\\', '/'));
-			return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
+		return new GameFiles() {
+			@Override
+			public byte[] read(String path) throws IOException {
+				Path file = folder.resolve(path.replace('\\', '/'));
+				return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
+			}
+
+			@Override
+			public List<String> list(String prefix) throws IOException {
+				Path start = folder.resolve(prefix);
+				if (!Files.isDirectory(start)) {
+					return List.of();
+				}
+				try (Stream<Path> files = Files.walk(start)) {
+					return files.filter(Files::isRegularFile)
+							.map(file -> folder.relativize(file).toString().replace('\\', '/').toLowerCase(Locale.ROOT))
+							.toList();
+				}
+			}
 		};
 	}
 
 	private static GameFiles all(List<GameFiles> mounts) {
-		return path -> {
-			for (GameFiles mount : mounts) {
-				byte[] bytes = mount.read(path);
-				if (bytes != null) {
-					return bytes;
+		return new GameFiles() {
+			@Override
+			public byte[] read(String path) throws IOException {
+				for (GameFiles mount : mounts) {
+					byte[] bytes = mount.read(path);
+					if (bytes != null) {
+						return bytes;
+					}
 				}
+				return null;
 			}
-			return null;
+
+			@Override
+			public List<String> list(String prefix) throws IOException {
+				Set<String> paths = new LinkedHashSet<>();
+				for (GameFiles mount : mounts) {
+					paths.addAll(mount.list(prefix));
+				}
+				return new ArrayList<>(paths);
+			}
 		};
 	}
 }

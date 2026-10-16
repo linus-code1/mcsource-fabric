@@ -3,9 +3,12 @@
 
 // MC:Source block texture sampling, for a Half-Life 1 look. Up close, textures
 // are smoothly filtered between texels the way the GoldSrc OpenGL renderer
-// drew its 8-bit textures, instead of Minecraft's sharp pixels. Each texel is
-// first graded towards the muted, warm, slightly crunchy colours of HL1's
-// paletted textures. Far away the normal mipmapped texture is used.
+// drew its textures, instead of Minecraft's sharp pixels. Each texel is
+// first graded towards the muted, warm colours of Half-Life's textures. Far
+// away the normal mipmapped texture is used. Half-Life 2 textures read from
+// the player's game (see BlockTextures) are larger than 16x16; filtering
+// still stays inside 16-texel cells, which only shows as a slightly sharper
+// step every 16 texels.
 // Written for this mod; no Valve code or textures are used.
 
 // Block textures are 16x16; filtering stays inside the sprite a sample falls
@@ -17,9 +20,7 @@ vec3 mcsource_grade(vec3 color) {
     color = mix(vec3(luma), color, 0.72);
     color *= vec3(1.0, 0.96, 0.88);
     color = (color - 0.5) * 1.08 + 0.5;
-    // Five bits per channel, close to what a 256-colour palette can hold.
-    color = floor(clamp(color, 0.0, 1.0) * 31.0 + 0.5) / 31.0;
-    return color;
+    return clamp(color, 0.0, 1.0);
 }
 
 vec4 mcsource_texel(sampler2D source, ivec2 texel) {

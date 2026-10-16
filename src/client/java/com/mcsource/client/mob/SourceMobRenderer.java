@@ -41,7 +41,11 @@ public final class SourceMobRenderer {
 		}
 		RiggedModel model = loaded.model;
 		RiggedModel.Pose pose = new RiggedModel.Pose(model);
-		boolean deathAnimated = animate(rig, model, state, pose);
+		// Fitted models match the mob's hitbox, which already includes baby and
+		// size scaling.
+		float scale = rig.fitHeight() && loaded.height > 1.0F ? state.boundingBoxHeight / loaded.height
+				: rig.scale() * state.scale * state.ageScale;
+		boolean deathAnimated = animate(rig, model, state, pose, scale);
 		Matrix4f[] bones = new Matrix4f[model.boneCount()];
 		model.skinning(pose, bones);
 
@@ -52,7 +56,6 @@ public final class SourceMobRenderer {
 			float fall = Math.min(1.0F, Mth.sqrt((state.deathTime - 1.0F) / 20.0F * 1.6F));
 			poseStack.rotateDegrees(Axis.ZP, fall * 90.0F);
 		}
-		float scale = rig.scale() * state.scale * state.ageScale;
 		int light = state.lightCoords;
 		int overlay = LivingEntityRenderer.getOverlayCoords(state, 0.0F);
 		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(loaded.texture), (matrices, consumer) -> {
@@ -64,7 +67,8 @@ public final class SourceMobRenderer {
 	}
 
 	/** Poses the model; returns whether a death animation was used. */
-	private static boolean animate(SourceRigs.Rig rig, RiggedModel model, LivingEntityRenderState state, RiggedModel.Pose pose) {
+	private static boolean animate(SourceRigs.Rig rig, RiggedModel model, LivingEntityRenderState state, RiggedModel.Pose pose,
+			float scale) {
 		float seconds = state.ageInTicks / 20.0F;
 		RiggedModel.Sequence death = model.find(rig.death());
 		if (state.deathTime > 0.0F && death != null) {
@@ -89,7 +93,7 @@ public final class SourceMobRenderer {
 				float frame;
 				if (walk.distance() > 1.0F) {
 					// Step in time with the ground covered, so feet don't slide.
-					float units = state.walkAnimationPos / WALK_STEPS_PER_BLOCK / rig.scale();
+					float units = state.walkAnimationPos / WALK_STEPS_PER_BLOCK / scale;
 					frame = units / walk.distance() * walk.frameCount();
 				} else {
 					frame = seconds * walk.fps();

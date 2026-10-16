@@ -45,6 +45,8 @@ public final class SourceModel {
 	public final RiggedModel model;
 	public final Identifier texture;
 	public final String source;
+	/** Bind pose height in model units (Half-Life's z axis). */
+	public final float height;
 	private final float[] uvs;
 	private final float[] posed;
 	private final float[] posedNormals;
@@ -151,6 +153,21 @@ public final class SourceModel {
 		}
 		posed = new float[model.positions.length];
 		posedNormals = new float[model.normals.length];
+
+		// Height of the model standing in its bind pose, in model units.
+		RiggedModel.Pose bind = new RiggedModel.Pose(model);
+		model.bindPose(bind);
+		Matrix4f[] bones = new Matrix4f[model.boneCount()];
+		model.skinning(bind, bones);
+		skin(bones);
+		float low = Float.MAX_VALUE;
+		float high = -Float.MAX_VALUE;
+		for (int corner : model.cornerVertex) {
+			float z = posed[corner * 3 + 2];
+			low = Math.min(low, z);
+			high = Math.max(high, z);
+		}
+		this.height = high > low ? high - low : 0.0F;
 	}
 
 	/** Moves every vertex and normal with its bones. */

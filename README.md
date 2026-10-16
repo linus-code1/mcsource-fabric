@@ -50,9 +50,16 @@ world to try it in.
   Half-Life 2's gravity; the jump is tuned to clear one block. Sprint-jumping
   no longer gives a free burst of speed. Swimming, flying, ladders and elytra
   are unchanged.
+- **Half-Life 2 block textures.** If you own Half-Life 2, common blocks
+  (grass, dirt, stone, cobblestone, gravel, sand, planks, bricks, concrete
+  and more) use the closest Half-Life 2 materials, built from your install
+  into an always-on resource pack at `config/mcsource/hl2_block_pack` the
+  first time the game starts. The list of which material goes with which
+  block is `config/mcsource/block_textures.txt`; edit it and restart to change
+  a match, and see `hl2_block_pack/used_materials.txt` for what was picked.
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
-  like the GoldSrc renderer's, and their colours are muted, warmed and reduced
-  to a paletted look. This is done in the shader from Minecraft's own textures.
+  like the GoldSrc renderer's, and their colours are muted and warmed. This is
+  done in the shader, for Minecraft's textures and Half-Life 2's alike.
 - **Source-style HUD.** Laid out like Half-Life 2's HUD on its 640x480
   reference screen and scaled to the window: health, suit (armour) and food as
   large glowing yellow numbers in rounded dark panels at the bottom left, the
@@ -193,7 +200,9 @@ client with the mod loaded.
 - Lamp light still comes from Minecraft's light levels. Blocks keep
   Minecraft's fixed face shading on top of the sun.
 - Mobs and items still use Minecraft's sharp textures; only blocks get the
-  Half-Life 1 look so far. Menus are still Minecraft's.
+  Half-Life look so far. Blocks with no Half-Life 2 match (ores, plants,
+  glass, water and so on) keep Minecraft's textures, and one block shows a
+  whole Half-Life 2 texture, so patterns look smaller than in Half-Life 2. Menus are still Minecraft's.
 - Half-Life 2's hands show only with an empty hand; held items still use
   Minecraft's arm.
 - The rest of the Source look (materials, bloom and full HDR, weapon view

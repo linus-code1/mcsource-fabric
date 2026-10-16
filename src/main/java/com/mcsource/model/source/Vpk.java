@@ -7,7 +7,9 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -83,6 +85,18 @@ public final class Vpk implements GameFiles {
 
 	public int size() {
 		return entries.size();
+	}
+
+	@Override
+	public List<String> list(String folder) {
+		String prefix = folder.toLowerCase(Locale.ROOT);
+		List<String> out = new ArrayList<>();
+		for (String path : entries.keySet()) {
+			if (path.startsWith(prefix)) {
+				out.add(path);
+			}
+		}
+		return out;
 	}
 
 	@Override
