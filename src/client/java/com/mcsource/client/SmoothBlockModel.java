@@ -4,10 +4,13 @@ import java.util.function.Predicate;
 
 import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
+import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
@@ -33,15 +36,22 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			if (state.is(SmoothTerrain.SMOOTH)) {
 				int[] offsets = SmoothTerrain.cornerOffsets(level, pos, state);
 				if (offsets != null) {
+					int[] light = new int[8];
+					int[] shade = new int[8];
+					cornerLighting(level, pos, light, shade);
 					emitter.pushTransform(quad -> {
 						for (int i = 0; i < 4; i++) {
-							float x = quad.x(i);
-							float y = quad.y(i);
-							float z = quad.z(i);
-							float offset = SmoothMath.offsetAt(offsets,
-									Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(y, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F));
-							quad.pos(i, x, y + offset, z);
+							float x = Mth.clamp(quad.x(i), 0.0F, 1.0F);
+							float y = Mth.clamp(quad.y(i), 0.0F, 1.0F);
+							float z = Mth.clamp(quad.z(i), 0.0F, 1.0F);
+							int corner = (x > 0.5F ? 1 : 0) + (y > 0.5F ? 2 : 0) + (z > 0.5F ? 4 : 0);
+							quad.pos(i, quad.x(i), quad.y(i) + SmoothMath.offsetAt(offsets, x, y, z), quad.z(i));
+							quad.lightmap(i, LightCoordsUtil.max(quad.lightmap(i), light[corner]));
+							quad.color(i, ARGB.multiply(quad.color(i), shade[corner]));
 						}
+						// Vanilla ambient occlusion assumes faces lie on the block's sides and
+						// darkens moved faces wrongly; light comes from cornerLighting instead.
+						quad.ambientOcclusion(TriState.FALSE);
 						return true;
 					});
 					try {
@@ -70,6 +80,54 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 		}
 		super.emitQuads(emitter, level, pos, state, random, cullTest);
+	}
+
+	/**
+	 * Smooth light for each of the block's eight corners: the average light of
+	 * the open blocks around that corner, so moved faces never sample light from
+	 * inside solid ground. Corners with less open space around them are shaded
+	 * darker, standing in for ambient occlusion.
+	 */
+	private static void cornerLighting(BlockAndTintGetter level, BlockPos pos, int[] light, int[] shade) {
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		boolean[] open = new boolean[27];
+		int[] cellLight = new int[27];
+		for (int dy = -1; dy <= 1; dy++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				for (int dx = -1; dx <= 1; dx++) {
+					int i = dx + 1 + 3 * (dz + 1) + 9 * (dy + 1);
+					cursor.setWithOffset(pos, dx, dy, dz);
+					open[i] = SmoothTerrain.isOpen(level.getBlockState(cursor));
+					if (open[i]) {
+						cellLight[i] = LightCoordsUtil.getLightCoords(level, cursor);
+					}
+				}
+			}
+		}
+		int fallback = LightCoordsUtil.getLightCoords(level, cursor.setWithOffset(pos, 0, 1, 0));
+		for (int corner = 0; corner < 8; corner++) {
+			int cx = corner & 1;
+			int cy = corner >> 1 & 1;
+			int cz = corner >> 2 & 1;
+			int count = 0;
+			int blockSum = 0;
+			int skySum = 0;
+			for (int oy = cy - 1; oy <= cy; oy++) {
+				for (int oz = cz - 1; oz <= cz; oz++) {
+					for (int ox = cx - 1; ox <= cx; ox++) {
+						int i = ox + 1 + 3 * (oz + 1) + 9 * (oy + 1);
+						if (open[i]) {
+							count++;
+							blockSum += LightCoordsUtil.block(cellLight[i]);
+							skySum += LightCoordsUtil.sky(cellLight[i]);
+						}
+					}
+				}
+			}
+			light[corner] = count == 0 ? fallback : LightCoordsUtil.smoothPack(blockSum * 16 / count, skySum * 16 / count);
+			int gray = Math.round(255 * Mth.clamp(0.55F + 0.45F * count / 4.0F, 0.55F, 1.0F));
+			shade[corner] = ARGB.color(255, gray, gray, gray);
+		}
 	}
 
 	@Override

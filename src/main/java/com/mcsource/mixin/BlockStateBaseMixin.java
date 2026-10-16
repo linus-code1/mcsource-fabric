@@ -51,6 +51,19 @@ public abstract class BlockStateBaseMixin {
 		}
 	}
 
+	/**
+	 * Players are pushed out of any suffocating block their feet overlap. On a
+	 * slope the uphill block always overlaps a little, which shoved players
+	 * downhill, so surface terrain with a smoothed top doesn't count.
+	 */
+	@Inject(method = "isSuffocating(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z",
+			at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothNotSuffocating(BlockGetter level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+		if (SmoothTerrain.corners(level, pos, (BlockState) (Object) this) != SmoothMath.FULL) {
+			cir.setReturnValue(false);
+		}
+	}
+
 	private void mcsource$applySmoothShape(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
 		BlockState self = (BlockState) (Object) this;
 		int packed = SmoothTerrain.corners(level, pos, self);
