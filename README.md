@@ -67,6 +67,12 @@ world to try it in.
   blocky skin arm: a tapered orange hazard-suit sleeve, a ribbed cuff, and a
   black glove with jointed fingers and thumb in a relaxed curl, smooth shaded.
   Built in code by this mod (`HandMesh`); no Valve models are used.
+- **Half-Life zombie.** Zombies are drawn with the zombie from your own
+  copy of Half-Life 1 (`zombie.mdl`), skinned to its skeleton and animated
+  with its own idle, walk, attack and death animations; the walk keeps pace
+  with how fast the mob moves. The model is read from your install at run
+  time and never shipped with this mod. See *Half-Life models* below. If the
+  file isn't found, zombies look like normal Minecraft zombies.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
@@ -83,6 +89,15 @@ world to try it in.
 4. Put both jars in `~/Library/Application Support/minecraft/mods`.
 5. Start the Fabric profile, choose **Create New World → More → World Type →
    MC:Source Test Hills**, and create the world.
+
+## Half-Life models
+
+Mob models come from your own Half-Life 1 install (Steam's *Half-Life*, which
+runs on macOS). The mod looks for `valve/models/zombie.mdl` in Steam's usual
+folder, `~/Library/Application Support/Steam/steamapps/common/Half-Life` on a
+Mac. If Half-Life is somewhere else, set its folder as `halflife_path` in
+`config/mcsource.properties` (created on first launch), or copy the `.mdl`
+files into `config/mcsource/models`. The game log says which model it loaded.
 
 ## Build
 
@@ -122,6 +137,13 @@ client with the mod loaded.
   experience and hotbar HUD elements, and the crosshair.
 - `assets/minecraft/shaders/include/texture_sampling.glsl` replaces how block
   textures are sampled, for the Half-Life 1 look.
+- `GoldSrcModel` reads Half-Life 1 `.mdl` files (bones, meshes, paletted
+  textures and run-length encoded animations), written from public
+  descriptions of the format. `SourceRigs` (client) lists which mobs get
+  which model and which animations stand for idle, walk, attack and death;
+  adding a mob there is all a new rig needs. `SourceMobRenderer` poses and
+  skins the model each frame, and `LivingEntityRendererMixin` draws it in
+  place of the Minecraft model.
 - `TestHillsGenerator` is the test world's chunk generator.
 
 ## Known limits
