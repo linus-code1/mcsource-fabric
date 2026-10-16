@@ -3,7 +3,8 @@
 	"package": "com.mcsource.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
-		"BlockStateBaseMixin"
+		"BlockStateBaseMixin",
+		"LivingEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

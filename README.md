@@ -35,6 +35,13 @@ world to try it in.
   shadows have soft edges and leaves let some light through. Bright light rolls off softly instead of clipping. Mobs,
   players and items use half-Lambert shading, so light wraps around them and
   their dark side keeps its shape.
+- **Source movement.** On land and in the air the player moves like in a
+  Source game: you speed up to 190 units/s running or 320 sprinting (one block
+  counts as 40 units), ground friction brings you to a quick stop, and in the
+  air you keep your momentum and can only steer by strafing. Air strafing and
+  bunny hopping (hold jump to hop on landing with no friction) both work. Jump
+  height and gravity stay Minecraft's, and sprint-jumping no longer gives a
+  free burst of speed. Swimming, flying, ladders and elytra are unchanged.
 - **Test world.** A new world type, *MC:Source Test Hills*: rolling grassy
   hills with a stone brick house near spawn, to compare smooth terrain against
   sharp built blocks.
@@ -83,6 +90,9 @@ client with the mod loaded.
 - `SunLight` (client) traces a few rays from each block vertex towards the
   sun while the chunk is meshed and darkens the vertex colour where the sun is
   blocked or the surface faces away.
+- `SourceMovement` holds the friction and acceleration math, and
+  `LivingEntityMixin` uses it in place of Minecraft's walking and air
+  movement for your own player.
 - `TestHillsGenerator` is the test world's chunk generator.
 
 ## Known limits
