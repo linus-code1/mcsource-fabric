@@ -14,9 +14,10 @@ world to try it in.
   block depending on how much terrain surrounds it. Every one-block step,
   straight or diagonal, on the ground or on a cave ceiling, becomes a ramp,
   flat ground stays flat, and textures, grass tint and
-  side overlays bend with the surface. Each corner also gets a smooth normal
-  and light from the open air around it, so slopes shade evenly across block
-  borders.
+  side overlays bend with the surface. Each face is drawn in smaller pieces
+  along a smooth curve through the corners, so ramps round off into the
+  ground at their top and foot, and normals, light and sun are blended over a
+  wider area, so slopes shade smoothly across block borders.
 - **Sharp built blocks.** Anything not in that tag (planks, bricks, cobblestone,
   glass and so on) stays a sharp cube. Corners touching a built block or lava
   don't move, so the two meet cleanly. Ground under water is smoothed like

@@ -125,6 +125,91 @@ public final class SmoothTerrain {
 		return applies(level, state) ? neighbourhood(level, pos, state, -1, 3) : null;
 	}
 
+	/**
+	 * The 5x5x5 block classes around a smoothed block, for drawing a smoother
+	 * surface than the corners alone give, or null when the block is not
+	 * smoothed. Indexed {@code dx + 2 + 5 * (dz + 2) + 25 * (dy + 2)}.
+	 */
+	public static int[] wideNeighbourhood(BlockGetter level, BlockPos pos, BlockState state) {
+		if (!applies(level, state)) {
+			return null;
+		}
+		int[] classes = new int[125];
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int dy = -2; dy <= 2; dy++) {
+			for (int dz = -2; dz <= 2; dz++) {
+				for (int dx = -2; dx <= 2; dx++) {
+					int index = dx + 2 + 5 * (dz + 2) + 25 * (dy + 2);
+					if (dx == 0 && dy == 0 && dz == 0) {
+						classes[index] = classify(state);
+					} else {
+						cursor.setWithOffset(pos, dx, dy, dz);
+						classes[index] = classify(level, cursor, level.getBlockState(cursor));
+					}
+				}
+			}
+		}
+		return classes;
+	}
+
+	/**
+	 * Offset (eighths) of the grid corner at {@code pos + (gx, gy, gz)}, each
+	 * from -1 to 2, from a {@link #wideNeighbourhood}. Gives the same result
+	 * as the corners used for collision.
+	 */
+	public static int wideCornerOffset(int[] wide, int gx, int gy, int gz) {
+		int lower = 0;
+		int upper = 0;
+		for (int oy = gy - 1; oy <= gy; oy++) {
+			for (int oz = gz - 1; oz <= gz; oz++) {
+				for (int ox = gx - 1; ox <= gx; ox++) {
+					int kind = wide[ox + 2 + 5 * (oz + 2) + 25 * (oy + 2)];
+					if (kind == BUILT) {
+						return 0;
+					}
+					if (kind == TERRAIN) {
+						if (oy < gy) {
+							lower++;
+						} else {
+							upper++;
+						}
+					}
+				}
+			}
+		}
+		return SmoothMath.cornerOffset(lower, upper);
+	}
+
+	/**
+	 * Direction away from the solid blocks around the grid corner at
+	 * {@code pos + (gx, gy, gz)} (each -1 to 2), not normalised; zero when
+	 * there is no clear direction.
+	 */
+	public static void wideCornerGradient(int[] wide, int gx, int gy, int gz, float[] out) {
+		float x = 0;
+		float y = 0;
+		float z = 0;
+		for (int oy = gy - 1; oy <= gy; oy++) {
+			for (int oz = gz - 1; oz <= gz; oz++) {
+				for (int ox = gx - 1; ox <= gx; ox++) {
+					if (wide[ox + 2 + 5 * (oz + 2) + 25 * (oy + 2)] != OPEN) {
+						x -= ox - gx + 0.5F;
+						y -= oy - gy + 0.5F;
+						z -= oz - gz + 0.5F;
+					}
+				}
+			}
+		}
+		out[0] = x;
+		out[1] = y;
+		out[2] = z;
+	}
+
+	/** Whether the block at {@code pos + (dx, dy, dz)} in a wide neighbourhood is open. */
+	public static boolean isOpenWide(int[] wide, int dx, int dy, int dz) {
+		return wide[dx + 2 + 5 * (dz + 2) + 25 * (dy + 2)] == OPEN;
+	}
+
 	/** Whether the block at {@code pos + (dx, dy, dz)} in a mesh neighbourhood is open. */
 	public static boolean isOpen(int[] classes, int dx, int dy, int dz) {
 		return classes[dx + 1 + 3 * (dz + 1) + 9 * (dy + 1)] == OPEN;

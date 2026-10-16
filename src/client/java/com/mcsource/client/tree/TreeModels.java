@@ -59,24 +59,35 @@ public final class TreeModels {
 	 * at its origin and its top above its foot. Leaning cliff trees, logs,
 	 * stumps and other things with "tree" in their names are left out.
 	 */
-	private static boolean readable(String path) {
+	private static RiggedModel readable(String path) {
 		try {
 			RiggedModel model = StudioModel.load(GameInstalls.source(), path, null);
 			if (model == null || model.triangleCount() == 0) {
-				return false;
+				return null;
 			}
 			if (!upright(model.positions)) {
 				LOGGER.info("Tree model {} left out: not an upright tree", path);
-				return false;
+				return null;
 			}
 			if (fleshy(model)) {
 				LOGGER.info("Tree model {} left out: its bark is pink like flesh, not wood", path);
-				return false;
+				return null;
 			}
-			return true;
+			StringBuilder materials = new StringBuilder();
+			int[] uses = new int[model.textures.length];
+			for (int t : model.triangleTexture) {
+				uses[t]++;
+			}
+			for (int i = 0; i < model.textures.length; i++) {
+				RiggedModel.Texture texture = model.textures[i];
+				materials.append(materials.isEmpty() ? "" : ", ").append(texture.name()).append(texture.masked() ? " (see-through" : " (solid")
+						.append(", ").append(uses[i]).append(" triangles)");
+			}
+			LOGGER.info("Tree model {}: {}", path, materials);
+			return model;
 		} catch (Exception e) {
 			LOGGER.info("Tree model {} could not be read: {}", path, e.toString());
-			return false;
+			return null;
 		}
 	}
 
@@ -107,6 +118,17 @@ public final class TreeModels {
 			b += p & 0xFF;
 		}
 		return r > g * 1.35 && b > g * 0.8;
+	}
+
+	/** Share of the model's triangles that are see-through (leaves). */
+	private static float leafy(RiggedModel model) {
+		int leaves = 0;
+		for (int t : model.triangleTexture) {
+			if (model.textures[t].masked()) {
+				leaves++;
+			}
+		}
+		return model.triangleCount() == 0 ? 0.0F : leaves / (float) model.triangleCount();
 	}
 
 	/** Positions are x, y, z with z up, in Source units. */
@@ -166,8 +188,8 @@ public final class TreeModels {
 				continue;
 			}
 			String file = name.substring(name.lastIndexOf('/') + 1);
-			if (!file.contains("tree") || !(name.contains("foliage") || name.contains("forest") || name.contains("nature")
-					|| name.contains("tree"))) {
+			// Only props in foliage folders: HL1's xen "tree" and the like live elsewhere.
+			if (!file.contains("tree") || !(name.contains("foliage") || name.contains("forest") || name.contains("nature"))) {
 				continue;
 			}
 			boolean skip = false;
@@ -177,13 +199,17 @@ public final class TreeModels {
 			if (skip) {
 				continue;
 			}
-			if (!readable(name)) {
+			RiggedModel model = readable(name);
+			if (model == null) {
 				continue;
 			}
 			if (file.contains("pine") || file.contains("spruce") || file.contains("fir") || file.contains("conifer")
 					|| file.contains("evergreen")) {
 				conifers.add(name);
 			} else if (file.contains("dead") || file.contains("bare") || file.contains("dry")) {
+				bare.add(name);
+			} else if (leafy(model) < 0.15F) {
+				// Broadleaf in name but with hardly any leaves: a bare tree.
 				bare.add(name);
 			} else {
 				broadleaf.add(name);

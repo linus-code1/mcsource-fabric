@@ -213,7 +213,8 @@ public final class Vtf {
 					colors[3] = argb(255, (rgb0[0] + 2 * rgb1[0]) / 3, (rgb0[1] + 2 * rgb1[1]) / 3, (rgb0[2] + 2 * rgb1[2]) / 3);
 				} else {
 					colors[2] = argb(255, (rgb0[0] + rgb1[0]) / 2, (rgb0[1] + rgb1[1]) / 2, (rgb0[2] + rgb1[2]) / 2);
-					colors[3] = format == DXT1_ONEBITALPHA ? 0 : argb(255, 0, 0, 0);
+					// Three-colour blocks: the fourth colour is transparent, as Direct3D decodes DXT1.
+					colors[3] = 0;
 				}
 				int indices = data.getInt(colorAt + 4);
 				for (int i = 0; i < 16; i++) {
