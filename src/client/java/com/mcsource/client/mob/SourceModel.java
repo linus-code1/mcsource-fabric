@@ -281,7 +281,8 @@ public final class SourceModel {
 				// Lit as Minecraft lights the near model, so the tree keeps its
 				// shade when it changes to these pictures: leaves one flat
 				// shade, solid parts by their facing in world space.
-				shade += leaf ? LEAF_SHADE : entityLight(posedNormals[n + 1], posedNormals[n + 2], posedNormals[n]);
+				// The picture is lit as CARD_LIGHT when drawn; divide that out.
+				shade += Math.min(1.0F, (leaf ? LEAF_LIGHT : entityLight(posedNormals[n + 1], posedNormals[n + 2], posedNormals[n])) / CARD_LIGHT);
 			}
 			shade /= 3.0F;
 			float area = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
@@ -412,20 +413,30 @@ public final class SourceModel {
 	 * detail, a cut-out material (leaves) can be thinned to about
 	 * {@code keep} of its triangles, each kept one grown by {@code grow}
 	 * about its middle so the crown stays about as full. Cut-out cards are lit
-	 * as if facing up, as Source lights its foliage, so the crown is not
-	 * patchy light and dark where cards face away from the light.
+	 * by the ambient light alone ({@link #LEAF_LIGHT}), the same from both
+	 * sides, so the crown is not patchy light and dark.
 	 */
 	/**
-	 * How bright leaves are drawn in the far pictures. The near model's
-	 * crown reads darker than a flat picture of it, with its many layers of
-	 * cards shading each other through their gaps, so the pictures are
-	 * darkened to match and a tree keeps its shade when it changes over.
+	 * How bright leaves are lit, near and far: Minecraft's ambient light
+	 * alone. Minecraft lights the back of a face as if it faced the other
+	 * way, so a leaf card lit as facing up came out bright from one side and
+	 * dark from the other, and a crown flickered between the two as it
+	 * turned; leaves now have no facing, so every side is the darker one.
 	 */
-	private static final float LEAF_SHADE = 0.62F;
+	public static final float LEAF_LIGHT = 0.4F;
+	/**
+	 * The facing given to the far pictures, in the world: halfway between
+	 * Minecraft's two lights and the opposite of each, so a picture's front
+	 * and back are lit the same.
+	 */
+	public static final org.joml.Vector3fc CARD_NORMAL = new org.joml.Vector3f(0.2F, 1.0F, -0.7F).normalize()
+			.sub(new org.joml.Vector3f(-0.2F, 1.0F, 0.7F).normalize()).normalize();
+	/** How bright Minecraft lights the far pictures, from either side. */
+	private static final float CARD_LIGHT = entityLight(CARD_NORMAL.x(), CARD_NORMAL.y(), CARD_NORMAL.z());
 
 	/**
-	 * About how bright Minecraft's entity lighting draws a face with this
-	 * world normal: a little ambient plus two lights from above.
+	 * About how bright Minecraft's entity lighting draws the front of a face
+	 * with this world normal: a little ambient plus two lights from above.
 	 */
 	private static float entityLight(float x, float y, float z) {
 		float l = (float) Math.sqrt(x * x + y * y + z * z);
@@ -485,7 +496,13 @@ public final class SourceModel {
 						.setUv(model.cornerUv[corner * 2], model.cornerUv[corner * 2 + 1])
 						.setOverlay(overlay)
 						.setLight(light)
-						.setNormal(pose, leaves ? 0.0F : posedNormals[n + 1], leaves ? 1.0F : posedNormals[n + 2], leaves ? 0.0F : posedNormals[n]);
+						;
+				if (leaves) {
+					// No facing: lit by the ambient light alone from both sides.
+					consumer.setNormal(0.0F, 0.0F, 0.0F);
+				} else {
+					consumer.setNormal(pose, posedNormals[n + 1], posedNormals[n + 2], posedNormals[n]);
+				}
 			}
 		}
 	}

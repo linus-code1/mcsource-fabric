@@ -1,5 +1,8 @@
 package com.mcsource.client.tree;
 
+import org.joml.Matrix3f;
+import org.joml.Vector3f;
+
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -178,18 +181,19 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 	 * One picture card, standing on the model's origin: across Minecraft's x
 	 * axis for the front picture, or across z for the side one. Model x is
 	 * Minecraft's z and model y is Minecraft's x, as in {@link SourceModel}.
+	 * Drawn once; Minecraft draws both sides of it. Its facing is
+	 * {@link SourceModel#CARD_NORMAL} in the world, which lights both sides
+	 * alike, so a far tree does not flicker between a lit and an unlit side.
 	 */
 	private static void card(PoseStack.Pose pose, VertexConsumer consumer, float min, float max, float bottom, float top, boolean side,
 			int light) {
+		Vector3f normal = new Matrix3f(pose.normal()).invert().transform(new Vector3f(SourceModel.CARD_NORMAL));
 		float[][] corners = {{min, top, 0.0F, 0.0F}, {min, bottom, 0.0F, 1.0F}, {max, bottom, 1.0F, 1.0F}, {max, top, 1.0F, 0.0F}};
-		for (int face = 0; face < 2; face++) {
-			for (int k = 0; k < 4; k++) {
-				float[] c = corners[face == 0 ? k : 3 - k];
-				float x = side ? 0.0F : c[0];
-				float z = side ? c[0] : 0.0F;
-				consumer.addVertex(pose, x, c[1], z).setColor(-1).setUv(c[2], c[3]).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light)
-						.setNormal(pose, 0.0F, 1.0F, 0.0F);
-			}
+		for (float[] c : corners) {
+			float x = side ? 0.0F : c[0];
+			float z = side ? c[0] : 0.0F;
+			consumer.addVertex(pose, x, c[1], z).setColor(-1).setUv(c[2], c[3]).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light)
+					.setNormal(pose, normal.x, normal.y, normal.z);
 		}
 	}
 }

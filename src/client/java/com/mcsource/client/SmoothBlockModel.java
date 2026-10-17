@@ -878,6 +878,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					emitter.shadeMode(ShadeMode.ENHANCED);
 					splitAlongFlatterDiagonal(emitter);
 					boolean blendHere = top && blends != null;
+					float[] alpha = null;
 					if (blendHere || rockHere) {
 						for (int i = 0; i < 4; i++) {
 							ox[i] = emitter.x(i);
@@ -890,14 +891,30 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							on[i * 3 + 2] = emitter.normalZ(i);
 						}
 					}
+					boolean allRock = false;
+					if (rockHere) {
+						alpha = rockAlpha(ox, oy, oz, on);
+						allRock = alpha[0] > 0.996F && alpha[1] > 0.996F && alpha[2] > 0.996F && alpha[3] > 0.996F;
+						if (allRock) {
+							// Wholly rock: draw the face itself as rock, with nothing laid
+							// over it, the same as a straight cliff.
+							float[] u = new float[4];
+							float[] v = new float[4];
+							rockUv(rock, pos, ox, oy, oz, on, u, v);
+							for (int i = 0; i < 4; i++) {
+								emitter.uv(i, u[i], v[i]);
+							}
+							emitter.tintIndex(-1);
+						}
+					}
 					emitter.emit();
-					if (blendHere) {
+					if (blendHere && !allRock) {
 						for (Blend blend : blends) {
 							blend.emit(emitter, ox, oy, oz, oc, ol, on);
 						}
 					}
-					if (rockHere) {
-						cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on);
+					if (rockHere && !allRock) {
+						cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on, alpha);
 					}
 				}
 			}
@@ -970,12 +987,18 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 */
 	private static net.minecraft.client.renderer.texture.TextureAtlasSprite cliffSprite(BlockState state) {
 		String rock;
-		if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)) {
-			rock = "minecraft:block/stone";
-		} else if (state.is(Blocks.SAND)) {
+		if (state.is(Blocks.SAND) || state.is(Blocks.SANDSTONE)) {
 			rock = "minecraft:block/sandstone";
-		} else if (state.is(Blocks.RED_SAND)) {
+		} else if (state.is(Blocks.RED_SAND) || state.is(Blocks.RED_SANDSTONE)) {
 			rock = "minecraft:block/red_sandstone";
+		} else if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)
+				|| state.is(Blocks.GRAVEL) || state.is(Blocks.CLAY) || state.is(Blocks.STONE) || state.is(Blocks.ANDESITE)
+				|| state.is(Blocks.DIORITE) || state.is(Blocks.GRANITE) || state.is(Blocks.TUFF) || state.is(Blocks.CALCITE)) {
+			// One rock for every cliff of ordinary ground. Minecraft's ground is
+			// full of pockets of other blocks (granite, gravel, dirt in stone),
+			// and on a smoothed cliff each pocket showed its own Half-Life 2
+			// texture as a dark or light blotch.
+			rock = "minecraft:block/stone";
 		} else {
 			return null;
 		}
@@ -983,11 +1006,61 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				.getSprite(net.minecraft.resources.Identifier.parse(rock));
 	}
 
+	/**
+	 * How much rock shows at each corner of one piece of a bent face, from
+	 * 0 to 1: by how steep the smoothed ground is there, and fully where the
+	 * piece itself stands upright (a step the smoothing could not round off).
+	 */
+	private static float[] rockAlpha(float[] px, float[] py, float[] pz, float[] normal) {
+		// The piece's own facing, from its diagonals.
+		float ax = px[2] - px[0];
+		float ay = py[2] - py[0];
+		float az = pz[2] - pz[0];
+		float bx = px[3] - px[1];
+		float by = py[3] - py[1];
+		float bz = pz[3] - pz[1];
+		float cx = ay * bz - az * by;
+		float cy = az * bx - ax * bz;
+		float cz = ax * by - ay * bx;
+		float length = Mth.sqrt(cx * cx + cy * cy + cz * cz);
+		float own = length < 1.0E-5F ? 0.0F : 1.0F - Math.abs(cy) / length;
+		float[] alpha = new float[4];
+		for (int i = 0; i < 4; i++) {
+			float steep = Math.max(1.0F - Math.abs(normal[i * 3 + 1]), own);
+			float t = Mth.clamp((steep - ROCK_FROM) / (ROCK_FULL - ROCK_FROM), 0.0F, 1.0F);
+			alpha[i] = t * t * (3.0F - 2.0F * t);
+		}
+		return alpha;
+	}
+
+	/**
+	 * Rock texture coordinates for the corners of a piece: projected from
+	 * the side the slope faces most, one tile over two blocks: across, by the
+	 * block's place in the world, and up, over the two blocks' height a bent
+	 * block can reach (half a block below its bottom to half a block above
+	 * its top), so it never stretches.
+	 */
+	private static void rockUv(net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos, float[] px, float[] py,
+			float[] pz, float[] normal, float[] u, float[] v) {
+		float nx = 0.0F;
+		float nz = 0.0F;
+		for (int i = 0; i < 4; i++) {
+			nx += Math.abs(normal[i * 3]);
+			nz += Math.abs(normal[i * 3 + 2]);
+		}
+		boolean alongX = nz >= nx;
+		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
+		for (int i = 0; i < 4; i++) {
+			u[i] = rock.getU((cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / 2.0F);
+			v[i] = rock.getV(1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F));
+		}
+	}
+
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
 	private static final float ROCK_FROM = 0.12F;
 	private static final float ROCK_FULL = 0.5F;
 	/** How far an overlay sits off the face beneath it, in blocks. */
-	private static final float ROCK_LIFT = 0.02F;
+	private static final float ROCK_LIFT = 0.005F;
 
 	/**
 	 * Lays rock over one piece of a steep face, faded in by how steep the
@@ -995,36 +1068,22 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * hillside so it doesn't stretch.
 	 */
 	private static void cliffRock(QuadEmitter emitter, net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos,
-			float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal) {
-		float[] alpha = new float[4];
+			float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal, float[] alpha) {
 		boolean any = false;
-		float nx = 0.0F;
-		float nz = 0.0F;
 		for (int i = 0; i < 4; i++) {
-			float steep = 1.0F - Math.abs(normal[i * 3 + 1]);
-			float t = Mth.clamp((steep - ROCK_FROM) / (ROCK_FULL - ROCK_FROM), 0.0F, 1.0F);
-			alpha[i] = t * t * (3.0F - 2.0F * t);
 			any |= alpha[i] > 0.004F;
-			nx += Math.abs(normal[i * 3]);
-			nz += Math.abs(normal[i * 3 + 2]);
 		}
 		if (!any) {
 			return;
 		}
-		// Project the texture from the side the slope faces most, one tile over
-		// two blocks: across, by the block's place in the world, and up, over
-		// the two blocks' height a bent block can reach (half a block below its
-		// bottom to half a block above its top), so it never stretches.
-		boolean alongX = nz >= nx;
-		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
+		float[] u = new float[4];
+		float[] v = new float[4];
+		rockUv(rock, pos, px, py, pz, normal, u, v);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
-			// Lift the overlay off the face along its normal, far enough that
-			// distant depth precision cannot make the two fight.
+			// Lift the overlay a little off the face along its normal.
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
-			float u = (cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / 2.0F;
-			float v = 1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F);
-			emitter.uv(i, rock.getU(u), rock.getV(v));
+			emitter.uv(i, u[i], v[i]);
 			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
 			emitter.lightmap(i, light[i]);
 			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
