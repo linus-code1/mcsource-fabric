@@ -92,10 +92,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				if (quad.tintIndex() >= 0) {
 					return false;
 				}
+				// Mapped as cliffRock maps it, so the two kinds of cliff meet.
 				boolean alongX = Math.abs(quad.faceNormal().z()) >= Math.abs(quad.faceNormal().x());
+				int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
 				for (int i = 0; i < 4; i++) {
-					float u = alongX ? quad.x(i) : quad.z(i);
-					quad.uv(i, rock.getU(Mth.clamp(u, 0.0F, 1.0F)), rock.getV(1.0F - Mth.clamp(quad.y(i), 0.0F, 1.0F)));
+					float u = (cell + Mth.clamp(alongX ? quad.x(i) : quad.z(i), 0.0F, 1.0F)) / 2.0F;
+					quad.uv(i, rock.getU(u), rock.getV(1.0F - Mth.clamp((quad.y(i) + 0.5F) / 2.0F, 0.0F, 1.0F)));
 				}
 				applySun(quad, level, pos);
 				return true;
@@ -111,6 +113,43 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 		} finally {
 			emitter.popTransform();
+		}
+	}
+
+	/** How dark the ground is right under the middle of a prop. */
+	private static final float CONTACT_SHADOW = 0.6F;
+
+	/**
+	 * A soft dark patch on the ground under a prop, darkest in the middle and
+	 * fading out past its edges, so it sits on the ground instead of looking
+	 * pasted over it.
+	 */
+	private static void contactShadow(QuadEmitter emitter, net.minecraft.client.renderer.texture.TextureAtlasSprite sprite, float minX,
+			float maxX, float minZ, float maxZ, float drop) {
+		float grow = 0.3F;
+		float[] xs = {minX - grow, minX + (maxX - minX) * 0.15F, minX + (maxX - minX) * 0.85F, maxX + grow};
+		float[] zs = {minZ - grow, minZ + (maxZ - minZ) * 0.15F, minZ + (maxZ - minZ) * 0.85F, maxZ + grow};
+		float y = drop + 0.02F;
+		for (int a = 0; a < 3; a++) {
+			for (int b = 0; b < 3; b++) {
+				int[][] corners = {{a, b}, {a, b + 1}, {a + 1, b + 1}, {a + 1, b}};
+				for (int i = 0; i < 4; i++) {
+					int ia = corners[i][0];
+					int ib = corners[i][1];
+					boolean inside = ia > 0 && ia < 3 && ib > 0 && ib < 3;
+					emitter.pos(i, xs[ia], y, zs[ib]);
+					emitter.uv(i, sprite.getU(0.5F), sprite.getV(0.5F));
+					emitter.color(i, ARGB.color(inside ? Math.round(CONTACT_SHADOW * 255.0F) : 0, 0, 0, 0));
+					emitter.lightmap(i, LightCoordsUtil.FULL_BRIGHT);
+					emitter.normal(i, 0.0F, 1.0F, 0.0F);
+				}
+				emitter.nominalFace(Direction.UP);
+				emitter.cullFace(null);
+				emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+				emitter.ambientOcclusion(TriState.FALSE);
+				emitter.tintIndex(-1);
+				emitter.emit();
+			}
 		}
 	}
 
@@ -285,6 +324,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		float[] uvs = mesh.uvs();
 		// Sit down onto smoothed ground that curves away below the block.
 		float drop = groundDrop(level, pos);
+		float minX = Float.MAX_VALUE;
+		float maxX = -Float.MAX_VALUE;
+		float minZ = Float.MAX_VALUE;
+		float maxZ = -Float.MAX_VALUE;
 		for (int t = 0; t < mesh.triangles(); t++) {
 			int material = mesh.texture()[t];
 			net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = sprites[material];
@@ -294,7 +337,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				float x = positions[t * 9 + k * 3] - 0.5F;
 				float y = positions[t * 9 + k * 3 + 1];
 				float z = positions[t * 9 + k * 3 + 2] - 0.5F;
-				emitter.pos(c, 0.5F + x * cos - z * sin, y + drop, 0.5F + x * sin + z * cos);
+				float wx = 0.5F + x * cos - z * sin;
+				float wz = 0.5F + x * sin + z * cos;
+				minX = Math.min(minX, wx);
+				maxX = Math.max(maxX, wx);
+				minZ = Math.min(minZ, wz);
+				maxZ = Math.max(maxZ, wz);
+				emitter.pos(c, wx, y + drop, wz);
 				emitter.uv(c, sprite.getU(uvs[t * 6 + k * 2]), sprite.getV(uvs[t * 6 + k * 2 + 1]));
 				emitter.lightmap(c, light);
 			}
@@ -311,6 +360,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			emitter.shadeMode(ShadeMode.ENHANCED);
 			emitter.tintIndex(-1);
 			emitter.emit();
+		}
+		if (minX < maxX && sky + block > 0) {
+			contactShadow(emitter, sprites[0], minX, maxX, minZ, maxZ, drop);
 		}
 	}
 
@@ -932,8 +984,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
-	private static final float ROCK_FROM = 0.32F;
-	private static final float ROCK_FULL = 0.62F;
+	private static final float ROCK_FROM = 0.12F;
+	private static final float ROCK_FULL = 0.5F;
 
 	/**
 	 * Lays rock over one piece of a steep face, faded in by how steep the
@@ -946,7 +998,6 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		boolean any = false;
 		float nx = 0.0F;
 		float nz = 0.0F;
-		float lowY = Float.MAX_VALUE;
 		for (int i = 0; i < 4; i++) {
 			float steep = 1.0F - Math.abs(normal[i * 3 + 1]);
 			float t = Mth.clamp((steep - ROCK_FROM) / (ROCK_FULL - ROCK_FROM), 0.0F, 1.0F);
@@ -954,21 +1005,23 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			any |= alpha[i] > 0.004F;
 			nx += Math.abs(normal[i * 3]);
 			nz += Math.abs(normal[i * 3 + 2]);
-			lowY = Math.min(lowY, py[i]);
 		}
 		if (!any) {
 			return;
 		}
-		// Project the texture from the side the slope faces most.
+		// Project the texture from the side the slope faces most, one tile over
+		// two blocks: across, by the block's place in the world, and up, over
+		// the two blocks' height a bent block can reach (half a block below its
+		// bottom to half a block above its top), so it never stretches.
 		boolean alongX = nz >= nx;
-		float baseY = (float) Math.floor(lowY);
+		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			// Lift the overlay a hair off the face, along its normal.
 			emitter.pos(i, px[i] + normal[i * 3] * 0.004F, py[i] + normal[i * 3 + 1] * 0.004F, pz[i] + normal[i * 3 + 2] * 0.004F);
-			float u = alongX ? px[i] : pz[i];
-			float v = 1.0F - Mth.clamp(py[i] - baseY, 0.0F, 1.0F);
-			emitter.uv(i, rock.getU(Mth.clamp(u, 0.0F, 1.0F)), rock.getV(v));
+			float u = (cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / 2.0F;
+			float v = 1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F);
+			emitter.uv(i, rock.getU(u), rock.getV(v));
 			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
 			emitter.lightmap(i, light[i]);
 			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);

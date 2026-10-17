@@ -56,14 +56,27 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 	}
 
 	// Lit by the air well above the foot, which sits sunk into the ground.
+	/**
+	 * The crown is lit by the brightest of a few cells up the trunk: on a
+	 * hillside the cells just above the foot can be inside the slope, which
+	 * left a whole tree dark.
+	 */
 	@Override
 	protected int getSkyLightLevel(TreeEntity tree, BlockPos pos) {
-		return super.getSkyLightLevel(tree, pos.above(2));
+		int light = 0;
+		for (int up = 1; up <= 9; up += 2) {
+			light = Math.max(light, super.getSkyLightLevel(tree, pos.above(up)));
+		}
+		return light;
 	}
 
 	@Override
 	protected int getBlockLightLevel(TreeEntity tree, BlockPos pos) {
-		return super.getBlockLightLevel(tree, pos.above(2));
+		int light = 0;
+		for (int up = 1; up <= 9; up += 2) {
+			light = Math.max(light, super.getBlockLightLevel(tree, pos.above(up)));
+		}
+		return light;
 	}
 
 	@Override
@@ -94,6 +107,8 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		double distance = Math.sqrt(state.distanceToCameraSq);
 		boolean wasFar = FAR.getOrDefault(tree, distance > IMPOSTOR);
 		state.far = wasFar ? distance > IMPOSTOR - HYSTERESIS : distance > IMPOSTOR + HYSTERESIS;
+		// Never the flat picture up close, whatever was remembered.
+		state.far &= distance > IMPOSTOR - 2.0F * HYSTERESIS;
 		FAR.put(tree, state.far);
 		Float drop = DROP.get(tree);
 		if (drop == null || tree.tickCount % 200 == 0) {

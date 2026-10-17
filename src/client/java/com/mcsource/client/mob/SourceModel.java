@@ -473,7 +473,22 @@ public final class SourceModel {
 			float y = 0;
 			float z = 0;
 			int n = 0;
+			// Only vertices of triangles that are drawn: a view model trimmed to
+			// its hands still holds its weapon's vertices, some of them on the
+			// hand bone, which would pull the middle out into empty air.
+			boolean[] used = new boolean[posed.length / 3];
+			for (int t = 0; t < model.triangleCount(); t++) {
+				if (hidden != null && hidden[t]) {
+					continue;
+				}
+				for (int k = 0; k < 3; k++) {
+					used[model.cornerVertex[t * 3 + k]] = true;
+				}
+			}
 			for (int i = 0; i < posed.length / 3; i++) {
+				if (!used[i]) {
+					continue;
+				}
 				int bone = model.positionBones[i * 3];
 				if (bone >= 0 && bone < model.boneCount() && model.boneNames[bone].toLowerCase(java.util.Locale.ROOT).contains(word)) {
 					x += posed[i * 3];

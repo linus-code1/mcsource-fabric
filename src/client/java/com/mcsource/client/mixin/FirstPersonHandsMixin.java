@@ -53,17 +53,20 @@ public abstract class FirstPersonHandsMixin {
 	 * screen.
 	 */
 	private static final float DEFAULT_FOV = 54.0F;
-	private static final float DEFAULT_OFFSET_X = -2.5F;
-	/** Pulled back towards the eye, so the hand is not held out ahead. */
-	private static final float DEFAULT_OFFSET_Y = -8.0F;
-	private static final float DEFAULT_OFFSET_Z = 10.0F;
+	private static final float DEFAULT_OFFSET_X = -1.5F;
+	/**
+	 * Pulled back towards the eye a little and lifted, but not so far that
+	 * the inside of the glove, which Valve never modelled, comes into view.
+	 */
+	private static final float DEFAULT_OFFSET_Y = -4.0F;
+	private static final float DEFAULT_OFFSET_Z = 5.0F;
 	private static SourceModel trimmed;
 	private static int mcsource$slot = -1;
 	private static long mcsource$drawStart;
 	private static long mcsource$swingStart;
 	private static float mcsource$lastAttack;
 	private static int mcsource$swingVariant;
-	/** Whether the crowbar is out for a swing, which hides the held item. */
+	/** Whether a swing is playing (the crowbar is out if the hand is empty). */
 	private static boolean mcsource$crowbarOut;
 	/** Held items are drawn this much smaller than Minecraft's, as they are held closer to the eye. */
 	private static final float ITEM_SCALE = 0.4F;
@@ -71,7 +74,7 @@ public abstract class FirstPersonHandsMixin {
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
 			float attackValue, HumanoidArm arm, PlayerRenderState playerState, CallbackInfo ci) {
-		if (mcsource$drawHands(poseStack, collector, light, attackValue, arm) != null) {
+		if (mcsource$drawHands(poseStack, collector, light, attackValue, arm, true) != null) {
 			ci.cancel();
 		}
 	}
@@ -91,12 +94,8 @@ public abstract class FirstPersonHandsMixin {
 			return;
 		}
 		HumanoidArm arm = playerState.avatarRenderState.mainArm;
-		Vector3f palm = mcsource$drawHands(poseStack, collector, lightCoords, attack, arm);
+		Vector3f palm = mcsource$drawHands(poseStack, collector, lightCoords, attack, arm, false);
 		if (palm == null) {
-			return;
-		}
-		if (mcsource$crowbarOut) {
-			ci.cancel();
 			return;
 		}
 		poseStack.pushPose();
@@ -112,7 +111,7 @@ public abstract class FirstPersonHandsMixin {
 	 * it was when called, or null when there are no Half-Life 2 hands.
 	 */
 	private static Vector3f mcsource$drawHands(PoseStack poseStack, SubmitNodeCollector collector, int light, float attackValue,
-			HumanoidArm arm) {
+			HumanoidArm arm, boolean empty) {
 		SourceModel hands = null;
 		SourceModel crowbar = null;
 		for (String reference : HANDS) {
@@ -210,8 +209,9 @@ public abstract class FirstPersonHandsMixin {
 		poseStack.translate(-side * UNITS, GameInstalls.setting("viewmodel_offset_z", DEFAULT_OFFSET_Z) * UNITS,
 				GameInstalls.setting("viewmodel_offset_y", DEFAULT_OFFSET_Y) * UNITS);
 		SourceModel.Axes axes = arm == HumanoidArm.LEFT ? SourceModel.Axes.HALF_LIFE_MIRRORED : SourceModel.Axes.HALF_LIFE;
-		// While a swing plays, the crowbar is out, as in Half-Life 2.
-		SourceModel shown = mcsource$crowbarOut && crowbar != null ? crowbar : hands;
+		// While an empty hand swings, the crowbar is out, as in Half-Life 2. A
+		// hand holding something swings with the thing it holds instead.
+		SourceModel shown = mcsource$crowbarOut && empty && crowbar != null ? crowbar : hands;
 		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(shown.texture), (matrices, consumer) -> {
 			shown.skin(bones);
 			shown.emit(matrices, consumer, axes, UNITS, light, OverlayTexture.NO_OVERLAY);
