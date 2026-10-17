@@ -270,6 +270,7 @@ public final class SourceModel {
 				continue;
 			}
 			RiggedModel.Texture texture = model.textures[model.triangleTexture[t]];
+			boolean leaf = texture.masked();
 			float shade = 0.0F;
 			for (int k = 0; k < 3; k++) {
 				int v = model.cornerVertex[t * 3 + k] * 3;
@@ -277,8 +278,10 @@ public final class SourceModel {
 				py[k] = (top - posed[v + 2]) * sy;
 				pd[k] = posed[v + depthAxis];
 				int n = model.cornerNormal[t * 3 + k] * 3;
-				// Light from above and in front, both faces of a card lit alike.
-				shade += 0.55F + 0.45F * Math.abs(posedNormals[n + 2] * 0.7F + posedNormals[n + depthAxis] * 0.3F);
+				// Lit as Minecraft lights the near model, so the tree keeps its
+				// shade when it changes to these pictures: leaves one flat
+				// shade, solid parts by their facing in world space.
+				shade += leaf ? LEAF_SHADE : entityLight(posedNormals[n + 1], posedNormals[n + 2], posedNormals[n]);
 			}
 			shade /= 3.0F;
 			float area = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
@@ -412,6 +415,31 @@ public final class SourceModel {
 	 * as if facing up, as Source lights its foliage, so the crown is not
 	 * patchy light and dark where cards face away from the light.
 	 */
+	/**
+	 * How bright leaves are drawn in the far pictures. The near model's
+	 * crown reads darker than a flat picture of it, with its many layers of
+	 * cards shading each other through their gaps, so the pictures are
+	 * darkened to match and a tree keeps its shade when it changes over.
+	 */
+	private static final float LEAF_SHADE = 0.62F;
+
+	/**
+	 * About how bright Minecraft's entity lighting draws a face with this
+	 * world normal: a little ambient plus two lights from above.
+	 */
+	private static float entityLight(float x, float y, float z) {
+		float l = (float) Math.sqrt(x * x + y * y + z * z);
+		if (l < 1.0E-4F) {
+			return 1.0F;
+		}
+		x /= l;
+		y /= l;
+		z /= l;
+		float a = Math.max(0.0F, (0.2F * x + y - 0.7F * z) / 1.2369F);
+		float b = Math.max(0.0F, (-0.2F * x + y + 0.7F * z) / 1.2369F);
+		return Math.min(1.0F, 0.4F + 0.6F * (a + b));
+	}
+
 	public void emitMaterial(PoseStack.Pose pose, VertexConsumer consumer, int material, float scale, int light, int overlay, float keep,
 			float grow) {
 		int count = model.triangleCount();

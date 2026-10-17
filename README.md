@@ -90,7 +90,8 @@ world to try it in.
 - **Half-Life 2 furniture.** With Half-Life 2 installed, chests become wooden
   crates, crafting and fletching tables become tables, beds become Half-Life 2
   beds across both their blocks, furnaces become stoves, barrels oil drums and
-  so on. They stay ordinary blocks (open a crate-chest as before); only the
+  so on, and melons and pumpkins become Half-Life 2's watermelon (orange for
+  pumpkins). They stay ordinary blocks (open a crate-chest as before); only the
   look changes, and blocks beside them still show their faces. Campfires keep
   their flames. The models picked are listed in
   `hl2_block_pack/used_materials.txt`; choose your own in
@@ -98,9 +99,13 @@ world to try it in.
 - **Finer stairs.** Stairs are drawn as four shallow steps instead of
   Minecraft's two big ones, corners included. Walking on them is unchanged.
 - **Sprite crops and water plants.** Wheat, carrots, potatoes and beetroots
-  are star-shaped clumps of Half-Life 2 grass sprites that grow taller as they
-  ripen (ripe wheat turns the colour of straw), and seagrass and kelp are the
-  same sprites in a murky underwater green.
+  are Half-Life 2 grass sprites that grow taller as they ripen (ripe wheat
+  turns the colour of straw), and seagrass and kelp are the same sprites in a
+  murky underwater green. Dry grass and dead bushes in deserts are the same
+  sprites again, in the pale straw colour of the sand.
+- **Made textures.** Where Half-Life 2 has no texture of its own: clay is its
+  mud in river-clay grey, lava is its rock molten and slowly churning, fire is
+  its flame sprites, and cactus is green bark on a ribbed column.
 - **Half-Life 2 sun and moon.** The sun is a small white-hot disc in a soft
   glow, like Half-Life 2's env_sun, using its glow sprite. The moon is a
   cooler, dimmer version with Minecraft's phases. Set `scary_sun=true` in
@@ -130,12 +135,14 @@ world to try it in.
   is the HEV suit hand from Half-Life 2's view models, read from your install
   (see *Half-Life models* below), idling and swinging with its own
   animations. Held items sit in its palm and move with those animations
-  instead of Minecraft's jab. Hitting swings Half-Life 2's crowbar, which
-  comes out for the swing (the held item is hidden meanwhile); items being eaten, drawn or charged, and
+  instead of Minecraft's jab. Hitting with an empty hand swings Half-Life 2's
+  crowbar, which comes out for the swing; items being eaten, drawn or charged, and
   maps, keep Minecraft's. Its size and place on screen can be tuned in
   `config/mcsource.properties`: `viewmodel_fov` (default 54, smaller makes it
   bigger) and `viewmodel_offset_x`, `viewmodel_offset_y` and
-  `viewmodel_offset_z` in Source units (right, forward and up). Without it, the hand is the mod's own rigged suit hand: an
+  `viewmodel_offset_z` in Source units (right, forward and up), and where a
+  held item sits in the fist with `viewmodel_item_x`, `viewmodel_item_y` and
+  `viewmodel_item_z`. Without it, the hand is the mod's own rigged suit hand: an
   orange sleeve and a black glove with a full finger skeleton.
 - **Half-Life 2 mobs.** With Half-Life 2 installed, mobs use the closest
   Half-Life 2 (and Episode One and Two) characters, read at run time from your

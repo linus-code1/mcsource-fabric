@@ -54,8 +54,9 @@ public final class PropModels {
 	 * {@code size=WxD} is the footprint in blocks (a bed is 1x2),
 	 * {@code h=} the most height it may take, {@code fill=} how much of
 	 * the footprint it fills, {@code yaw=} turns the model, {@code turn=no}
-	 * keeps it from turning with the block, and {@code keep=slanted} keeps
-	 * the block's own slanted quads (a campfire's flames).
+	 * keeps it from turning with the block, {@code keep=slanted} keeps
+	 * the block's own slanted quads (a campfire's flames), and
+	 * {@code tint=RRGGBB} recolours its textures (a watermelon as a pumpkin).
 	 */
 	public static final String DEFAULTS = """
 			chest = models/props_junk/wood_crate001a.mdl models/props_junk/wood_crate002a.mdl models/props_junk/wood_crate00*.mdl fill=0.88
@@ -74,6 +75,10 @@ public final class PropModels {
 			composter = models/props_junk/trashbin01a.mdl models/props_trainstation/trashcan_indoor001a.mdl models/props_junk/trashdumpster0*.mdl turn=no
 			jukebox = models/props_lab/citizenradio.mdl models/props_c17/consolebox0*.mdl h=0.8
 			lectern = models/props_c17/furnituredrawer001a.mdl models/props_c17/furnituredrawer00*.mdl
+			melon = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl turn=no
+			pumpkin = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl turn=no tint=C8701C
+			carved_pumpkin = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl tint=C8701C
+			jack_o_lantern = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl tint=E08A2A
 			""";
 
 	private static final String USER_LIST = """
@@ -83,7 +88,8 @@ public final class PropModels {
 			# Give a block no models to keep Minecraft's look for it:
 			#   crafting_table =
 			# Options: size=WxD (footprint in blocks), h= (most height), fill= (how
-			# much of the footprint), yaw= (degrees), turn=no, keep=slanted.
+			# much of the footprint), yaw= (degrees), turn=no, keep=slanted,
+			# tint=RRGGBB (recolour).
 			# Delete the hl2_block_pack folder or change this file, then restart.
 			""";
 
@@ -232,6 +238,41 @@ public final class PropModels {
 		}
 	}
 
+	/**
+	 * A texture recoloured to a colour given as {@code RRGGBB}, keeping its
+	 * light and shade: its average brightness becomes that colour.
+	 */
+	private static int[] tinted(int[] pixels, String hex) {
+		int colour;
+		try {
+			colour = Integer.parseInt(hex.replace("#", ""), 16);
+		} catch (NumberFormatException e) {
+			return pixels;
+		}
+		double sum = 0;
+		int count = 0;
+		for (int p : pixels) {
+			if ((p >>> 24) >= 128) {
+				sum += (p >> 16 & 255) + (p >> 8 & 255) + (p & 255);
+				count++;
+			}
+		}
+		if (count == 0 || sum <= 0) {
+			return pixels;
+		}
+		double mean = sum / count;
+		int[] out = new int[pixels.length];
+		for (int i = 0; i < pixels.length; i++) {
+			int p = pixels[i];
+			double light = ((p >> 16 & 255) + (p >> 8 & 255) + (p & 255)) / mean;
+			int r = (int) Math.min(255, Math.round((colour >> 16 & 255) * light));
+			int g = (int) Math.min(255, Math.round((colour >> 8 & 255) * light));
+			int b = (int) Math.min(255, Math.round((colour & 255) * light));
+			out[i] = (p & 0xFF000000) | r << 16 | g << 8 | b;
+		}
+		return out;
+	}
+
 	/** Poses the model, fits it into the block and writes its textures; the mesh file's bytes, or null. */
 	private static byte[] fit(RiggedModel model, Entry entry, Path textures) throws IOException {
 		RiggedModel.Pose pose = new RiggedModel.Pose(model);
@@ -342,6 +383,10 @@ public final class PropModels {
 				pixels = big;
 				w *= grow;
 				h *= grow;
+			}
+			String tint = entry.options.get("tint");
+			if (tint != null) {
+				pixels = tinted(pixels, tint);
 			}
 			String name = fileName(entry.key) + "_" + i;
 			BlockTextures.writePng(textures.resolve(name + ".png"), pixels, w, h);

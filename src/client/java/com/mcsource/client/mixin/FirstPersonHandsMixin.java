@@ -70,6 +70,10 @@ public abstract class FirstPersonHandsMixin {
 	private static boolean mcsource$crowbarOut;
 	/** Held items are drawn this much smaller than Minecraft's, as they are held closer to the eye. */
 	private static final float ITEM_SCALE = 0.4F;
+	/** Where a held item sits from the palm, in Source units: right, forward and up. */
+	private static final float DEFAULT_ITEM_X = -1.2F;
+	private static final float DEFAULT_ITEM_Y = 0.0F;
+	private static final float DEFAULT_ITEM_Z = -2.8F;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
@@ -100,6 +104,11 @@ public abstract class FirstPersonHandsMixin {
 		}
 		poseStack.pushPose();
 		poseStack.translate(palm.x, palm.y, palm.z);
+		// Minecraft's first-person placement lifts an item up and out from
+		// where it is held; bring its grip back down into the fist.
+		float itemSide = GameInstalls.setting("viewmodel_item_x", DEFAULT_ITEM_X) * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F);
+		poseStack.translate(itemSide * UNITS, GameInstalls.setting("viewmodel_item_z", DEFAULT_ITEM_Z) * UNITS,
+				-GameInstalls.setting("viewmodel_item_y", DEFAULT_ITEM_Y) * UNITS);
 		poseStack.scale(ITEM_SCALE, ITEM_SCALE, ITEM_SCALE);
 		state.mainHandRenderState.submit(poseStack, collector, lightCoords, OverlayTexture.NO_OVERLAY, 0);
 		poseStack.popPose();

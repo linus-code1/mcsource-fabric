@@ -986,6 +986,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
 	private static final float ROCK_FROM = 0.12F;
 	private static final float ROCK_FULL = 0.5F;
+	/** How far an overlay sits off the face beneath it, in blocks. */
+	private static final float ROCK_LIFT = 0.02F;
 
 	/**
 	 * Lays rock over one piece of a steep face, faded in by how steep the
@@ -1017,8 +1019,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
-			// Lift the overlay a hair off the face, along its normal.
-			emitter.pos(i, px[i] + normal[i * 3] * 0.004F, py[i] + normal[i * 3 + 1] * 0.004F, pz[i] + normal[i * 3 + 2] * 0.004F);
+			// Lift the overlay off the face along its normal, far enough that
+			// distant depth precision cannot make the two fight.
+			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
 			float u = (cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / 2.0F;
 			float v = 1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F);
 			emitter.uv(i, rock.getU(u), rock.getV(v));
@@ -1067,7 +1070,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 			emitter.clear();
 			for (int i = 0; i < 4; i++) {
-				emitter.pos(i, px[i], py[i] + 0.004F, pz[i]);
+				emitter.pos(i, px[i], py[i] + ROCK_LIFT, pz[i]);
 				float[] uv = uvAt(px[i], pz[i]);
 				emitter.uv(i, uv[0], uv[1]);
 				int c = ARGB.multiply(colour[i], tint);

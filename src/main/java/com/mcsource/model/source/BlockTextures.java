@@ -83,7 +83,6 @@ public final class BlockTextures {
 			sandstone = stone/*sand* nature/*sandstone* *sandstone* concrete/concretewall0*
 			sandstone_top = stone/*sand* nature/*sandstone* *sandstone* concrete/concretefloor0*
 			sandstone_bottom = stone/*sand* nature/*sandstone* *sandstone* concrete/concretefloor0*
-			clay = *clay* concrete/concretefloor0*
 			snow = nature/snowfloor00* nature/*snow* *snow*
 			snow_block = nature/snowfloor00* nature/*snow* *snow*
 			ice = nature/ice* */ice0* nature/*frozen*
@@ -291,6 +290,7 @@ public final class BlockTextures {
 				errors.put(name, e.toString());
 			}
 		}
+		sandColour = made.containsKey("sand") ? average(made.get("sand")) : 0;
 		if (mapping.containsKey("plants")) {
 			try {
 				plants(files, mapping.get("plants"), materials, folder, used, made.get("grass_block_top"), packRoot);
@@ -304,6 +304,11 @@ public final class BlockTextures {
 		}
 		mossy(made, "cobblestone", "mossy_cobblestone", folder, used);
 		mossy(made, "stone_bricks", "mossy_stone_bricks", folder, used);
+		try {
+			madeTextures(files, materials, made, folder, packRoot, used);
+		} catch (IOException | RuntimeException e) {
+			errors.put("made", e.toString());
+		}
 		if (made.keySet().stream().anyMatch(name -> name.endsWith("_leaves"))) {
 			Path models = packRoot.resolve("assets/minecraft/models/block");
 			Files.createDirectories(models);
@@ -538,11 +543,342 @@ public final class BlockTextures {
 		return out;
 	}
 
+	// ------------------------------------------------------------ made textures
+
+	private static final int ANIMATION_SIZE = 64;
+	private static final int ANIMATION_FRAMES = 32;
+
+	/**
+	 * Textures Half-Life 2 has nothing ready for, made from ones it does:
+	 * clay, lava, fire and cactus.
+	 */
+	private static void madeTextures(GameFiles files, List<String> materials, Map<String, int[]> made, Path folder, Path packRoot,
+			Map<String, String> used) throws IOException {
+		// Clay: the mud floor, grey-blue as river clay.
+		int[] mud = made.getOrDefault("mud", made.get("dirt"));
+		if (mud != null) {
+			writePng(folder.resolve("clay.png"), recolourTo(mud, 0x9298A2), SIZE);
+			used.put("clay", (made.containsKey("mud") ? used.get("mud") : used.get("dirt")) + " (as clay)");
+		}
+		// Lava: the rock, molten, with dark crust drifting over it.
+		int[] rock = made.getOrDefault("stone", made.get("cobblestone"));
+		if (rock != null) {
+			lava(rock, folder);
+			used.put("lava", used.getOrDefault("stone", used.get("cobblestone")) + " (molten)");
+		}
+		used.put("fire", fire(files, materials, folder));
+		// Cactus: bark, green, on a ridged column.
+		int[] bark = made.getOrDefault("oak_log", made.get("spruce_log"));
+		if (bark != null) {
+			writePng(folder.resolve("cactus_side.png"), recolourTo(bark, 0x56743A), SIZE);
+			writePng(folder.resolve("cactus_top.png"), recolourTo(bark, 0x6A8848), SIZE);
+			writePng(folder.resolve("cactus_bottom.png"), recolourTo(bark, 0x4A6230), SIZE);
+			Path models = packRoot.resolve("assets/minecraft/models/block");
+			Files.createDirectories(models);
+			Files.writeString(models.resolve("cactus.json"), CACTUS_MODEL);
+			used.put("cactus", used.getOrDefault("oak_log", used.get("spruce_log")) + " (green)");
+		}
+	}
+
+	/**
+	 * A cactus as a ridged column instead of a box: a square column with a
+	 * second one turned a quarter about it, so it has eight ribs.
+	 */
+	private static final String CACTUS_MODEL = """
+			{
+				"parent": "minecraft:block/block",
+				"textures": {
+					"particle": "minecraft:block/cactus_side",
+					"side": "minecraft:block/cactus_side",
+					"top": "minecraft:block/cactus_top",
+					"bottom": "minecraft:block/cactus_bottom"
+				},
+				"elements": [
+					{"from": [3, 0, 3], "to": [13, 16, 13], "faces": {
+						"down": {"uv": [3, 3, 13, 13], "texture": "#bottom", "cullface": "down"},
+						"up": {"uv": [3, 3, 13, 13], "texture": "#top", "cullface": "up"},
+						"north": {"uv": [0, 0, 16, 16], "texture": "#side"},
+						"south": {"uv": [0, 0, 16, 16], "texture": "#side"},
+						"west": {"uv": [0, 0, 16, 16], "texture": "#side"},
+						"east": {"uv": [0, 0, 16, 16], "texture": "#side"}}},
+					{"from": [3.6, 0, 3.6], "to": [12.4, 15.98, 12.4],
+						"rotation": {"origin": [8, 8, 8], "axis": "y", "angle": 45, "rescale": false}, "faces": {
+						"up": {"uv": [4, 4, 12, 12], "texture": "#top"},
+						"north": {"uv": [2, 0, 14, 16], "texture": "#side"},
+						"south": {"uv": [2, 0, 14, 16], "texture": "#side"},
+						"west": {"uv": [2, 0, 14, 16], "texture": "#side"},
+						"east": {"uv": [2, 0, 14, 16], "texture": "#side"}}}
+				]
+			}
+			""";
+
+	/**
+	 * Animated lava from a rock texture: its dark cracks and hollows glow
+	 * yellow-white, the rest is orange melt under a dark crust that slowly
+	 * drifts and breaks up.
+	 */
+	private static void lava(int[] rock, Path folder) throws IOException {
+		int s = ANIMATION_SIZE;
+		int[] small = resample(rock, SIZE, s);
+		float mean = brightness(average(small));
+		int[] strip = new int[s * s * ANIMATION_FRAMES];
+		for (int f = 0; f < ANIMATION_FRAMES; f++) {
+			double t = (double) f / ANIMATION_FRAMES;
+			for (int y = 0; y < s; y++) {
+				for (int x = 0; x < s; x++) {
+					// The crust drifts one way, the glow beneath another; both wrap.
+					int cx = Math.floorMod(x + Math.round((float) (t * s)), s);
+					int cy = Math.floorMod(y + Math.round((float) (Math.sin(t * 2 * Math.PI) * 2)), s);
+					float light = brightness(small[cy * s + cx]);
+					double u = x * 2 * Math.PI / s;
+					double v = y * 2 * Math.PI / s;
+					double a = t * 2 * Math.PI;
+					float wave = (float) (0.5 + 0.25 * Math.sin(2 * u + v + a) + 0.15 * Math.sin(3 * v - u - 2 * a)
+							+ 0.1 * Math.sin(5 * u + 4 * v + a));
+					float crack = mean <= 0.0F ? 0.5F : (mean - light) / mean;
+					float heat = Math.max(0.0F, Math.min(1.0F, 0.45F + crack * 1.8F + (wave - 0.5F) * 0.9F));
+					int r;
+					int g;
+					int b;
+					if (heat < 0.35F) {
+						// Crust: dark red-brown, a little of the rock's grain.
+						float k = heat / 0.35F;
+						r = Math.round(60 + 120 * k + 40 * light);
+						g = Math.round(14 + 30 * k + 10 * light);
+						b = Math.round(6 + 4 * k);
+					} else {
+						float k = (heat - 0.35F) / 0.65F;
+						r = 255;
+						g = Math.round(90 + 150 * k * k);
+						b = Math.round(10 + 110 * k * k * k);
+					}
+					strip[(f * s + y) * s + x] = 0xFF000000 | Math.min(255, r) << 16 | Math.min(255, g) << 8 | Math.min(255, b);
+				}
+			}
+		}
+		String meta = "{\"animation\": {\"frametime\": 4, \"interpolate\": true}}\n";
+		for (String name : new String[] {"lava_still", "lava_flow"}) {
+			writePng(folder.resolve(name + ".png"), strip, s, s * ANIMATION_FRAMES);
+			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
+		}
+	}
+
+	/** Half-Life 2's flame sprites, tried in order. */
+	private static final String[] FIRE_PATTERNS = {"sprites/flamelet*", "sprites/fire*", "sprites/flame*", "effects/fire*"};
+
+	/**
+	 * Fire from Half-Life 2's flame sprites: each frame is one of them
+	 * standing in the block, stretched and swayed a little as it burns.
+	 * Returns the sprites used, or null when there are none (Minecraft's
+	 * fire is kept).
+	 */
+	private static String fire(GameFiles files, List<String> materials, Path folder) throws IOException {
+		List<RiggedModel.Texture> flames = new ArrayList<>();
+		List<String> names = new ArrayList<>();
+		for (String pattern : FIRE_PATTERNS) {
+			for (String material : candidates(pattern, materials, false)) {
+				RiggedModel.Texture texture = tryLoad(files, material, 256, true);
+				if (texture != null && texture.width() >= 8 && texture.height() >= 8) {
+					flames.add(texture);
+					names.add(material);
+				}
+			}
+			if (flames.size() >= 3) {
+				break;
+			}
+		}
+		if (flames.isEmpty()) {
+			return null;
+		}
+		int s = ANIMATION_SIZE;
+		int frames = ANIMATION_FRAMES;
+		for (int which = 0; which < 3; which++) {
+			int[] strip = new int[s * s * frames];
+			for (int f = 0; f < frames; f++) {
+				RiggedModel.Texture flame = flames.get((f / 4 + which) % flames.size());
+				double t = (double) f / frames;
+				float stretch = (float) (1.0 + 0.12 * Math.sin(t * 2 * Math.PI * 3 + which));
+				float sway = (float) (0.06 * Math.sin(t * 2 * Math.PI * 2 + which * 2));
+				for (int y = 0; y < s; y++) {
+					float fy = (float) y / s;
+					// Bottom of the sprite on the bottom of the block; the top stretches.
+					float sv = 1.0F - (1.0F - fy) / stretch;
+					if (sv < 0.0F) {
+						continue;
+					}
+					for (int x = 0; x < s; x++) {
+						float su = (float) x / s + sway * (1.0F - fy);
+						if (su < 0.0F || su >= 1.0F) {
+							continue;
+						}
+						int p = flame.pixels()[Math.min(flame.height() - 1, (int) (sv * flame.height())) * flame.width()
+								+ Math.min(flame.width() - 1, (int) (su * flame.width()))];
+						strip[(f * s + y) * s + x] = flamePixel(p);
+					}
+				}
+			}
+			String meta = "{\"animation\": {\"frametime\": 2, \"interpolate\": true}}\n";
+			String name = which == 2 ? "campfire_fire" : "fire_" + which;
+			writePng(folder.resolve(name + ".png"), strip, s, s * frames);
+			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
+		}
+		return String.join(" ", names);
+	}
+
+	/**
+	 * A pixel of an additive flame sprite as a cut-out one: how bright it is
+	 * decides whether it shows, and bright parts are lifted to flame colours.
+	 */
+	private static int flamePixel(int p) {
+		int r = p >> 16 & 255;
+		int g = p >> 8 & 255;
+		int b = p & 255;
+		int a = p >>> 24;
+		float light = Math.max(r, Math.max(g, b)) / 255.0F * (a / 255.0F);
+		if (light < 0.18F) {
+			return 0;
+		}
+		float k = Math.min(1.0F, (light - 0.18F) / 0.6F);
+		int or = 255;
+		int og = Math.round(110 + 130 * k);
+		int ob = Math.round(20 + 120 * k * k);
+		// Keep a little of the sprite's own colour.
+		or = (or * 3 + r) / 4;
+		og = (og * 3 + g) / 4;
+		ob = (ob * 3 + b) / 4;
+		return 0xFF000000 | Math.min(255, or) << 16 | Math.min(255, og) << 8 | Math.min(255, ob);
+	}
+
+	/** A square image resampled to another size by averaging or repeating pixels. */
+	private static int[] resample(int[] image, int from, int to) {
+		int[] out = new int[to * to];
+		int step = Math.max(1, from / to);
+		for (int y = 0; y < to; y++) {
+			for (int x = 0; x < to; x++) {
+				long r = 0;
+				long g = 0;
+				long b = 0;
+				int n = 0;
+				for (int dy = 0; dy < step; dy++) {
+					for (int dx = 0; dx < step; dx++) {
+						int p = image[Math.min(from - 1, y * from / to + dy) * from + Math.min(from - 1, x * from / to + dx)];
+						r += p >> 16 & 255;
+						g += p >> 8 & 255;
+						b += p & 255;
+						n++;
+					}
+				}
+				out[y * to + x] = 0xFF000000 | (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * An image recoloured to {@code rgb}, keeping its light and shade: its
+	 * average brightness becomes that colour. See-through pixels stay so.
+	 */
+	static int[] recolourTo(int[] image, int rgb) {
+		double sum = 0;
+		int count = 0;
+		for (int p : image) {
+			if ((p >>> 24) >= 128) {
+				sum += (p >> 16 & 255) + (p >> 8 & 255) + (p & 255);
+				count++;
+			}
+		}
+		int[] out = image.clone();
+		if (count == 0 || sum <= 0) {
+			return out;
+		}
+		double mean = sum / count;
+		for (int i = 0; i < out.length; i++) {
+			int p = out[i];
+			double light = ((p >> 16 & 255) + (p >> 8 & 255) + (p & 255)) / mean;
+			int r = (int) Math.min(255, Math.round((rgb >> 16 & 255) * light));
+			int g = (int) Math.min(255, Math.round((rgb >> 8 & 255) * light));
+			int b = (int) Math.min(255, Math.round((rgb & 255) * light));
+			out[i] = (p & 0xFF000000) | r << 16 | g << 8 | b;
+		}
+		return out;
+	}
+
+	/** Colour of the sand, or 0 when unknown; set before the plants are made. */
+	private static int sandColour;
+
+	/**
+	 * Desert plants, crops and water plants from the grass sprites,
+	 * recoloured: dry grass and dead bushes the pale straw of the sand
+	 * around them, ripe wheat gold, seagrass and kelp a murky green.
+	 */
+	private static void moreSprites(RiggedModel.Texture sheet, List<Sprite> green, Path folder, Map<String, String> used, String chosen)
+			throws IOException {
+		int sand = sandColour != 0 ? sandColour : 0xA89A80;
+		int straw = mix(sand, 0xC2A872, 0.6F);
+		int dead = mix(sand, 0x6E5A40, 0.65F);
+		writePng(folder.resolve("short_dry_grass.png"), recolourTo(spriteImage(sheet, pickShape(green, "wide", 2), SIZE, SIZE), straw),
+				SIZE);
+		writePng(folder.resolve("tall_dry_grass.png"), recolourTo(spriteImage(sheet, pickShape(green, "tall", 1), SIZE, SIZE), straw),
+				SIZE);
+		writePng(folder.resolve("dead_bush.png"), recolourTo(spriteImage(sheet, pickShape(green, "any", 3), SIZE, SIZE), dead), SIZE);
+		used.put("dead_bush", chosen + " (grass, dry)");
+		used.put("short_dry_grass", chosen + " (grass, dry)");
+
+		// Crops grow from a short tuft to a full one.
+		int[] wheat = spriteImage(sheet, pickShape(green, "tall", 0), SIZE, SIZE);
+		for (int stage = 0; stage < 8; stage++) {
+			int[] image = shorter(wheat, 0.25F + 0.75F * stage / 7.0F);
+			if (stage >= 5) {
+				image = recolourTo(image, mix(0x7A8A40, 0xD8B860, (stage - 4) / 3.0F));
+			}
+			writePng(folder.resolve("wheat_stage" + stage + ".png"), image, SIZE);
+		}
+		String[][] roots = {{"carrots", "4"}, {"potatoes", "5"}, {"beetroots", "6"}};
+		for (String[] crop : roots) {
+			int[] tuft = spriteImage(sheet, pickShape(green, "wide", Integer.parseInt(crop[1])), SIZE, SIZE);
+			for (int stage = 0; stage < 4; stage++) {
+				writePng(folder.resolve(crop[0] + "_stage" + stage + ".png"), shorter(tuft, 0.3F + 0.7F * stage / 3.0F), SIZE);
+			}
+		}
+		used.put("crops", chosen + " (grass tufts)");
+
+		int weed = 0x4E7A52;
+		writePng(folder.resolve("seagrass.png"), recolourTo(spriteImage(sheet, pickShape(green, "wide", 7), SIZE, SIZE), weed), SIZE);
+		int[] tall = recolourTo(spriteImage(sheet, pickShape(green, "tall", 2), SIZE, SIZE * 2), weed);
+		writePng(folder.resolve("tall_seagrass_top.png"), java.util.Arrays.copyOfRange(tall, 0, SIZE * SIZE), SIZE);
+		writePng(folder.resolve("tall_seagrass_bottom.png"), java.util.Arrays.copyOfRange(tall, SIZE * SIZE, SIZE * SIZE * 2), SIZE);
+		int kelp = 0x5A6E3A;
+		writePng(folder.resolve("kelp.png"), recolourTo(spriteImage(sheet, pickShape(green, "tall", 3), SIZE, SIZE), kelp), SIZE);
+		writePng(folder.resolve("kelp_plant.png"), recolourTo(spriteImage(sheet, pickShape(green, "tall", 4), SIZE, SIZE), kelp), SIZE);
+		used.put("seagrass", chosen + " (grass, green-brown)");
+	}
+
+	/** A plant sprite squashed down to {@code fraction} of its height, still standing on the bottom edge. */
+	private static int[] shorter(int[] image, float fraction) {
+		int[] out = new int[SIZE * SIZE];
+		int h = Math.max(1, Math.round(SIZE * fraction));
+		for (int y = SIZE - h; y < SIZE; y++) {
+			int from = Math.min(SIZE - 1, (y - (SIZE - h)) * SIZE / h);
+			System.arraycopy(image, from * SIZE, out, y * SIZE, SIZE);
+		}
+		return out;
+	}
+
+	/** {@code a} and {@code b} mixed, {@code k} of the way to {@code b}. */
+	private static int mix(int a, int b, float k) {
+		int out = 0;
+		for (int shift = 0; shift <= 16; shift += 8) {
+			float c = (a >> shift & 255) * (1.0F - k) + (b >> shift & 255) * k;
+			out |= Math.max(0, Math.min(255, Math.round(c))) << shift;
+		}
+		return out;
+	}
+
 	// ------------------------------------------------------------ plants
 
 	/** Plant textures and the kind of sprite each takes. */
 	private static final String[][] GREEN_PLANTS = {
-		{"short_grass", "wide"}, {"fern", "any"}, {"tall_grass", "tall"}, {"large_fern", "any"}, {"short_dry_grass", "wide"},
+		{"short_grass", "wide"}, {"fern", "any"}, {"tall_grass", "tall"}, {"large_fern", "any"},
 		{"bush", "wide"}, {"sugar_cane", "tall"},
 	};
 	/**
@@ -681,11 +1017,7 @@ public final class BlockTextures {
 			writePlant(folder, "fern_" + v, spriteImage(sheet, fern, SIZE, SIZE));
 		}
 		grassTufts(packRoot);
-		List<Sprite> brown = coloured.getOrDefault("brown", List.of());
-		if (!brown.isEmpty()) {
-			writePlant(folder, "dead_bush", spriteImage(sheet, brown.getFirst(), SIZE, SIZE));
-			used.put("dead_bush", chosen + " (sprite at " + brown.getFirst().x + "," + brown.getFirst().y + ")");
-		}
+		moreSprites(sheet, green, folder, used, chosen);
 		// Flowers: the sprites after the ones grass took, so they differ from it.
 		int flowerIndex = GREEN_PLANTS.length;
 		for (String flower : FLOWERS) {
