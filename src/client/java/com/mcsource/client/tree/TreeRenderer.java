@@ -42,7 +42,11 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		float fall;
 		float fallDirection;
 		boolean far;
+		/** How far down the drawn ground under the trunk is. */
+		float drop;
 	}
+
+	private static final java.util.Map<TreeEntity, Float> DROP = new java.util.WeakHashMap<>();
 
 	public TreeRenderer(EntityRendererProvider.Context context) {
 		super(context);
@@ -91,6 +95,12 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		boolean wasFar = FAR.getOrDefault(tree, distance > IMPOSTOR);
 		state.far = wasFar ? distance > IMPOSTOR - HYSTERESIS : distance > IMPOSTOR + HYSTERESIS;
 		FAR.put(tree, state.far);
+		Float drop = DROP.get(tree);
+		if (drop == null || tree.tickCount % 200 == 0) {
+			drop = com.mcsource.client.SmoothBlockModel.groundDrop((net.minecraft.client.multiplayer.ClientLevel) tree.level(), tree.blockPosition());
+			DROP.put(tree, drop);
+		}
+		state.drop = drop;
 	}
 
 	@Override
@@ -116,8 +126,9 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		}
 		float drawScale = scale;
 		poseStack.pushPose();
-		// Sink the foot a little so it meets ground that smoothing lowered.
-		poseStack.translate(0.0F, -0.4F, 0.0F);
+		// Sink the foot down to the drawn ground, which smoothing may have
+		// lowered, and a little into it so no root shows air beneath.
+		poseStack.translate(0.0F, Math.min(-0.15F, state.drop - 0.15F), 0.0F);
 		if (state.fall > 0.0F) {
 			// Topple about the foot of the trunk, away from whoever felled it.
 			poseStack.rotateDegrees(Axis.YP, -state.fallDirection);

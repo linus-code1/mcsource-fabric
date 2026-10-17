@@ -49,17 +49,12 @@ public final class SmoothTerrain {
 	}
 
 	/**
-	 * Like {@link #classify(BlockState)}, but the top layer of water pins the
-	 * corners round it. The water surface is drawn flat at the top of its
-	 * block, so a shore lowered beside it would leave a gap under the water's
-	 * edge.
+	 * The class of a block in the world. Water counts as open space even at
+	 * its surface: shores slope down under the water, and the client draws
+	 * the surface on over the lowered shore so no gap shows at its edge.
 	 */
 	private static int classify(BlockGetter level, BlockPos pos, BlockState state) {
-		int kind = classify(state);
-		if (kind == OPEN && !state.getFluidState().isEmpty() && level.getFluidState(pos.above()).isEmpty()) {
-			return BUILT;
-		}
-		return kind;
+		return classify(state);
 	}
 
 	/**

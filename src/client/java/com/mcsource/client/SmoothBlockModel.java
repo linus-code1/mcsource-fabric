@@ -80,10 +80,25 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		boolean terrain = state.is(SmoothTerrain.SMOOTH);
 		boolean snowAbove = terrain && level.getBlockState(pos.above()).is(Blocks.SNOW);
+		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = terrain ? cliffSprite(state) : null;
 		emitter.pushTransform(quad -> {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				// Hidden under the snow sheet; see emitBent.
 				return false;
+			}
+			if (rock != null && Math.abs(quad.faceNormal().y()) < 0.5F) {
+				// A straight cliff of soft ground: its sides are rock, as Source
+				// blends rock into displacements where they turn into cliffs.
+				if (quad.tintIndex() >= 0) {
+					return false;
+				}
+				boolean alongX = Math.abs(quad.faceNormal().z()) >= Math.abs(quad.faceNormal().x());
+				for (int i = 0; i < 4; i++) {
+					float u = alongX ? quad.x(i) : quad.z(i);
+					quad.uv(i, rock.getU(Mth.clamp(u, 0.0F, 1.0F)), rock.getV(1.0F - Mth.clamp(quad.y(i), 0.0F, 1.0F)));
+				}
+				applySun(quad, level, pos);
+				return true;
 			}
 			if (terrain) {
 				liftLowTop(quad, state);
@@ -185,9 +200,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			float y0, float z0, float x1, float y1, float z1) {
 		Direction shown = flip && face.getAxis() == Direction.Axis.Y ? face.getOpposite() : face;
 		Direction culled = cull == null ? null : flip && cull.getAxis() == Direction.Axis.Y ? cull.getOpposite() : cull;
-		if (culled != null && !cullTest.test(culled)) {
-			return;
-		}
+		// Faces on the block's sides carry their cull face; the renderer hides
+		// them where a neighbour covers them.
 		float[][] corners = switch (face) {
 			case UP -> new float[][] {{x0, y0, z0}, {x0, y0, z1}, {x1, y0, z1}, {x1, y0, z0}};
 			case DOWN -> new float[][] {{x0, y0, z1}, {x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}};
@@ -269,6 +283,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		int block = LightCoordsUtil.block(light);
 		float[] positions = mesh.positions();
 		float[] uvs = mesh.uvs();
+		// Sit down onto smoothed ground that curves away below the block.
+		float drop = groundDrop(level, pos);
 		for (int t = 0; t < mesh.triangles(); t++) {
 			int material = mesh.texture()[t];
 			net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = sprites[material];
@@ -278,7 +294,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				float x = positions[t * 9 + k * 3] - 0.5F;
 				float y = positions[t * 9 + k * 3 + 1];
 				float z = positions[t * 9 + k * 3 + 2] - 0.5F;
-				emitter.pos(c, 0.5F + x * cos - z * sin, y, 0.5F + x * sin + z * cos);
+				emitter.pos(c, 0.5F + x * cos - z * sin, y + drop, 0.5F + x * sin + z * cos);
 				emitter.uv(c, sprite.getU(uvs[t * 6 + k * 2]), sprite.getV(uvs[t * 6 + k * 2 + 1]));
 				emitter.lightmap(c, light);
 			}
@@ -390,6 +406,22 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * The top of the ground under a plant or snow layer, exactly as the ground
 	 * itself is drawn, in blocks relative to the plant's own block.
 	 */
+	/**
+	 * How far below {@code pos} (in blocks, 0 or less) the lowest point of the
+	 * drawn ground under it is, sampled over the middle of the block, so
+	 * things standing there (props, trees) can sit down onto it.
+	 */
+	public static float groundDrop(BlockAndTintGetter level, BlockPos pos) {
+		GroundSurface surface = new GroundSurface(level, pos, SmoothTerrain.groundCorners(level, pos));
+		float low = 0.0F;
+		for (float x = 0.15F; x <= 0.86F; x += 0.35F) {
+			for (float z = 0.15F; z <= 0.86F; z += 0.35F) {
+				low = Math.min(low, surface.height(x, z));
+			}
+		}
+		return Math.max(low, -0.75F);
+	}
+
 	private static final class GroundSurface {
 		private final float base;
 		private final float[] grid;
@@ -700,6 +732,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			emitter.popTransform();
 		}
 		java.util.List<Blend> blends = blends(level, pos, state);
+		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = cliffSprite(state);
 		float[] ox = new float[4];
 		float[] oy = new float[4];
 		float[] oz = new float[4];
@@ -728,6 +761,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			float fy = face.y();
 			float fz = face.z();
 			boolean top = fy > 0.5F;
+			// One rock layer per face: a grass side's tinted overlay quad gets none.
+			boolean rockHere = rock != null && (top || quad.tintIndex() < 0);
 			for (int a = 0; a < PIECES; a++) {
 				for (int b = 0; b < PIECES; b++) {
 					emitter.copyFrom(quad);
@@ -791,7 +826,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					emitter.shadeMode(ShadeMode.ENHANCED);
 					splitAlongFlatterDiagonal(emitter);
 					boolean blendHere = top && blends != null;
-					if (blendHere) {
+					if (blendHere || rockHere) {
 						for (int i = 0; i < 4; i++) {
 							ox[i] = emitter.x(i);
 							oy[i] = emitter.y(i);
@@ -809,10 +844,142 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							blend.emit(emitter, ox, oy, oz, oc, ol, on);
 						}
 					}
+					if (rockHere) {
+						cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on);
+					}
 				}
 			}
 		});
 		captured.clear();
+		waterEdge(emitter, level, pos);
+	}
+
+	/**
+	 * Shores slope down under the water beside them, so the water's surface is
+	 * carried on over a shore block at the water's height: where the ground
+	 * dips below it you see water, and where the ground rises above it hides
+	 * it, so the waterline follows the shore's curve instead of block edges.
+	 */
+	private static void waterEdge(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos) {
+		BlockState above = level.getBlockState(pos.above());
+		if (!SmoothTerrain.isOpen(above) || !above.getFluidState().isEmpty()) {
+			return;
+		}
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		float height = -1.0F;
+		BlockPos water = null;
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				if (dx == 0 && dz == 0) {
+					continue;
+				}
+				cursor.setWithOffset(pos, dx, 0, dz);
+				var fluid = level.getFluidState(cursor);
+				if (!fluid.is(net.minecraft.tags.FluidTags.WATER) || !level.getFluidState(cursor.above()).isEmpty()) {
+					continue;
+				}
+				float h = fluid.getHeight(level, cursor);
+				if (h > height) {
+					height = h;
+					water = cursor.immutable();
+				}
+			}
+		}
+		if (water == null) {
+			return;
+		}
+		var sprite = net.minecraft.client.Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)
+				.getSprite(net.minecraft.resources.Identifier.withDefaultNamespace("block/water_still"));
+		int tint = net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(level, water);
+		int light = LightCoordsUtil.max(LightCoordsUtil.getLightCoords(level, pos.above()), LightCoordsUtil.getLightCoords(level, water));
+		float[][] corners = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
+		for (int i = 0; i < 4; i++) {
+			float x = corners[i][0];
+			float z = corners[i][1];
+			emitter.pos(i, x, height - 0.001F, z);
+			emitter.uv(i, sprite.getU(x), sprite.getV(z));
+			emitter.color(i, ARGB.opaque(tint));
+			emitter.lightmap(i, light);
+			emitter.normal(i, 0.0F, 1.0F, 0.0F);
+		}
+		emitter.nominalFace(Direction.UP);
+		emitter.cullFace(null);
+		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+		emitter.ambientOcclusion(TriState.FALSE);
+		emitter.shadeMode(ShadeMode.ENHANCED);
+		emitter.tintIndex(-1);
+		emitter.emit();
+	}
+
+	/**
+	 * The rock that shows through on steep faces of soft ground (grass, dirt,
+	 * sand), as Source blends rock into its displacements where they turn
+	 * into cliffs; null for ground that is rock already.
+	 */
+	private static net.minecraft.client.renderer.texture.TextureAtlasSprite cliffSprite(BlockState state) {
+		String rock;
+		if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)) {
+			rock = "minecraft:block/stone";
+		} else if (state.is(Blocks.SAND)) {
+			rock = "minecraft:block/sandstone";
+		} else if (state.is(Blocks.RED_SAND)) {
+			rock = "minecraft:block/red_sandstone";
+		} else {
+			return null;
+		}
+		return net.minecraft.client.Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)
+				.getSprite(net.minecraft.resources.Identifier.parse(rock));
+	}
+
+	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
+	private static final float ROCK_FROM = 0.32F;
+	private static final float ROCK_FULL = 0.62F;
+
+	/**
+	 * Lays rock over one piece of a steep face, faded in by how steep the
+	 * ground is at each corner, with the rock texture wrapped round the
+	 * hillside so it doesn't stretch.
+	 */
+	private static void cliffRock(QuadEmitter emitter, net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos,
+			float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal) {
+		float[] alpha = new float[4];
+		boolean any = false;
+		float nx = 0.0F;
+		float nz = 0.0F;
+		float lowY = Float.MAX_VALUE;
+		for (int i = 0; i < 4; i++) {
+			float steep = 1.0F - Math.abs(normal[i * 3 + 1]);
+			float t = Mth.clamp((steep - ROCK_FROM) / (ROCK_FULL - ROCK_FROM), 0.0F, 1.0F);
+			alpha[i] = t * t * (3.0F - 2.0F * t);
+			any |= alpha[i] > 0.004F;
+			nx += Math.abs(normal[i * 3]);
+			nz += Math.abs(normal[i * 3 + 2]);
+			lowY = Math.min(lowY, py[i]);
+		}
+		if (!any) {
+			return;
+		}
+		// Project the texture from the side the slope faces most.
+		boolean alongX = nz >= nx;
+		float baseY = (float) Math.floor(lowY);
+		emitter.clear();
+		for (int i = 0; i < 4; i++) {
+			// Lift the overlay a hair off the face, along its normal.
+			emitter.pos(i, px[i] + normal[i * 3] * 0.004F, py[i] + normal[i * 3 + 1] * 0.004F, pz[i] + normal[i * 3 + 2] * 0.004F);
+			float u = alongX ? px[i] : pz[i];
+			float v = 1.0F - Mth.clamp(py[i] - baseY, 0.0F, 1.0F);
+			emitter.uv(i, rock.getU(Mth.clamp(u, 0.0F, 1.0F)), rock.getV(v));
+			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+			emitter.lightmap(i, light[i]);
+			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+		}
+		emitter.nominalFace(null);
+		emitter.cullFace(null);
+		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+		emitter.ambientOcclusion(TriState.FALSE);
+		emitter.shadeMode(ShadeMode.ENHANCED);
+		emitter.tintIndex(-1);
+		emitter.emit();
 	}
 
 	/** How far into a block a neighbouring ground texture fades, in blocks. */
