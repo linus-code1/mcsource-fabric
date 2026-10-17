@@ -157,8 +157,8 @@ public final class BlockTextures {
 			deepslate_tiles = tile/tilefloor0* stone/*
 			polished_deepslate = concrete/concretefloor0* stone/*
 			mud_bricks = brick/brickwall0* brick/*
-			hay_block_side = *hay* *straw* nature/*grass*
-			hay_block_top = *hay* *straw* nature/*grass*
+			hay_block_side = *hay* *straw* *thatch* nature/*grass*
+			hay_block_top = *hay* *straw* *thatch* nature/*grass*
 			white_terracotta = plaster/plasterwall0* plaster/*
 			white_wool = *fabric* *cloth* plaster/*
 			stone_bricks_wall = stone/stonewall0*
@@ -523,6 +523,11 @@ public final class BlockTextures {
 		Pattern regex = Pattern.compile(Pattern.quote(lower).replace("*", "\\E.*\\Q"));
 		List<String> out = new ArrayList<>();
 		for (String material : materials) {
+			// Model textures are cut-up atlases for one prop (hay bales, crates), which
+			// look wrong tiled over a block; only lists that ask for them get them.
+			if (material.startsWith("models/") && !lower.startsWith("models/")) {
+				continue;
+			}
 			if (regex.matcher(material).matches() && !(skipSpecial && SKIP.matcher(material).matches())) {
 				out.add(material);
 				if (out.size() >= 8) {

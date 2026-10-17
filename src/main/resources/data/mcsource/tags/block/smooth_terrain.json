@@ -3,6 +3,8 @@
 		"minecraft:grass_block",
 		"minecraft:dirt",
 		"minecraft:coarse_dirt",
+		"minecraft:farmland",
+		"minecraft:dirt_path",
 		"minecraft:podzol",
 		"minecraft:mycelium",
 		"minecraft:rooted_dirt",

@@ -64,7 +64,7 @@ world to try it in.
   so flowers become its weeds and tufts). Ground textures stretch over 2x2
   blocks, picked by each block's place in the world, and where two kinds of
   ground meet each fades a little way into the other, as Source blends
-  textures across displacements. Trees further than 40 blocks away are drawn
+  textures across displacements. Trees further than 64 blocks away are drawn
   as two crossed pictures of themselves, made from the model when first seen. Short grass and ferns are small star-shaped
   tufts of several different sprites, shaded into the ground colour at the
   root, and only about one grass block in four grows one. Mossy cobblestone and
@@ -77,12 +77,12 @@ world to try it in.
   matches in `config/mcsource/block_textures.txt` (restart to apply).
 - **Half-Life 2 trees.** With Half-Life 2 installed, trees in newly made
   chunks and trees grown from saplings are Half-Life 2 tree models instead of
-  log and leaves blocks: spruces become pines, pale oaks bare trees and the
-  rest broadleaf trees, at their real size. Only upright tree models are
+  log and leaves blocks: every tree is the fullest Half-Life 2 pine (pale oaks
+  stay bare trees), at its real size. Only upright tree models are
   used, so logs, stumps, cliff trees and alien plants (by name, or by pink
   flesh-like bark) are left out. One tree
   in four is left out since these trees are bigger, and trees further than
-  40 blocks are drawn as two crossed pictures of themselves. Only the trunk is solid; hit a tree five times to
+  64 blocks are drawn as two crossed pictures of themselves. Only the trunk is solid; hit a tree five times to
   fell it: it topples away from you and breaks into logs along its length,
   plus saplings. Trees cast a soft shadow on the ground, and their textures
   are mipmapped so leaves don't sparkle in the distance. Set `hl2_trees=false` in

@@ -25,7 +25,14 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 	/** Trees taller than this many blocks are scaled down to it. */
 	private static final float MAX_HEIGHT = 20.0F;
 	/** Beyond this many blocks a tree is drawn as two crossed pictures of itself. */
-	private static final float IMPOSTOR = 40.0F;
+	private static final float IMPOSTOR = 64.0F;
+	/**
+	 * A tree switches to its picture only past {@link #IMPOSTOR} plus this,
+	 * and back only nearer than it minus this, so a tree near the switching
+	 * distance doesn't flick back and forth as you move.
+	 */
+	private static final float HYSTERESIS = 6.0F;
+	private static final java.util.Map<TreeEntity, Boolean> FAR = new java.util.WeakHashMap<>();
 
 	public static class State extends EntityRenderState {
 		String wood = "";
@@ -34,6 +41,7 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		/** How far it has fallen over, 0 standing to 1 on the ground. */
 		float fall;
 		float fallDirection;
+		boolean far;
 	}
 
 	public TreeRenderer(EntityRendererProvider.Context context) {
@@ -79,6 +87,10 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 			state.fall = t * t;
 		}
 		state.fallDirection = tree.fallDirection();
+		double distance = Math.sqrt(state.distanceToCameraSq);
+		boolean wasFar = FAR.getOrDefault(tree, distance > IMPOSTOR);
+		state.far = wasFar ? distance > IMPOSTOR - HYSTERESIS : distance > IMPOSTOR + HYSTERESIS;
+		FAR.put(tree, state.far);
 	}
 
 	@Override
@@ -114,8 +126,7 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		}
 		poseStack.rotateDegrees(Axis.YP, -state.yaw);
 		int light = state.lightCoords;
-		float distance = (float) Math.sqrt(state.distanceToCameraSq);
-		if (distance > IMPOSTOR && state.fall <= 0.0F) {
+		if (state.far && state.fall <= 0.0F) {
 			// Far away: two crossed pictures of the tree instead of its triangles.
 			SourceModel.Impostor picture = model.impostor();
 			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(picture.front()), (pose, consumer) -> card(pose, consumer,

@@ -23,6 +23,9 @@ public final class TreeModels {
 		"root", "_low", "fallen", "broken", "xen", "alien", "tentacle", "cliff", "hedge", "bush", "dead_fall", "leaning"};
 
 	private static List<String> conifers;
+	/** The conifer with the most leaf triangles. */
+	private static String bestConifer;
+	private static int bestLeaves;
 	private static List<String> bare;
 	private static List<String> broadleaf;
 
@@ -38,9 +41,12 @@ public final class TreeModels {
 	/** The model for a tree of this wood (such as {@code minecraft:spruce_log}), varied by {@code seed}; null if none. */
 	public static synchronized SourceModel pick(String wood, long seed) {
 		find();
-		List<String> kind = wood.contains("spruce") ? conifers : wood.contains("pale_oak") ? bare : broadleaf;
-		// Bare trees only stand in for pale oaks, or when there is nothing else.
-		for (List<String> list : List.of(kind, broadleaf, conifers, bare)) {
+		// Every tree is the leafiest pine: Half-Life 2's pines are its fullest,
+		// best-looking trees. Pale oaks stay bare; other kinds stand in only when
+		// there is no pine.
+		List<String> best = bestConifer == null ? List.of() : List.of(bestConifer);
+		List<String> kind = wood.contains("pale_oak") && !bare.isEmpty() ? bare : best;
+		for (List<String> list : List.of(kind, best, conifers, broadleaf, bare)) {
 			if (list.isEmpty()) {
 				continue;
 			}
@@ -207,6 +213,11 @@ public final class TreeModels {
 			if (file.contains("pine") || file.contains("spruce") || file.contains("fir") || file.contains("conifer")
 					|| file.contains("evergreen")) {
 				conifers.add(name);
+				int leaves = (int) (leafy(model) * model.triangleCount());
+				if (leaves > bestLeaves) {
+					bestLeaves = leaves;
+					bestConifer = name;
+				}
 			} else if (file.contains("dead") || file.contains("bare") || file.contains("dry")) {
 				bare.add(name);
 			} else if (leafy(model) < 0.15F) {
@@ -219,6 +230,6 @@ public final class TreeModels {
 		conifers.sort(null);
 		bare.sort(null);
 		broadleaf.sort(null);
-		LOGGER.info("Tree models: conifers {}, bare {}, broadleaf {}", conifers, bare, broadleaf);
+		LOGGER.info("Tree models: conifers {}, bare {}, broadleaf {}; every tree uses {}", conifers, bare, broadleaf, bestConifer);
 	}
 }
