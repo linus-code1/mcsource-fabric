@@ -8,7 +8,6 @@
 		"FirstPersonHandsMixin",
 		"GameRendererMixin",
 		"GuiGraphicsExtractorMixin",
-		"LevelExtractorMixin",
 		"LivingEntityRendererMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",

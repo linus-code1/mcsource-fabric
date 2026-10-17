@@ -82,8 +82,7 @@ world to try it in.
   used, so logs, stumps, cliff trees and alien plants (by name, or by pink
   flesh-like bark) are left out. One tree
   in four is left out since these trees are bigger, and trees further than
-  40 blocks are drawn as two crossed pictures of themselves. Trees stay
-  drawn when their foot is hidden behind a hill. Only the trunk is solid; hit a tree five times to
+  40 blocks are drawn as two crossed pictures of themselves. Only the trunk is solid; hit a tree five times to
   fell it: it topples away from you and breaks into logs along its length,
   plus saplings. Trees cast a soft shadow on the ground, and their textures
   are mipmapped so leaves don't sparkle in the distance. Set `hl2_trees=false` in

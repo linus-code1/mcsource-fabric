@@ -332,6 +332,34 @@ public final class SourceModel {
 		return id;
 	}
 
+	private boolean[] duplicates;
+
+	/**
+	 * Triangles lying exactly on another one, such as the back of a leaf card
+	 * Source draws from both sides. Minecraft draws both faces of every
+	 * triangle, so the pair would sit in the same place and flicker as they
+	 * fight over which is in front; only the first of each is drawn.
+	 */
+	private boolean[] duplicates() {
+		if (duplicates == null) {
+			int count = model.triangleCount();
+			boolean[] out = new boolean[count];
+			java.util.Set<String> seen = new java.util.HashSet<>();
+			long[] key = new long[3];
+			for (int i = 0; i < count; i++) {
+				for (int k = 0; k < 3; k++) {
+					int v = model.cornerVertex[i * 3 + k] * 3;
+					key[k] = Math.round(posed[v] * 16.0F) * 0x1F1F1F1FL ^ Math.round(posed[v + 1] * 16.0F) * 0x3B3B3BL
+							^ Math.round(posed[v + 2] * 16.0F);
+				}
+				java.util.Arrays.sort(key);
+				out[i] = !seen.add(model.triangleTexture[i] + ":" + key[0] + ":" + key[1] + ":" + key[2]);
+			}
+			duplicates = out;
+		}
+		return duplicates;
+	}
+
 	private float[] areas;
 	private float[] sortedAreas;
 
@@ -394,7 +422,7 @@ public final class SourceModel {
 		// as the tree gets further away; the trunk and big boughs stay.
 		float minArea = keep >= 1.0F || cutout(material) ? 0.0F : smallArea(keep);
 		for (int i = 0; i < count; i++) {
-			if (model.triangleTexture[i] != material || hidden != null && hidden[i]) {
+			if (model.triangleTexture[i] != material || hidden != null && hidden[i] || duplicates()[i]) {
 				continue;
 			}
 			if (minArea > 0.0F && areas()[i] < minArea) {

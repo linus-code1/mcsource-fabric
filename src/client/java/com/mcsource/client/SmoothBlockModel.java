@@ -100,7 +100,6 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			Predicate<Direction> cullTest, int ground, boolean thinSnow) {
 		int lightHere = LightCoordsUtil.getLightCoords(level, pos);
 		GroundSurface surface = new GroundSurface(level, pos, ground);
-		boolean snow = state.is(Blocks.SNOW);
 		MutableMesh captured = CAPTURED.get();
 		captured.clear();
 		QuadEmitter capture = captured.emitter();
@@ -165,11 +164,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						// two surfaces cross each other and flicker.
 						splitAlongFlatterDiagonal(emitter);
 					}
-					if (!snow) {
-						// Every blade lit as if facing up, whichever way its quad turns;
-						// otherwise the crossed quads of one tuft come out light and dark.
-						emitter.shadeDirectionOverride(Direction.UP);
-					}
+					// Lit as if facing up, like the ground under it. Without this the
+					// renderer shades each triangle by the way it happens to face:
+					// the crossed cards of a grass tuft come out light and dark, and
+					// a snow sheet bent over a slope turned into a patchwork of white
+					// and half-dark grey triangles.
+					emitter.shadeDirectionOverride(Direction.UP);
 					emitter.emit();
 				}
 			}

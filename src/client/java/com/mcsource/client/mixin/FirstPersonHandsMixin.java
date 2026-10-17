@@ -42,6 +42,8 @@ public abstract class FirstPersonHandsMixin {
 		"source:models/weapons/v_hands.mdl",
 		"source:models/weapons/v_crowbar.mdl#hand,glove,arm",
 		"source:models/weapons/v_physcannon.mdl#hand,glove,arm",
+		// Half-Life: Source's crowbar, for players who own that but not Half-Life 2.
+		"source:models/v_crowbar.mdl#hand,glove,arm",
 	};
 	private static final float UNITS = 1.0F / 40.0F;
 	/**
@@ -191,7 +193,7 @@ public abstract class FirstPersonHandsMixin {
 		});
 		// Where the palm is now, for an item held in it.
 		hands.skin(bones);
-		Vector3f palm = hands.centroid(arm == HumanoidArm.LEFT ? "l_hand" : "r_hand", "hand");
+		Vector3f palm = hands.centroid(arm == HumanoidArm.LEFT ? "l_hand" : "r_hand", arm == HumanoidArm.LEFT ? "l hand" : "r hand", "hand");
 		if (palm == null) {
 			palm = new Vector3f();
 		}
