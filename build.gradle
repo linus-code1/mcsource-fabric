@@ -2,7 +2,8 @@ plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 }
 
-version = project.mod_version
+// The commit a build was made from, so the game can show which build it runs.
+version = project.mod_version + '+' + (System.getenv('GITHUB_SHA') ?: 'local').take(7)
 group = project.maven_group
 
 base {

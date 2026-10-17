@@ -90,5 +90,7 @@ public abstract class TitleScreenMixin extends Screen {
 			target = "Lnet/minecraft/client/gui/components/LogoRenderer;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IF)V"))
 	private void mcsource$halfLifeTitle(LogoRenderer logo, GuiGraphicsExtractor graphics, int screenWidth, float alpha) {
 		graphics.text(font, TITLE_TEXT, mcsource$left(), Math.max(height / 2 - 64, 16), 0xFFFFFFFF, true);
+		// Which build is running, to tell builds apart when reporting problems.
+		graphics.text(font, Component.literal("MC:Source " + com.mcsource.client.McSourceClient.build()), 2, height - 10, 0xFF808080, false);
 	}
 }

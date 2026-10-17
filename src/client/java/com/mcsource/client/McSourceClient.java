@@ -18,6 +18,7 @@ import com.mcsource.tree.Trees;
 public class McSourceClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		org.slf4j.LoggerFactory.getLogger("mcsource").info("MC:Source build {}", build());
 		// Every block model is wrapped; whether a block is smoothed is decided per
 		// position at mesh time from the block tags, which arrive with the world.
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake()
@@ -38,5 +39,11 @@ public class McSourceClient implements ClientModInitializer {
 			return minecraft.level == null || !minecraft.level.getBlockState(outline.pos()).is(SmoothTerrain.SMOOTH)
 					|| outline.shape() == Shapes.block();
 		});
+	}
+
+	/** The mod's version with the commit it was built from, such as 0.1.0+09ecf5c. */
+	public static String build() {
+		return net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("mcsource")
+				.map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("?");
 	}
 }
