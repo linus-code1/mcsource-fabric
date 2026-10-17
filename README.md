@@ -8,7 +8,7 @@ world to try it in.
 
 ## What it does so far
 
-- **Smooth terrain.** Natural blocks (grass, dirt, stone, sand and the others
+- **Smooth terrain.** Natural blocks (grass, dirt, paths, farmland, stone, sand and the others
   in `data/mcsource/tags/block/smooth_terrain.json`) form one continuous
   surface: every grid corner where blocks meet moves up or down by up to half a
   block depending on how much terrain surrounds it. Every one-block step,
@@ -87,6 +87,20 @@ world to try it in.
   plus saplings. Trees cast a soft shadow on the ground, and their textures
   are mipmapped so leaves don't sparkle in the distance. Set `hl2_trees=false` in
   `config/mcsource.properties` to keep block trees.
+- **Half-Life 2 furniture.** With Half-Life 2 installed, chests become wooden
+  crates, crafting and fletching tables become tables, beds become Half-Life 2
+  beds across both their blocks, furnaces become stoves, barrels oil drums and
+  so on. They stay ordinary blocks (open a crate-chest as before); only the
+  look changes, and blocks beside them still show their faces. Campfires keep
+  their flames. The models picked are listed in
+  `hl2_block_pack/used_materials.txt`; choose your own in
+  `config/mcsource/props.txt` (restart to apply).
+- **Finer stairs.** Stairs are drawn as four shallow steps instead of
+  Minecraft's two big ones, corners included. Walking on them is unchanged.
+- **Sprite crops and water plants.** Wheat, carrots, potatoes and beetroots
+  are star-shaped clumps of Half-Life 2 grass sprites that grow taller as they
+  ripen (ripe wheat turns the colour of straw), and seagrass and kelp are the
+  same sprites in a murky underwater green.
 - **Half-Life 2 sun and moon.** The sun is a small white-hot disc in a soft
   glow, like Half-Life 2's env_sun, using its glow sprite. The moon is a
   cooler, dimmer version with Minecraft's phases. Set `scary_sun=true` in

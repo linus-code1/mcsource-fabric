@@ -5,12 +5,14 @@
 	"client": [
 		"AvatarRendererMixin",
 		"CameraMixin",
+		"ChestRendererMixin",
 		"FirstPersonHandsMixin",
 		"GameRendererMixin",
 		"GuiGraphicsExtractorMixin",
 		"LivingEntityRendererMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",
+		"PropCullMixin",
 		"TitleScreenMixin"
 	],
 	"injectors": {

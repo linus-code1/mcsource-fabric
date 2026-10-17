@@ -22,7 +22,11 @@ public class McSourceClient implements ClientModInitializer {
 		// Every block model is wrapped; whether a block is smoothed is decided per
 		// position at mesh time from the block tags, which arrive with the world.
 		ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake()
-				.register((model, modelContext) -> new SmoothBlockModel(model)));
+				.register((model, modelContext) -> {
+					// Models are being baked again: the props may have changed with the packs.
+					com.mcsource.client.prop.PropModels.reset();
+					return new SmoothBlockModel(model);
+				}));
 		SourceHud.register();
 		EntityRendererRegistry.register(Karts.KART, KartRenderer::new);
 		EntityRendererRegistry.register(Trees.TREE, TreeRenderer::new);

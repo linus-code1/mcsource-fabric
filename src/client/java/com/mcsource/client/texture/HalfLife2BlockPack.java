@@ -91,7 +91,9 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		Map<String, String[]> mapping = BlockTextures.parse(BlockTextures.DEFAULTS);
 		mapping.putAll(BlockTextures.parse(list));
 		boolean scary = GameInstalls.flag("scary_sun", false);
-		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode() + ":" + scary;
+		String props = com.mcsource.client.prop.PropModels.userList(root);
+		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode() + ":" + scary + ":"
+				+ com.mcsource.client.prop.PropModels.DEFAULTS.hashCode() + ":" + props.hashCode();
 		Path stampFile = pack.resolve("built_from.txt");
 		if (Files.isRegularFile(stampFile) && Files.readString(stampFile).equals(stamp)) {
 			return;
@@ -115,6 +117,11 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			LOGGER.info("No Half-Life 2 materials found for block textures; keeping Minecraft's");
 			delete(fresh);
 			return;
+		}
+		try {
+			report.append(com.mcsource.client.prop.PropModels.generate(GameInstalls.source(), props, fresh));
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not make the furniture props", e);
 		}
 		try {
 			String glow = SkyTextures.generate(GameInstalls.source(), fresh, scary);

@@ -157,8 +157,8 @@ public final class BlockTextures {
 			deepslate_tiles = tile/tilefloor0* stone/*
 			polished_deepslate = concrete/concretefloor0* stone/*
 			mud_bricks = brick/brickwall0* brick/*
-			hay_block_side = *hay* *straw* *thatch* nature/*grass*
-			hay_block_top = *hay* *straw* *thatch* nature/*grass*
+			hay_block_side = *hay* *straw* *thatch* nature/*dry*grass* nature/*grass*dry* nature/*grass*
+			hay_block_top = *hay* *straw* *thatch* nature/*dry*grass* nature/*grass*dry* nature/*grass*
 			white_terracotta = plaster/plasterwall0* plaster/*
 			white_wool = *fabric* *cloth* plaster/*
 			stone_bricks_wall = stone/stonewall0*

@@ -45,6 +45,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			Predicate<Direction> cullTest) {
 		if (level != BlockAndTintGetter.EMPTY) {
+			com.mcsource.client.prop.PropModels.Mesh prop = com.mcsource.client.prop.PropModels.mesh(state);
+			if (prop != null) {
+				emitProp(emitter, level, pos, state, random, cullTest, prop);
+				return;
+			}
+			if (state.getBlock() instanceof net.minecraft.world.level.block.StairBlock) {
+				emitStairs(emitter, level, pos, state, cullTest);
+				return;
+			}
 			if (state.is(SmoothTerrain.SMOOTH) && !buried(level, pos)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, pos, state);
 				float[] grid = wide == null ? null : grid(wide, level, pos);
@@ -77,6 +86,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				return false;
 			}
 			if (terrain) {
+				liftLowTop(quad, state);
 				spreadTexture(quad, pos);
 			}
 			applySun(quad, level, pos);
@@ -86,6 +96,205 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 		} finally {
 			emitter.popTransform();
+		}
+	}
+
+	/** Steps a stairs block is drawn with, instead of Minecraft's two. */
+	private static final int STEPS = 4;
+
+	/**
+	 * Stairs drawn as a run of four shallow steps, like the staircases in
+	 * Half-Life 2, instead of Minecraft's two big ones. Corner stairs join
+	 * the same way Minecraft's do. Only the look changes: walking on them
+	 * is as before.
+	 */
+	private void emitStairs(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, Predicate<Direction> cullTest) {
+		Direction facing = state.getValue(net.minecraft.world.level.block.StairBlock.FACING);
+		var shape = state.getValue(net.minecraft.world.level.block.StairBlock.SHAPE);
+		boolean top = state.getValue(net.minecraft.world.level.block.StairBlock.HALF) == net.minecraft.world.level.block.state.properties.Half.TOP;
+		int[] heights = new int[STEPS * STEPS];
+		for (int i = 0; i < STEPS; i++) {
+			for (int j = 0; j < STEPS; j++) {
+				int main = rise(facing, i, j);
+				int h = switch (shape) {
+					case STRAIGHT -> main;
+					case OUTER_LEFT -> Math.min(main, rise(facing.getCounterClockWise(), i, j));
+					case OUTER_RIGHT -> Math.min(main, rise(facing.getClockWise(), i, j));
+					case INNER_LEFT -> Math.max(main, rise(facing.getCounterClockWise(), i, j));
+					case INNER_RIGHT -> Math.max(main, rise(facing.getClockWise(), i, j));
+				};
+				heights[i + STEPS * j] = h;
+			}
+		}
+		net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = wrapped.particleMaterial().sprite();
+		float cell = 1.0F / STEPS;
+		// Treads, and the bottom.
+		for (int i = 0; i < STEPS; i++) {
+			for (int j = 0; j < STEPS; j++) {
+				float y = heights[i + STEPS * j] * cell;
+				stairFace(emitter, level, pos, cullTest, sprite, top, Direction.UP, y >= 1.0F ? Direction.UP : null,
+						i * cell, y, j * cell, (i + 1) * cell, y, (j + 1) * cell);
+			}
+		}
+		stairFace(emitter, level, pos, cullTest, sprite, top, Direction.DOWN, Direction.DOWN, 0, 0, 0, 1, 0, 1);
+		// Risers and sides: wherever a column stands above the one beside it, or at the block's edge.
+		for (int i = 0; i < STEPS; i++) {
+			for (int j = 0; j < STEPS; j++) {
+				int h = heights[i + STEPS * j];
+				for (Direction side : Direction.Plane.HORIZONTAL) {
+					int ni = i + side.getStepX();
+					int nj = j + side.getStepZ();
+					boolean edge = ni < 0 || nj < 0 || ni >= STEPS || nj >= STEPS;
+					int other = edge ? 0 : heights[ni + STEPS * nj];
+					if (other >= h) {
+						continue;
+					}
+					float x0 = i * cell;
+					float z0 = j * cell;
+					float x1 = x0 + cell;
+					float z1 = z0 + cell;
+					switch (side) {
+						case EAST -> x0 = x1;
+						case WEST -> x1 = x0;
+						case SOUTH -> z0 = z1;
+						default -> z1 = z0;
+					}
+					stairFace(emitter, level, pos, cullTest, sprite, top, side, edge ? side : null, x0, other * cell, z0, x1, h * cell, z1);
+				}
+			}
+		}
+	}
+
+	/** Height (in steps) of the stairs rising towards {@code toward}, at column (i, j). */
+	private static int rise(Direction toward, int i, int j) {
+		int along = switch (toward) {
+			case EAST -> i;
+			case WEST -> STEPS - 1 - i;
+			case SOUTH -> j;
+			default -> STEPS - 1 - j;
+		};
+		return along + 1;
+	}
+
+	/**
+	 * One flat face of the stairs between two corners, facing {@code face}.
+	 * Upside-down stairs are the same faces mirrored top to bottom.
+	 */
+	private static void stairFace(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, Predicate<Direction> cullTest,
+			net.minecraft.client.renderer.texture.TextureAtlasSprite sprite, boolean flip, Direction face, Direction cull, float x0,
+			float y0, float z0, float x1, float y1, float z1) {
+		Direction shown = flip && face.getAxis() == Direction.Axis.Y ? face.getOpposite() : face;
+		Direction culled = cull == null ? null : flip && cull.getAxis() == Direction.Axis.Y ? cull.getOpposite() : cull;
+		if (culled != null && !cullTest.test(culled)) {
+			return;
+		}
+		float[][] corners = switch (face) {
+			case UP -> new float[][] {{x0, y0, z0}, {x0, y0, z1}, {x1, y0, z1}, {x1, y0, z0}};
+			case DOWN -> new float[][] {{x0, y0, z1}, {x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}};
+			case NORTH -> new float[][] {{x1, y1, z0}, {x1, y0, z0}, {x0, y0, z0}, {x0, y1, z0}};
+			case SOUTH -> new float[][] {{x0, y1, z0}, {x0, y0, z0}, {x1, y0, z0}, {x1, y1, z0}};
+			case WEST -> new float[][] {{x0, y1, z0}, {x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}};
+			case EAST -> new float[][] {{x0, y1, z1}, {x0, y0, z1}, {x0, y0, z0}, {x0, y1, z0}};
+		};
+		for (int c = 0; c < 4; c++) {
+			// Upside down: mirrored in y, and wound the other way so the face still points out.
+			float[] p = corners[flip ? 3 - c : c];
+			float x = p[0];
+			float y = flip ? 1.0F - p[1] : p[1];
+			float z = p[2];
+			emitter.pos(c, x, y, z);
+			float u;
+			float v;
+			if (face.getAxis() == Direction.Axis.Y) {
+				u = x;
+				v = z;
+			} else {
+				u = face.getAxis() == Direction.Axis.X ? z : x;
+				v = 1.0F - y;
+			}
+			emitter.uv(c, sprite.getU(u), sprite.getV(v));
+			emitter.color(c, -1);
+		}
+		emitter.nominalFace(shown);
+		emitter.cullFace(culled);
+		emitter.chunkLayer(ChunkSectionLayer.SOLID);
+		emitter.ambientOcclusion(TriState.DEFAULT);
+		emitter.tintIndex(-1);
+		applySun(emitter, level, pos);
+		emitter.emit();
+	}
+
+	/**
+	 * A furniture block drawn as its Half-Life 2 prop, turned the way the
+	 * block faces. A bed's prop covers both of its blocks and is drawn by the
+	 * head. The prop is lit by the brightest cell around it, since a solid
+	 * block (a crafting table) has no light of its own inside it.
+	 */
+	private void emitProp(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
+			Predicate<Direction> cullTest, com.mcsource.client.prop.PropModels.Mesh mesh) {
+		if (state.hasProperty(net.minecraft.world.level.block.BedBlock.PART)
+				&& state.getValue(net.minecraft.world.level.block.BedBlock.PART) == net.minecraft.world.level.block.state.properties.BedPart.FOOT) {
+			return;
+		}
+		if (mesh.keepSlanted()) {
+			// The block's own slanted cards (a campfire's flames) stay on the prop.
+			emitter.pushTransform(quad -> {
+				Vector3fc normal = quad.faceNormal();
+				return Math.abs(normal.x()) > 0.2F && Math.abs(normal.z()) > 0.2F;
+			});
+			try {
+				super.emitQuads(emitter, level, pos, state, random, cullTest);
+			} finally {
+				emitter.popTransform();
+			}
+		}
+		float angle = 0.0F;
+		var facing = net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING;
+		if (mesh.turns() && state.hasProperty(facing)) {
+			angle = (float) Math.toRadians(state.getValue(facing).toYRot());
+		}
+		float cos = Mth.cos(angle);
+		float sin = Mth.sin(angle);
+		var atlas = net.minecraft.client.Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS);
+		net.minecraft.client.renderer.texture.TextureAtlasSprite[] sprites =
+				new net.minecraft.client.renderer.texture.TextureAtlasSprite[mesh.sprites().length];
+		for (int i = 0; i < sprites.length; i++) {
+			sprites[i] = atlas.getSprite(net.minecraft.resources.Identifier.parse(mesh.sprites()[i]));
+		}
+		int light = LightCoordsUtil.getLightCoords(level, pos);
+		for (Direction direction : Direction.values()) {
+			light = LightCoordsUtil.max(light, LightCoordsUtil.getLightCoords(level, pos.relative(direction)));
+		}
+		int sky = LightCoordsUtil.sky(light);
+		int block = LightCoordsUtil.block(light);
+		float[] positions = mesh.positions();
+		float[] uvs = mesh.uvs();
+		for (int t = 0; t < mesh.triangles(); t++) {
+			int material = mesh.texture()[t];
+			net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = sprites[material];
+			for (int c = 0; c < 4; c++) {
+				// Source models wind their triangles the other way round from Minecraft.
+				int k = c == 3 ? 0 : 2 - c;
+				float x = positions[t * 9 + k * 3] - 0.5F;
+				float y = positions[t * 9 + k * 3 + 1];
+				float z = positions[t * 9 + k * 3 + 2] - 0.5F;
+				emitter.pos(c, 0.5F + x * cos - z * sin, y, 0.5F + x * sin + z * cos);
+				emitter.uv(c, sprite.getU(uvs[t * 6 + k * 2]), sprite.getV(uvs[t * 6 + k * 2 + 1]));
+				emitter.lightmap(c, light);
+			}
+			Vector3fc normal = emitter.faceNormal();
+			for (int c = 0; c < 4; c++) {
+				int colour = sky == 0 ? -1 : SunLight.multiplier(level, pos.getX() + emitter.x(c), pos.getY() + emitter.y(c),
+						pos.getZ() + emitter.z(c), normal.x(), normal.y(), normal.z(), sky, block);
+				emitter.color(c, colour);
+			}
+			emitter.cullFace(null);
+			emitter.nominalFace(null);
+			emitter.chunkLayer(mesh.masked()[material] ? ChunkSectionLayer.CUTOUT : ChunkSectionLayer.SOLID);
+			emitter.ambientOcclusion(TriState.FALSE);
+			emitter.shadeMode(ShadeMode.ENHANCED);
+			emitter.tintIndex(-1);
+			emitter.emit();
 		}
 	}
 
@@ -284,6 +493,22 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		return Math.floorMod(forward ? coordinate : -coordinate - 1, SPREAD);
 	}
 
+	/**
+	 * Paths and farmland are a sixteenth lower than the ground; their tops are
+	 * raised level with it so they run into the ground around them without a
+	 * step at their edge.
+	 */
+	private static void liftLowTop(MutableQuadView quad, BlockState state) {
+		if (!state.is(Blocks.DIRT_PATH) && !state.is(Blocks.FARMLAND)) {
+			return;
+		}
+		for (int i = 0; i < 4; i++) {
+			if (quad.y(i) > 0.9F) {
+				quad.pos(i, quad.x(i), 1.0F, quad.z(i));
+			}
+		}
+	}
+
 	/** Sun and shadow for an ordinary block face, lit by the cell it faces. */
 	private static void applySun(MutableQuadView quad, BlockAndTintGetter level, BlockPos pos) {
 		Vector3fc normal = quad.faceNormal();
@@ -464,6 +689,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				return false;
 			}
 			capture.copyFrom(quad);
+			liftLowTop(capture, state);
 			spreadTexture(capture, pos);
 			capture.emit();
 			return false;
