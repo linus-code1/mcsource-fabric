@@ -299,6 +299,9 @@ public final class BlockTextures {
 				errors.put("plants", e.toString());
 			}
 		}
+		for (String[] ore : ORES) {
+			ore(made, ore[0], ore[1], Integer.parseInt(ore[2], 16), folder, used);
+		}
 		mossy(made, "cobblestone", "mossy_cobblestone", folder, used);
 		mossy(made, "stone_bricks", "mossy_stone_bricks", folder, used);
 		if (made.keySet().stream().anyMatch(name -> name.endsWith("_leaves"))) {
@@ -892,8 +895,8 @@ public final class BlockTextures {
 			}
 			// 0 at the tips, 1 at the root.
 			float down = bottom == top ? 1.0F : (i / SIZE - top) / (float) (bottom - top);
-			float toward = 0.5F + 0.4F * down * down;
-			float dark = 1.0F - 0.3F * down * down;
+			float toward = 0.7F + 0.3F * down;
+			float dark = 0.88F - 0.25F * down * down;
 			int out = p & 0xFF000000;
 			for (int c = 0; c < 3; c++) {
 				int shiftBits = 16 - 8 * c;
@@ -929,11 +932,19 @@ public final class BlockTextures {
 					}
 				}
 			}
-			// Three blocks in four are left bare, so grass grows in scattered clumps.
-			variants.append(",\n\t\t{\"model\": \"mcsource:block/no_plant\", \"weight\": ").append(TUFTS * 2 * 4 * 3).append("}");
+			// Five blocks in six are left bare, so grass grows in scattered clumps.
+			variants.append(",\n\t\t{\"model\": \"mcsource:block/no_plant\", \"weight\": ").append(TUFTS * 2 * 4 * 5).append("}");
 			Files.writeString(states.resolve(plant + ".json"), "{\"variants\": {\"\": [\n\t\t" + variants + "\n\t]}}");
 		}
+		// Flat litter lying on the ground (fallen leaves, petals, wildflowers)
+		// has nothing like it in Half-Life 2 and shows up as bright squares on
+		// the smoothed ground, so it is not drawn.
+		for (String litter : GROUND_LITTER) {
+			Files.writeString(states.resolve(litter + ".json"), "{\"variants\": {\"\": {\"model\": \"mcsource:block/no_plant\"}}}");
+		}
 	}
+
+	private static final String[] GROUND_LITTER = {"leaf_litter", "pink_petals", "wildflowers"};
 
 	/** Three two-sided cards in a star, {@code grow} sixteenths bigger than the smallest tuft. */
 	private static String tuftModel(String texture, int grow) {
@@ -955,6 +966,75 @@ public final class BlockTextures {
 		return "{\"from\": [" + x1 + ", " + y1 + ", " + z1 + "], \"to\": [" + x2 + ", " + y2 + ", " + z2 + "], \"shade\": false, "
 				+ "\"rotation\": {\"origin\": [8, 8, 8], \"axis\": \"y\", \"angle\": " + angle + ", \"rescale\": false}, "
 				+ "\"faces\": {\"" + a + "\": " + face + ", \"" + b + "\": " + face + "}}";
+	}
+
+	/** Ore textures to make: name, the rock it sits in, and the colour of its mineral. */
+	private static final String[][] ORES = {
+		{"coal_ore", "stone", "262422"}, {"deepslate_coal_ore", "deepslate", "1c1a19"},
+		{"iron_ore", "stone", "b08a6e"}, {"deepslate_iron_ore", "deepslate", "a07c62"},
+		{"copper_ore", "stone", "9c6040"}, {"deepslate_copper_ore", "deepslate", "8c5638"},
+		{"gold_ore", "stone", "c8a540"}, {"deepslate_gold_ore", "deepslate", "b89438"},
+		{"redstone_ore", "stone", "8a2a20"}, {"deepslate_redstone_ore", "deepslate", "7a241c"},
+		{"lapis_ore", "stone", "34508a"}, {"deepslate_lapis_ore", "deepslate", "2e467a"},
+		{"diamond_ore", "stone", "6ab8b0"}, {"deepslate_diamond_ore", "deepslate", "5aa49c"},
+		{"emerald_ore", "stone", "3c8a50"}, {"deepslate_emerald_ore", "deepslate", "347a46"},
+	};
+
+	/**
+	 * Makes an ore texture from the rock it sits in: a few soft veins of the
+	 * mineral's colour worked into the rock's own light and shade, instead of
+	 * Minecraft's bright pixel speckles, so ore reads as part of a rock face.
+	 */
+	private static void ore(Map<String, int[]> made, String name, String host, int colour, Path folder, Map<String, String> used)
+			throws IOException {
+		int[] rock = made.get(host);
+		if (rock == null) {
+			return;
+		}
+		float mean = Math.max(0.05F, brightness(average(rock)));
+		java.util.Random random = new java.util.Random(name.hashCode());
+		int veins = 5;
+		float[] cx = new float[veins];
+		float[] cy = new float[veins];
+		float[] rx = new float[veins];
+		float[] ry = new float[veins];
+		float[] turn = new float[veins];
+		for (int k = 0; k < veins; k++) {
+			cx[k] = random.nextFloat() * SIZE;
+			cy[k] = random.nextFloat() * SIZE;
+			rx[k] = SIZE * (0.05F + 0.05F * random.nextFloat());
+			ry[k] = rx[k] * (0.3F + 0.3F * random.nextFloat());
+			turn[k] = random.nextFloat() * (float) Math.PI;
+		}
+		int[] out = new int[rock.length];
+		for (int y = 0; y < SIZE; y++) {
+			for (int x = 0; x < SIZE; x++) {
+				int p = rock[y * SIZE + x];
+				float w = 0.0F;
+				for (int k = 0; k < veins; k++) {
+					// Wrapped, so the texture still tiles.
+					float dx = x - cx[k];
+					float dy = y - cy[k];
+					dx -= SIZE * Math.round(dx / SIZE);
+					dy -= SIZE * Math.round(dy / SIZE);
+					float a = (float) (dx * Math.cos(turn[k]) + dy * Math.sin(turn[k])) / rx[k];
+					float b = (float) (-dx * Math.sin(turn[k]) + dy * Math.cos(turn[k])) / ry[k];
+					float d = a * a + b * b;
+					w = Math.max(w, Math.max(0.0F, 1.0F - d));
+				}
+				float light = brightness(p) / mean;
+				// Broken up by the rock's own grain.
+				w = Math.min(0.8F, w * 1.6F * Math.min(1.0F, light));
+				int o = 0xFF000000;
+				for (int shift = 0; shift <= 16; shift += 8) {
+					float c = (p >> shift & 255) * (1.0F - w) + (colour >> shift & 255) * Math.min(1.4F, light) * w;
+					o |= Math.max(0, Math.min(255, Math.round(c))) << shift;
+				}
+				out[y * SIZE + x] = o;
+			}
+		}
+		writePng(folder.resolve(name + ".png"), out, SIZE);
+		used.put(name, used.get(host) + " (with veins)");
 	}
 
 	/**

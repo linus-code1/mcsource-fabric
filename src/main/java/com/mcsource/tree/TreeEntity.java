@@ -10,6 +10,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -21,13 +22,20 @@ import net.minecraft.world.level.storage.ValueOutput;
 /**
  * A whole tree, drawn on the client with a Half-Life 2 tree model instead of
  * being built from log and leaves blocks. Only its trunk is solid. Chopping
- * it (hitting it a few times) fells it into logs and a sapling.
+ * it (hitting it a few times) fells it: it topples over and breaks into
+ * logs and a sapling.
  */
 public class TreeEntity extends Entity {
 	private static final EntityDataAccessor<String> WOOD = SynchedEntityData.defineId(TreeEntity.class, EntityDataSerializers.STRING);
 	/** Hits it takes to fell a tree. */
 	private static final int CHOPS = 5;
 	private static final double RENDER_DISTANCE = 160.0;
+	/** Ticks a felled tree takes to fall to the ground. */
+	public static final int FALL_TICKS = 30;
+	/** Ticks since the tree was felled, or -1 while it stands. */
+	private static final EntityDataAccessor<Integer> FALLING = SynchedEntityData.defineId(TreeEntity.class, EntityDataSerializers.INT);
+	/** The direction it falls in, in degrees like an entity's yaw. */
+	private static final EntityDataAccessor<Float> FALL_DIRECTION = SynchedEntityData.defineId(TreeEntity.class, EntityDataSerializers.FLOAT);
 
 	private int chops;
 
@@ -48,21 +56,60 @@ public class TreeEntity extends Entity {
 	@Override
 	protected void defineSynchedData(SynchedEntityData.Builder builder) {
 		builder.define(WOOD, "minecraft:oak_log");
+		builder.define(FALLING, -1);
+		builder.define(FALL_DIRECTION, 0.0F);
+	}
+
+	/** Ticks since it was felled, or -1 while it stands. */
+	public int falling() {
+		return entityData.get(FALLING);
+	}
+
+	/** Which way it falls, in degrees like an entity's yaw. */
+	public float fallDirection() {
+		return entityData.get(FALL_DIRECTION);
 	}
 
 	@Override
 	public void tick() {
-		// Trees stand still; nothing to update.
+		// A standing tree has nothing to update; a felled one falls over, and
+		// when it hits the ground breaks into logs.
+		int falling = falling();
+		if (falling < 0 || !(level() instanceof ServerLevel level)) {
+			return;
+		}
+		entityData.set(FALLING, falling + 1);
+		if (falling + 1 >= FALL_TICKS) {
+			playSound(SoundEvents.WOOD_BREAK, 2.0F, 0.5F);
+			// Logs along the length of the fallen trunk.
+			Item log = item(wood());
+			if (log != Items.AIR) {
+				int count = 4 + random.nextInt(4);
+				double angle = Math.toRadians(fallDirection());
+				for (int i = 0; i < count; i++) {
+					double along = 1.0 + i * 1.2;
+					ItemEntity item = new ItemEntity(level, getX() - Math.sin(angle) * along, getY() + 0.5, getZ() + Math.cos(angle) * along,
+							new ItemStack(log), 0.0, 0.1, 0.0);
+					item.setDefaultPickUpDelay();
+					level.addFreshEntity(item);
+				}
+			}
+			Item sapling = item(sapling(wood()));
+			if (sapling != Items.AIR) {
+				spawnAtLocation(level, new ItemStack(sapling, 1 + random.nextInt(2)));
+			}
+			discard();
+		}
 	}
 
 	@Override
 	public boolean canBeCollidedWith(Entity other) {
-		return true;
+		return falling() < 0;
 	}
 
 	@Override
 	public boolean isPickable() {
-		return !isRemoved();
+		return !isRemoved() && falling() < 0;
 	}
 
 	@Override
@@ -78,7 +125,7 @@ public class TreeEntity extends Entity {
 
 	@Override
 	public boolean hurtServer(ServerLevel level, DamageSource source, float amount) {
-		if (!(source.getEntity() instanceof Player player)) {
+		if (!(source.getEntity() instanceof Player player) || falling() >= 0) {
 			return false;
 		}
 		chops++;
@@ -86,18 +133,12 @@ public class TreeEntity extends Entity {
 			playSound(SoundEvents.WOOD_HIT, 1.0F, 0.8F + random.nextFloat() * 0.3F);
 			return true;
 		}
+		// Felled: it topples away from whoever chopped it, then breaks up.
 		playSound(SoundEvents.WOOD_BREAK, 1.5F, 0.7F);
-		if (!player.getAbilities().instabuild) {
-			Item log = item(wood());
-			if (log != Items.AIR) {
-				spawnAtLocation(level, new ItemStack(log, 4 + random.nextInt(4)));
-			}
-			Item sapling = item(sapling(wood()));
-			if (sapling != Items.AIR) {
-				spawnAtLocation(level, new ItemStack(sapling, 1 + random.nextInt(2)));
-			}
-		}
-		discard();
+		double dx = getX() - player.getX();
+		double dz = getZ() - player.getZ();
+		entityData.set(FALL_DIRECTION, (float) Math.toDegrees(Math.atan2(-dx, dz)));
+		entityData.set(FALLING, 0);
 		return true;
 	}
 

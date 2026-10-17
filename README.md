@@ -27,7 +27,8 @@ world to try it in.
   outline and ray picking on both the client and the server, so you walk up the
   slope you see. Collision is built from 8×8 columns that follow the drawn
   surface to within an eighth of a block; the steps between columns are small
-  enough that you walk up slopes without jumping.
+  enough that you walk up slopes without jumping, and the view glides over
+  them as Source's does on stairs instead of jumping with each one.
 - **Plants and snow follow the ground.** Grass, flowers, saplings, snow layers
   and similar blocks bend to the surface of the ground under them. A single
   snow layer is drawn as a thin sheet lying on the ground without the little
@@ -82,7 +83,9 @@ world to try it in.
   flesh-like bark) are left out. Forests
   are thinned out since these trees are bigger, and further trees draw fewer,
   bigger leaf cards and drop their thinnest branches so they cost less. Only the trunk is solid; hit a tree five times to
-  fell it into logs and saplings. Set `hl2_trees=false` in
+  fell it: it topples away from you and breaks into logs along its length,
+  plus saplings. Trees cast a soft shadow on the ground, and their textures
+  are mipmapped so leaves don't sparkle in the distance. Set `hl2_trees=false` in
   `config/mcsource.properties` to keep block trees.
 - **Half-Life 2 sun and moon.** The sun is a small white-hot disc in a soft
   glow, like Half-Life 2's env_sun, using its glow sprite. The moon is a
@@ -109,10 +112,12 @@ world to try it in.
 - **Half-Life 2 style sky and haze.** Minecraft's blocky clouds are replaced
   by a soft painted cloud layer in the sky, and distant terrain fades into the
   sky colour with distance haze.
-- **Half-Life 2 hands.** If you own Half-Life 2, your empty first-person hand
+- **Half-Life 2 hands.** If you own Half-Life 2, your first-person hand
   is the HEV suit hand from Half-Life 2's view models, read from your install
   (see *Half-Life models* below), idling and swinging with its own
-  animations. Its size and place on screen can be tuned in
+  animations. Held items sit in its palm and move with those animations
+  instead of Minecraft's jab; items being eaten, drawn or charged, and
+  maps, keep Minecraft's. Its size and place on screen can be tuned in
   `config/mcsource.properties`: `viewmodel_fov` (default 54, smaller makes it
   bigger) and `viewmodel_offset_x`, `viewmodel_offset_y` and
   `viewmodel_offset_z` in Source units (right, forward and up). Without it, the hand is the mod's own rigged suit hand: an
@@ -252,11 +257,11 @@ client with the mod loaded.
 - Lamp light still comes from Minecraft's light levels. Blocks keep
   Minecraft's fixed face shading on top of the sun.
 - Mobs and items still use Minecraft's sharp textures; only blocks get the
-  Half-Life look so far. Blocks with no Half-Life 2 match (ores, plants,
-  glass, water and so on) keep Minecraft's textures, and one block shows a
-  whole Half-Life 2 texture, so patterns look smaller than in Half-Life 2. Menus are still Minecraft's.
-- Half-Life 2's hands show only with an empty hand; held items still use
-  Minecraft's arm. Mobs drawn with Half-Life 2 models don't show armour or
+  Half-Life look so far. Blocks with no Half-Life 2 match (glass and
+  so on) keep Minecraft's textures. Ores are made from the rock texture
+  with soft veins of colour, and leaf litter, petals and wildflowers on the
+  ground are not drawn. Menus are still Minecraft's.
+- Mobs drawn with Half-Life 2 models don't show armour or
   held items, and their heads don't turn to look at you.
 - The rest of the Source look (materials, bloom and full HDR, weapon view
   models, menus) comes in later steps of the plan. Valve's SDK shader code is never copied in;

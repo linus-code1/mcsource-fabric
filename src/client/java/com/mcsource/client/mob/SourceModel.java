@@ -205,11 +205,7 @@ public final class SourceModel {
 				}
 				Identifier id = Identifier.fromNamespaceAndPath("mcsource", "model/" + textureCount++);
 				String name = source + " " + t.name();
-				Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(() -> "MC:Source model " + name, image) {
-					{
-						sampler = RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR);
-					}
-				});
+				Minecraft.getInstance().getTextureManager().register(id, new MippedTexture(() -> "MC:Source model " + name, image));
 				materialTextures[i] = id;
 			}
 		}
@@ -332,7 +328,7 @@ public final class SourceModel {
 		}
 		Identifier id = Identifier.fromNamespaceAndPath("mcsource", "model/" + textureCount++);
 		String label = source + " " + name;
-		Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(() -> "MC:Source impostor " + label, image));
+		Minecraft.getInstance().getTextureManager().register(id, new MippedTexture(() -> "MC:Source impostor " + label, image));
 		return id;
 	}
 
@@ -436,6 +432,33 @@ public final class SourceModel {
 						.setNormal(pose, leaves ? 0.0F : posedNormals[n + 1], leaves ? 1.0F : posedNormals[n + 2], leaves ? 0.0F : posedNormals[n]);
 			}
 		}
+	}
+
+	/**
+	 * Middle of the vertices of the last skinned pose that follow mostly a
+	 * bone whose name (lower case) contains the first of the words that any
+	 * bone has, in model units; null when no bone matches.
+	 */
+	public Vector3f centroid(String... words) {
+		for (String word : words) {
+			float x = 0;
+			float y = 0;
+			float z = 0;
+			int n = 0;
+			for (int i = 0; i < posed.length / 3; i++) {
+				int bone = model.positionBones[i * 3];
+				if (bone >= 0 && bone < model.boneCount() && model.boneNames[bone].toLowerCase(java.util.Locale.ROOT).contains(word)) {
+					x += posed[i * 3];
+					y += posed[i * 3 + 1];
+					z += posed[i * 3 + 2];
+					n++;
+				}
+			}
+			if (n > 0) {
+				return new Vector3f(x / n, y / n, z / n);
+			}
+		}
+		return null;
 	}
 
 	/** Triangles left out when drawing, or null for none. */

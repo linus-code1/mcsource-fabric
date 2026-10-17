@@ -1,6 +1,7 @@
 package com.mcsource.client.mixin;
 
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -18,6 +19,10 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.InteractionHand;
 
 import com.mcsource.client.mob.GameInstalls;
 import com.mcsource.client.mob.SourceModel;
@@ -59,10 +64,48 @@ public abstract class FirstPersonHandsMixin {
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
 			float attackValue, HumanoidArm arm, PlayerRenderState playerState, CallbackInfo ci) {
-		SourceModel hands = SourceModel.first(HANDS);
-		if (hands == null) {
+		if (mcsource$drawHands(poseStack, collector, light, attackValue, arm) != null) {
+			ci.cancel();
+		}
+	}
+
+	/**
+	 * A held item is held in Half-Life 2's hand: the hand is drawn with its
+	 * own animations and the item rides in its palm, instead of Minecraft's
+	 * floating item with its jab and dip. Items being used (eaten, drawn,
+	 * charged) and maps keep Minecraft's own animations.
+	 */
+	@Inject(method = "submitArmWithItem", at = @At("HEAD"), cancellable = true)
+	private void mcsource$itemInHalfLife2Hand(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks,
+			float xRot, InteractionHand hand, float attack, ItemStack itemStack, float inverseArmHeight, PoseStack poseStack,
+			SubmitNodeCollector collector, int lightCoords, CallbackInfo ci) {
+		if (hand != InteractionHand.MAIN_HAND || itemStack.isEmpty() || itemStack.has(DataComponents.MAP_ID) || state.isScoping
+				|| state.useItemRemainingTicks > 0 || playerState.avatarRenderState == null) {
 			return;
 		}
+		HumanoidArm arm = playerState.avatarRenderState.mainArm;
+		Vector3f palm = mcsource$drawHands(poseStack, collector, lightCoords, attack, arm);
+		if (palm == null) {
+			return;
+		}
+		poseStack.pushPose();
+		poseStack.translate(palm.x, palm.y, palm.z);
+		state.mainHandRenderState.submit(poseStack, collector, lightCoords, OverlayTexture.NO_OVERLAY, 0);
+		poseStack.popPose();
+		ci.cancel();
+	}
+
+	/**
+	 * Draws the hands; returns where the palm is, in the pose stack's space as
+	 * it was when called, or null when there are no Half-Life 2 hands.
+	 */
+	private static Vector3f mcsource$drawHands(PoseStack poseStack, SubmitNodeCollector collector, int light, float attackValue,
+			HumanoidArm arm) {
+		SourceModel hands = SourceModel.first(HANDS);
+		if (hands == null) {
+			return null;
+		}
+		Matrix4f base = new Matrix4f(poseStack.last().pose());
 		if (hands != trimmed) {
 			// The upper arm reaches past the edge of the screen in Source; with
 			// the hands moved into view its open end would show.
@@ -81,8 +124,7 @@ public abstract class FirstPersonHandsMixin {
 		// the view model's own animations at their own speed. The draw plays
 		// only after changing slot, and a swing plays through once when an
 		// attack starts.
-		int slot = playerState == null ? 0 : Minecraft.getInstance().player == null ? 0
-				: Minecraft.getInstance().player.getInventory().getSelectedSlot();
+		int slot = Minecraft.getInstance().player == null ? 0 : Minecraft.getInstance().player.getInventory().getSelectedSlot();
 		if (slot != mcsource$slot) {
 			mcsource$slot = slot;
 			mcsource$drawStart = now;
@@ -130,7 +172,16 @@ public abstract class FirstPersonHandsMixin {
 			hands.skin(bones);
 			hands.emit(matrices, consumer, axes, UNITS, light, OverlayTexture.NO_OVERLAY);
 		});
+		// Where the palm is now, for an item held in it.
+		hands.skin(bones);
+		Vector3f palm = hands.centroid(arm == HumanoidArm.LEFT ? "l_hand" : "r_hand", "hand");
+		if (palm == null) {
+			palm = new Vector3f();
+		}
+		// Half-Life's axes to the model's, as the hands are drawn.
+		Vector3f point = new Vector3f(palm.y * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F), palm.z, palm.x).mul(UNITS);
+		poseStack.last().pose().transformPosition(point);
 		poseStack.popPose();
-		ci.cancel();
+		return base.invert().transformPosition(point);
 	}
 }

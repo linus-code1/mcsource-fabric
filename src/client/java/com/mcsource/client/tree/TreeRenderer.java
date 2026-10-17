@@ -30,10 +30,21 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		String wood = "";
 		long seed;
 		float yaw;
+		/** How far it has fallen over, 0 standing to 1 on the ground. */
+		float fall;
+		float fallDirection;
 	}
 
 	public TreeRenderer(EntityRendererProvider.Context context) {
 		super(context);
+		// A soft patch of shade on the ground under the crown.
+		shadowRadius = 2.5F;
+		shadowStrength = 0.55F;
+	}
+
+	@Override
+	protected float getShadowRadius(State state) {
+		return state.fall > 0.0F ? 0.0F : super.getShadowRadius(state);
 	}
 
 	@Override
@@ -47,11 +58,24 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		state.wood = tree.wood();
 		state.seed = tree.blockPosition().asLong() * 0x9E3779B97F4A7C15L;
 		state.yaw = tree.getYRot();
+		int falling = tree.falling();
+		if (falling < 0) {
+			state.fall = 0.0F;
+		} else {
+			float t = Math.min(1.0F, (falling + partialTicks) / TreeEntity.FALL_TICKS);
+			// Slow to start, then faster as it goes, like a falling tree.
+			state.fall = t * t;
+		}
+		state.fallDirection = tree.fallDirection();
 	}
 
 	@Override
 	protected AABB getBoundingBoxForCulling(TreeEntity tree, float partialTicks) {
 		// The crown reaches far past the trunk the entity's box covers.
+		if (tree.falling() >= 0) {
+			// Falling over, it reaches out as far as it is tall.
+			return tree.getBoundingBox().inflate(MAX_HEIGHT, 0.0, MAX_HEIGHT).expandTowards(0.0, MAX_HEIGHT, 0.0);
+		}
 		return tree.getBoundingBox().inflate(8.0, 0.0, 8.0).expandTowards(0.0, MAX_HEIGHT, 0.0);
 	}
 
@@ -70,10 +94,16 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		poseStack.pushPose();
 		// Sink the foot a little so it meets ground that smoothing lowered.
 		poseStack.translate(0.0F, -0.4F, 0.0F);
+		if (state.fall > 0.0F) {
+			// Topple about the foot of the trunk, away from whoever felled it.
+			poseStack.rotateDegrees(Axis.YP, -state.fallDirection);
+			poseStack.rotateDegrees(Axis.XP, 88.0F * state.fall);
+			poseStack.rotateDegrees(Axis.YP, state.fallDirection);
+		}
 		poseStack.rotateDegrees(Axis.YP, -state.yaw);
 		int light = state.lightCoords;
 		float distance = (float) Math.sqrt(state.distanceToCameraSq);
-		if (distance > IMPOSTOR) {
+		if (distance > IMPOSTOR && state.fall <= 0.0F) {
 			// Far away: two crossed pictures of the tree instead of its triangles.
 			SourceModel.Impostor picture = model.impostor();
 			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(picture.front()), (pose, consumer) -> card(pose, consumer,

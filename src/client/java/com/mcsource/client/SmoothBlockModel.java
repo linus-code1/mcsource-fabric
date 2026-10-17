@@ -35,7 +35,7 @@ import com.mcsource.terrain.SmoothTerrain;
  */
 public final class SmoothBlockModel extends WrapperBlockStateModel {
 	/** How far a thin snow sheet sits above the ground. */
-	private static final float SNOW_LIFT = 0.02F;
+	private static final float SNOW_LIFT = 0.035F;
 
 	public SmoothBlockModel(BlockStateModel wrapped) {
 		super(wrapped);
@@ -155,6 +155,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						emitter.normal(i, 0.0F, 1.0F, 0.0F);
 					}
 					emitter.ambientOcclusion(TriState.FALSE);
+					if (lying) {
+						// Cut into triangles the same way as the ground under it, or the
+						// two surfaces cross each other and flicker.
+						splitAlongFlatterDiagonal(emitter);
+					}
 					if (!snow) {
 						// Every blade lit as if facing up, whichever way its quad turns;
 						// otherwise the crossed quads of one tuft come out light and dark.
@@ -884,7 +889,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 			blockLight[corner] = blockMax;
 			skyLight[corner] = skyMax;
-			shade[corner] = 0.8F + 0.2F * Math.min(count, 4) / 4.0F;
+			shade[corner] = 0.92F + 0.08F * Math.min(count, 4) / 4.0F;
 		}
 	}
 
