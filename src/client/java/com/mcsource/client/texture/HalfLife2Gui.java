@@ -85,87 +85,96 @@ final class HalfLife2Gui {
 	/** Half-Life 2 skies tried for the title screen, best first. */
 	private static final String[] SKIES = {"skybox/sky_day01_01", "skybox/sky_day01_05", "skybox/sky_day02_02", "skybox/sky_day01_04",
 		"skybox/sky_day02_01", "skybox/sky_day01_06"};
-	/** Source's sky faces in the order of Minecraft's panorama images: north, east, south, west, up, down. */
-	private static final String[] FACES = {"ft", "rt", "bk", "lf", "up", "dn"};
 
 	/**
-	 * The title screen's turning background made from a Half-Life 2 skybox,
-	 * as its menu shows the game's world behind it. Returns the sky used, or
-	 * a note that none was found.
+	 * The title screen's turning background made from a Half-Life 2 sky. One
+	 * side of the sky is used all the way round, mirrored on every other side
+	 * so the edges always meet; its top fades into a plain sky colour for the
+	 * face above, and below the horizon it fades into dark haze, so no seams
+	 * or stretched streaks show as it turns. Returns the sky used, or a note
+	 * that none was found.
 	 */
 	static String panorama(com.mcsource.model.source.GameFiles files, Path packRoot) throws IOException {
 		for (String sky : SKIES) {
-			com.mcsource.model.RiggedModel.Texture[] faces = new com.mcsource.model.RiggedModel.Texture[6];
-			boolean all = true;
-			for (int i = 0; i < 6 && all; i++) {
-				try {
-					faces[i] = com.mcsource.model.source.Materials.load(files, sky + FACES[i], 1024);
-				} catch (IOException | RuntimeException e) {
-					faces[i] = null;
-				}
-				all = faces[i] != null;
+			com.mcsource.model.RiggedModel.Texture face;
+			try {
+				face = com.mcsource.model.source.Materials.load(files, sky + "ft", 1024);
+			} catch (IOException | RuntimeException e) {
+				face = null;
 			}
-			if (!all) {
+			if (face == null || face.width() < 8 || face.height() < 8) {
 				continue;
 			}
+			int size = PANORAMA_SIZE;
+			// The sky picture fills the top of each side down to the horizon at its middle.
+			int horizon = size / 2;
+			int topColour = rowAverage(face, 0);
+			int bottomColour = rowAverage(face, face.height() - 1);
+			int haze = darken(bottomColour, 0.45F);
+			int[] side = new int[size * size];
+			for (int y = 0; y < size; y++) {
+				for (int x = 0; x < size; x++) {
+					int colour;
+					if (y < horizon) {
+						int tx = Math.min(face.width() - 1, x * face.width() / size);
+						// Half-height skies hold only the sky; full-height ones have the horizon at their middle.
+						int skyRows = face.height() * 2 <= face.width() + 2 ? face.height() : face.height() / 2;
+						int ty = Math.min(skyRows - 1, y * skyRows / horizon);
+						colour = face.pixels()[ty * face.width() + tx];
+						// Fade the top edge into the plain colour of the face above.
+						float t = 1.0F - y / (size * 0.12F);
+						if (t > 0.0F) {
+							colour = mix(colour, topColour, Math.min(1.0F, t));
+						}
+						// And the bottom edge into the horizon colour, the same all round.
+						float b = (y - horizon * 0.9F) / (horizon * 0.1F);
+						if (b > 0.0F) {
+							colour = mix(colour, bottomColour, Math.min(1.0F, b));
+						}
+					} else {
+						colour = mix(bottomColour, haze, Math.min(1.0F, (y - horizon) / (size * 0.15F)));
+					}
+					side[y * size + x] = colour | 0xFF000000;
+				}
+			}
+			int[] mirrored = new int[size * size];
+			for (int y = 0; y < size; y++) {
+				for (int x = 0; x < size; x++) {
+					mirrored[y * size + x] = side[y * size + size - 1 - x];
+				}
+			}
+			int[] up = new int[size * size];
+			java.util.Arrays.fill(up, topColour | 0xFF000000);
+			int[] down = new int[size * size];
+			java.util.Arrays.fill(down, haze | 0xFF000000);
 			Path folder = packRoot.resolve("assets/minecraft/textures/gui/title/background");
 			Files.createDirectories(folder);
-			// Minecraft needs all six the same square size, but Half-Life 2's
-			// sides are often half height (the sky above the horizon only) and
-			// its floor tiny, so each is resampled onto one size.
-			int size = PANORAMA_SIZE;
-			int horizon = 0;
-			for (int i = 0; i < 4; i++) {
-				horizon = average(horizon, faces[i].pixels()[faces[i].pixels().length - 1], i);
-			}
-			int ground = darken(horizon, 0.5F);
-			for (int i = 0; i < 6; i++) {
-				com.mcsource.model.RiggedModel.Texture face = faces[i];
-				int[] pixels = new int[size * size];
-				// Sides shorter than wide cover only the top of the face.
-				int covered = i < 4 ? Math.round(size * Math.min(1.0F, face.height() / (float) face.width())) : size;
-				for (int y = 0; y < size; y++) {
-					for (int x = 0; x < size; x++) {
-						int sx = x;
-						int sy = y;
-						// Source's up and down faces are turned a quarter relative to Minecraft's.
-						if (i == 4) {
-							sx = y;
-							sy = size - 1 - x;
-						} else if (i == 5) {
-							sx = size - 1 - y;
-							sy = x;
-						}
-						int colour;
-						if (i == 5) {
-							colour = ground;
-						} else if (sy < covered) {
-							int tx = Math.min(face.width() - 1, sx * face.width() / size);
-							int ty = Math.min(face.height() - 1, sy * face.height() / covered);
-							colour = face.pixels()[ty * face.width() + tx];
-						} else {
-							// Below the sky: fade from the bottom of the sky to the ground.
-							int tx = Math.min(face.width() - 1, sx * face.width() / size);
-							int edge = face.pixels()[(face.height() - 1) * face.width() + tx];
-							float t = (sy - covered) / (float) Math.max(1, size - covered);
-							colour = mix(edge, ground, Math.min(1.0F, t * 2.0F));
-						}
-						pixels[y * size + x] = colour | 0xFF000000;
-					}
-				}
-				BlockTextures.writePng(folder.resolve("panorama_" + i + ".png"), pixels, size);
-			}
-			return sky;
+			BlockTextures.writePng(folder.resolve("panorama_0.png"), side, size);
+			BlockTextures.writePng(folder.resolve("panorama_1.png"), mirrored, size);
+			BlockTextures.writePng(folder.resolve("panorama_2.png"), side, size);
+			BlockTextures.writePng(folder.resolve("panorama_3.png"), mirrored, size);
+			BlockTextures.writePng(folder.resolve("panorama_4.png"), up, size);
+			BlockTextures.writePng(folder.resolve("panorama_5.png"), down, size);
+			return sky + "ft";
 		}
 		return "(no Half-Life 2 skybox found)";
 	}
 
-	private static final int PANORAMA_SIZE = 512;
-
-	/** Running average of colours: {@code sum} holds the average of {@code count} colours so far. */
-	private static int average(int sum, int colour, int count) {
-		return mix(sum, colour, 1.0F / (count + 1));
+	private static int rowAverage(com.mcsource.model.RiggedModel.Texture face, int row) {
+		long r = 0;
+		long g = 0;
+		long b = 0;
+		for (int x = 0; x < face.width(); x++) {
+			int p = face.pixels()[row * face.width() + x];
+			r += p >> 16 & 255;
+			g += p >> 8 & 255;
+			b += p & 255;
+		}
+		int n = face.width();
+		return (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n);
 	}
+
+	private static final int PANORAMA_SIZE = 512;
 
 	private static int mix(int a, int b, float t) {
 		int out = 0;

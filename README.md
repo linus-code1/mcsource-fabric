@@ -60,7 +60,11 @@ world to try it in.
   into an always-on resource pack at `config/mcsource/hl2_block_pack` the
   first time the game starts. Grass, ferns and flowers are cut out of Half-Life
   2's grass sprite sheet, since its grass is sprites too (it has no flowers,
-  so flowers become its weeds and tufts). Short grass and ferns are small star-shaped
+  so flowers become its weeds and tufts). Ground textures stretch over 2x2
+  blocks, picked by each block's place in the world, and where two kinds of
+  ground meet each fades a little way into the other, as Source blends
+  textures across displacements. Trees further than 40 blocks away are drawn
+  as two crossed pictures of themselves, made from the model when first seen. Short grass and ferns are small star-shaped
   tufts of several different sprites, shaded into the ground colour at the
   root, and only about one grass block in four grows one. Mossy cobblestone and
   mossy stone bricks are the cobblestone and stone bricks with the grass grown

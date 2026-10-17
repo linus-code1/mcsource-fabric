@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode;
 import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.ARGB;
@@ -47,6 +48,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			if (state.is(SmoothTerrain.SMOOTH) && !buried(level, pos)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, pos, state);
 				float[] grid = wide == null ? null : grid(wide, level, pos);
+				if (grid == null && wide != null && blends(level, pos, state) != null) {
+					// Flat, but beside another ground texture to blend with.
+					grid = new float[64];
+				}
 				if (grid != null) {
 					emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
 					return;
@@ -64,7 +69,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 			return;
 		}
+		boolean terrain = state.is(SmoothTerrain.SMOOTH);
 		emitter.pushTransform(quad -> {
+			if (terrain) {
+				spreadTexture(quad, pos);
+			}
 			applySun(quad, level, pos);
 			return true;
 		});
@@ -79,73 +88,190 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * Plants and snow on top of smoothed ground: each vertex rides the ground
 	 * surface under it, so they bend over slopes instead of floating flat. A
 	 * single snow layer is drawn as a thin sheet lying on the ground, without
-	 * the little walls round its edge.
+	 * the little walls round its edge, cut into pieces like the ground so it
+	 * follows the same curve and the ground never shows through it.
 	 */
 	private void emitFollowing(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
 			Predicate<Direction> cullTest, int ground, boolean thinSnow) {
 		int lightHere = LightCoordsUtil.getLightCoords(level, pos);
-		float[] corners = groundTop(level, pos, ground);
+		GroundSurface surface = new GroundSurface(level, pos, ground);
+		boolean snow = state.is(Blocks.SNOW);
+		MutableMesh captured = CAPTURED.get();
+		captured.clear();
+		QuadEmitter capture = captured.emitter();
 		emitter.pushTransform(quad -> {
 			if (thinSnow && quad.faceNormal().y() < 0.5F) {
 				return false;
 			}
-			for (int i = 0; i < 4; i++) {
-				float x = quad.x(i);
-				float z = quad.z(i);
-				float u = Mth.clamp(x, 0.0F, 1.0F);
-				float v = Mth.clamp(z, 0.0F, 1.0F);
-				float groundY = Mth.lerp(v, Mth.lerp(u, corners[0], corners[1]), Mth.lerp(u, corners[2], corners[3])) - 1.0F;
-				float y = thinSnow ? groundY + SNOW_LIFT : quad.y(i) + groundY;
-				quad.pos(i, x, y, z);
-				// Plants and snow take the sun as if facing up, like the ground.
-				int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + y, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
-						LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
-				quad.color(i, ARGB.multiply(quad.color(i), sun));
-			}
-			quad.ambientOcclusion(TriState.FALSE);
-			if (!state.is(Blocks.SNOW)) {
-				// Every blade lit as if facing up, whichever way its quad turns;
-				// otherwise the crossed quads of one tuft come out light and dark.
-				quad.shadeDirectionOverride(Direction.UP);
-				for (int i = 0; i < 4; i++) {
-					quad.normal(i, 0.0F, 1.0F, 0.0F);
-				}
-			}
-			return true;
+			capture.copyFrom(quad);
+			capture.emit();
+			return false;
 		});
 		try {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 		} finally {
 			emitter.popTransform();
 		}
+		float[] px = new float[4];
+		float[] py = new float[4];
+		float[] pz = new float[4];
+		float[] pu = new float[4];
+		float[] pv = new float[4];
+		int[] pc = new int[4];
+		captured.forEachMutable(quad -> {
+			// Flat quads lying on the ground (snow) are cut up to follow its curve;
+			// standing ones (plants) only need their corners moved.
+			boolean lying = quad.faceNormal().y() > 0.5F;
+			int pieces = lying ? PIECES : 1;
+			for (int i = 0; i < 4; i++) {
+				px[i] = quad.x(i);
+				py[i] = quad.y(i);
+				pz[i] = quad.z(i);
+				pu[i] = quad.u(i);
+				pv[i] = quad.v(i);
+				pc[i] = quad.color(i);
+			}
+			for (int a = 0; a < pieces; a++) {
+				for (int b = 0; b < pieces; b++) {
+					emitter.copyFrom(quad);
+					for (int i = 0; i < 4; i++) {
+						float s = (a + (i >= 2 ? 1 : 0)) / (float) pieces;
+						float t = (b + (i == 1 || i == 2 ? 1 : 0)) / (float) pieces;
+						float w0 = (1 - s) * (1 - t);
+						float w1 = (1 - s) * t;
+						float w2 = s * t;
+						float w3 = s * (1 - t);
+						float x = px[0] * w0 + px[1] * w1 + px[2] * w2 + px[3] * w3;
+						float y = py[0] * w0 + py[1] * w1 + py[2] * w2 + py[3] * w3;
+						float z = pz[0] * w0 + pz[1] * w1 + pz[2] * w2 + pz[3] * w3;
+						float groundY = surface.height(Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F));
+						float bentY = thinSnow ? groundY + SNOW_LIFT : y + groundY;
+						emitter.pos(i, x, bentY, z);
+						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
+						// Plants and snow take the sun as if facing up, like the ground.
+						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
+								LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
+						emitter.color(i, ARGB.multiply(blendColor(pc, w0, w1, w2, w3), sun));
+						emitter.normal(i, 0.0F, 1.0F, 0.0F);
+					}
+					emitter.ambientOcclusion(TriState.FALSE);
+					if (!snow) {
+						// Every blade lit as if facing up, whichever way its quad turns;
+						// otherwise the crossed quads of one tuft come out light and dark.
+						emitter.shadeDirectionOverride(Direction.UP);
+					}
+					emitter.emit();
+				}
+			}
+		});
+		captured.clear();
 	}
 
 	/**
-	 * Heights of the four top corners of the ground under a plant, in blocks
-	 * (index cx + 2 * cz): the collision corners, with flat ground corners
-	 * rounded the same way the ground itself is drawn.
+	 * The top of the ground under a plant or snow layer, exactly as the ground
+	 * itself is drawn, in blocks relative to the plant's own block.
 	 */
-	private static float[] groundTop(BlockAndTintGetter level, BlockPos pos, int packed) {
-		float[] out = new float[4];
-		for (int i = 0; i < 4; i++) {
-			out[i] = SmoothMath.corner(packed, i) / 8.0F;
-		}
-		BlockPos below = SmoothTerrain.ground(level, pos);
-		if (!level.getBlockState(below).is(SmoothTerrain.SMOOTH)) {
-			return out;
-		}
-		int[] heights = null;
-		for (int i = 0; i < 4; i++) {
-			int cx = i & 1;
-			int cz = i >> 1;
-			if (SmoothMath.corner(packed, i) == 8 && SmoothTerrain.flatGround(level, below, cx, cz)) {
-				if (heights == null) {
-					heights = columnHeights(level, below);
+	private static final class GroundSurface {
+		private final float base;
+		private final float[] grid;
+		private final float[] corners;
+
+		GroundSurface(BlockAndTintGetter level, BlockPos pos, int packed) {
+			BlockPos below = SmoothTerrain.ground(level, pos);
+			BlockState ground = level.getBlockState(below);
+			float[] bent = null;
+			if (ground.is(SmoothTerrain.SMOOTH)) {
+				int[] wide = SmoothTerrain.wideNeighbourhood(level, below, ground);
+				bent = wide == null ? null : grid(wide, level, below);
+			}
+			this.base = below.getY() + 1 - pos.getY();
+			this.grid = bent;
+			if (ground.is(SmoothTerrain.SMOOTH)) {
+				this.corners = null;
+			} else {
+				// Not smoothed ground (or none): the collision corners, as before.
+				this.corners = new float[4];
+				for (int i = 0; i < 4; i++) {
+					corners[i] = SmoothMath.corner(packed, i) / 8.0F - 1.0F;
 				}
-				out[i] += rounding(heights, cx, 1, cz);
 			}
 		}
-		return out;
+
+		float height(float x, float z) {
+			if (corners != null) {
+				return Mth.lerp(z, Mth.lerp(x, corners[0], corners[1]), Mth.lerp(x, corners[2], corners[3]));
+			}
+			return base + (grid == null ? 0.0F : smoothOffset(grid, x, 1.0F, z));
+		}
+	}
+
+	/** Ground textures stretch over this many blocks each way, as Source's do over several metres. */
+	static final int SPREAD = 2;
+
+	/**
+	 * Stretches a terrain face's texture over {@link #SPREAD} blocks: each
+	 * block shows the part of the texture its place in the world picks, so the
+	 * texture runs on unbroken across neighbouring blocks and repeats less
+	 * often. Up and down faces stretch both ways; sides only sideways, so the
+	 * grass band along the top of a grass block's side stays where it is.
+	 */
+	static void spreadTexture(MutableQuadView quad, BlockPos pos) {
+		Vector3fc normal = quad.faceNormal();
+		boolean flat = Math.abs(normal.y()) > 0.5F;
+		float u0 = Float.MAX_VALUE;
+		float u1 = -Float.MAX_VALUE;
+		float v0 = Float.MAX_VALUE;
+		float v1 = -Float.MAX_VALUE;
+		for (int i = 0; i < 4; i++) {
+			u0 = Math.min(u0, quad.u(i));
+			u1 = Math.max(u1, quad.u(i));
+			v0 = Math.min(v0, quad.v(i));
+			v1 = Math.max(v1, quad.v(i));
+		}
+		if (u1 - u0 < 1.0E-6F || v1 - v0 < 1.0E-6F) {
+			return;
+		}
+		// Which world axis each texture direction runs along, and which way.
+		int uAxis = -1;
+		int vAxis = -1;
+		boolean uForward = true;
+		boolean vForward = true;
+		for (int i = 1; i < 4; i++) {
+			float du = quad.u(i) - quad.u(0);
+			float dv = quad.v(i) - quad.v(0);
+			for (int axis = 0; axis < 3; axis++) {
+				float d = quad.posByIndex(i, axis) - quad.posByIndex(0, axis);
+				if (Math.abs(d) < 0.5F) {
+					continue;
+				}
+				if (uAxis < 0 && Math.abs(du) > (u1 - u0) * 0.5F && Math.abs(dv) < (v1 - v0) * 0.5F) {
+					uAxis = axis;
+					uForward = du * d > 0;
+				} else if (vAxis < 0 && Math.abs(dv) > (v1 - v0) * 0.5F && Math.abs(du) < (u1 - u0) * 0.5F) {
+					vAxis = axis;
+					vForward = dv * d > 0;
+				}
+			}
+		}
+		int uCell = uAxis < 0 || uAxis == 1 && !flat ? -1 : cell(pos, uAxis, uForward);
+		int vCell = vAxis < 0 || vAxis == 1 && !flat ? -1 : cell(pos, vAxis, vForward);
+		for (int i = 0; i < 4; i++) {
+			float u = quad.u(i);
+			float v = quad.v(i);
+			if (uCell >= 0) {
+				u = u0 + (uCell + (u - u0) / (u1 - u0)) / SPREAD * (u1 - u0);
+			}
+			if (vCell >= 0) {
+				v = v0 + (vCell + (v - v0) / (v1 - v0)) / SPREAD * (v1 - v0);
+			}
+			quad.uv(i, u, v);
+		}
+	}
+
+	/** Which of the {@link #SPREAD} parts of the texture a block shows along an axis. */
+	private static int cell(BlockPos pos, int axis, boolean forward) {
+		int coordinate = axis == 0 ? pos.getX() : axis == 1 ? pos.getY() : pos.getZ();
+		return Math.floorMod(forward ? coordinate : -coordinate - 1, SPREAD);
 	}
 
 	/** Sun and shadow for an ordinary block face, lit by the cell it faces. */
@@ -321,6 +447,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		QuadEmitter capture = captured.emitter();
 		emitter.pushTransform(quad -> {
 			capture.copyFrom(quad);
+			spreadTexture(capture, pos);
 			capture.emit();
 			return false;
 		});
@@ -329,6 +456,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		} finally {
 			emitter.popTransform();
 		}
+		java.util.List<Blend> blends = blends(level, pos, state);
+		float[] ox = new float[4];
+		float[] oy = new float[4];
+		float[] oz = new float[4];
+		int[] oc = new int[4];
+		int[] ol = new int[4];
+		float[] on = new float[12];
 		float[] px = new float[4];
 		float[] py = new float[4];
 		float[] pz = new float[4];
@@ -350,6 +484,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			float fx = face.x();
 			float fy = face.y();
 			float fz = face.z();
+			boolean top = fy > 0.5F;
 			for (int a = 0; a < PIECES; a++) {
 				for (int b = 0; b < PIECES; b++) {
 					emitter.copyFrom(quad);
@@ -412,11 +547,170 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					emitter.ambientOcclusion(TriState.FALSE);
 					emitter.shadeMode(ShadeMode.ENHANCED);
 					splitAlongFlatterDiagonal(emitter);
+					boolean blendHere = top && blends != null;
+					if (blendHere) {
+						for (int i = 0; i < 4; i++) {
+							ox[i] = emitter.x(i);
+							oy[i] = emitter.y(i);
+							oz[i] = emitter.z(i);
+							oc[i] = emitter.color(i);
+							ol[i] = emitter.lightmap(i);
+							on[i * 3] = emitter.normalX(i);
+							on[i * 3 + 1] = emitter.normalY(i);
+							on[i * 3 + 2] = emitter.normalZ(i);
+						}
+					}
 					emitter.emit();
+					if (blendHere) {
+						for (Blend blend : blends) {
+							blend.emit(emitter, ox, oy, oz, oc, ol, on);
+						}
+					}
 				}
 			}
 		});
 		captured.clear();
+	}
+
+	/** How far into a block a neighbouring ground texture fades, in blocks. */
+	private static final float BLEND_WIDTH = 0.75F;
+	/** How much of a neighbour's texture shows right at the shared edge. */
+	private static final float BLEND_EDGE = 0.5F;
+	private static final ThreadLocal<MutableMesh> NEIGHBOUR = ThreadLocal.withInitial(() -> Renderer.get().mutableMesh());
+
+	/**
+	 * A neighbouring ground texture laid over the edge of a block's top and
+	 * faded out across it, as Source blends two textures across a
+	 * displacement: where grass meets stone, each runs a little way into the
+	 * other instead of stopping at a hard block edge.
+	 */
+	private record Blend(Direction side, float[] u, float[] v, float[] x, float[] z, int tint) {
+		void emit(QuadEmitter emitter, float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal) {
+			float[] alpha = new float[4];
+			boolean any = false;
+			for (int i = 0; i < 4; i++) {
+				float distance = switch (side) {
+					case EAST -> 1.0F - px[i];
+					case WEST -> px[i];
+					case SOUTH -> 1.0F - pz[i];
+					default -> pz[i];
+				};
+				float t = Mth.clamp(1.0F - distance / BLEND_WIDTH, 0.0F, 1.0F);
+				alpha[i] = BLEND_EDGE * t * t * (3.0F - 2.0F * t);
+				any |= alpha[i] > 0.004F;
+			}
+			if (!any) {
+				return;
+			}
+			emitter.clear();
+			for (int i = 0; i < 4; i++) {
+				emitter.pos(i, px[i], py[i] + 0.004F, pz[i]);
+				float[] uv = uvAt(px[i], pz[i]);
+				emitter.uv(i, uv[0], uv[1]);
+				int c = ARGB.multiply(colour[i], tint);
+				emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(c), ARGB.green(c), ARGB.blue(c)));
+				emitter.lightmap(i, light[i]);
+				emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+			}
+			emitter.nominalFace(Direction.UP);
+			emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+			emitter.ambientOcclusion(TriState.FALSE);
+			emitter.shadeMode(ShadeMode.ENHANCED);
+			emitter.tintIndex(-1);
+			emitter.emit();
+		}
+
+		/** Texture coordinates at a point on the top face, from the neighbour's top face corners. */
+		private float[] uvAt(float px, float pz) {
+			// The top face's corners sit at the corners of the unit square; blend between them.
+			float[] out = new float[2];
+			float total = 0.0F;
+			for (int i = 0; i < 4; i++) {
+				float w = (1.0F - Math.abs(x[i] - px)) * (1.0F - Math.abs(z[i] - pz));
+				out[0] += u[i] * w;
+				out[1] += v[i] * w;
+				total += w;
+			}
+			if (total > 0.0F) {
+				out[0] /= total;
+				out[1] /= total;
+			}
+			return out;
+		}
+	}
+
+	/**
+	 * The neighbouring ground textures to blend over this block's top, or
+	 * null when there are none: a different smoothed block beside it, at the
+	 * same height or one up or down, with open space above.
+	 */
+	private static java.util.List<Blend> blends(BlockAndTintGetter level, BlockPos pos, BlockState state) {
+		if (!SmoothTerrain.isOpen(level.getBlockState(pos.above()))) {
+			return null;
+		}
+		java.util.List<Blend> out = null;
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			for (int dy : new int[] {0, 1, -1}) {
+				cursor.setWithOffset(pos, side.getStepX(), dy, side.getStepZ());
+				BlockState next = level.getBlockState(cursor);
+				if (!next.is(SmoothTerrain.SMOOTH) || !SmoothTerrain.isOpen(level.getBlockState(cursor.above()))) {
+					continue;
+				}
+				if (next.getBlock() != state.getBlock()) {
+					Blend blend = topOf(level, cursor.immutable(), next, pos, side);
+					if (blend != null) {
+						if (out == null) {
+							out = new java.util.ArrayList<>();
+						}
+						out.add(blend);
+					}
+				}
+				break;
+			}
+		}
+		return out;
+	}
+
+	/** The top face of a neighbouring block, its texture spread as if it lay at {@code at}. */
+	private static Blend topOf(BlockAndTintGetter level, BlockPos neighbour, BlockState state, BlockPos at, Direction side) {
+		BlockStateModel model = net.minecraft.client.Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+		if (model == null) {
+			return null;
+		}
+		MutableMesh mesh = NEIGHBOUR.get();
+		mesh.clear();
+		RandomSource random = RandomSource.create(state.getSeed(neighbour));
+		// The empty level gives the model's own unbent quads.
+		((net.fabricmc.fabric.api.client.renderer.v1.model.FabricBlockStateModel) model).emitQuads(mesh.emitter(), BlockAndTintGetter.EMPTY,
+				neighbour, state, random, direction -> false);
+		Blend[] found = new Blend[1];
+		mesh.forEachMutable(quad -> {
+			if (found[0] != null || quad.faceNormal().y() < 0.5F) {
+				return;
+			}
+			spreadTexture(quad, at);
+			float[] u = new float[4];
+			float[] v = new float[4];
+			float[] x = new float[4];
+			float[] z = new float[4];
+			for (int i = 0; i < 4; i++) {
+				u[i] = quad.u(i);
+				v[i] = quad.v(i);
+				x[i] = Math.round(quad.x(i));
+				z[i] = Math.round(quad.z(i));
+			}
+			int tint = -1;
+			if (quad.tintIndex() >= 0) {
+				var source = net.minecraft.client.Minecraft.getInstance().getBlockColors().getTintSource(state, quad.tintIndex());
+				if (source != null) {
+					tint = 0xFF000000 | source.colorInWorld(state, level, neighbour);
+				}
+			}
+			found[0] = new Blend(side, u, v, x, z, tint);
+		});
+		mesh.clear();
+		return found[0];
 	}
 
 	/** Packed light blended per channel. */

@@ -1,6 +1,7 @@
 package com.mcsource.client.tree;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -22,9 +23,8 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 	private static final float UNITS = 1.0F / 40.0F;
 	/** Trees taller than this many blocks are scaled down to it. */
 	private static final float MAX_HEIGHT = 20.0F;
-	/** Distances in blocks where trees switch to fewer leaves. */
-	private static final float NEAR = 24.0F;
-	private static final float FAR = 56.0F;
+	/** Beyond this many blocks a tree is drawn as two crossed pictures of itself. */
+	private static final float IMPOSTOR = 40.0F;
 
 	public static class State extends EntityRenderState {
 		String wood = "";
@@ -71,22 +71,46 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		// Sink the foot a little so it meets ground that smoothing lowered.
 		poseStack.translate(0.0F, -0.4F, 0.0F);
 		poseStack.rotateDegrees(Axis.YP, -state.yaw);
-		Identifier[] textures = model.materialTextures();
 		int light = state.lightCoords;
-		// Level of detail: further trees drop their thinnest branches, and the
-		// furthest draw fewer, bigger leaf cards. Leaves are kept in full at
-		// middle distance, or the crowns look bare.
 		float distance = (float) Math.sqrt(state.distanceToCameraSq);
-		float keep = distance < NEAR ? 1.0F : distance < FAR ? 0.4F : 0.15F;
-		float leafKeep = distance < FAR ? 1.0F : 0.45F;
-		float grow = leafKeep < 1.0F ? 1.0F / (float) Math.sqrt(leafKeep) : 1.0F;
-		for (int i = 0; i < textures.length; i++) {
-			int material = i;
-			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textures[i]),
-					(pose, consumer) -> model.emitMaterial(pose, consumer, material, drawScale, light, OverlayTexture.NO_OVERLAY,
-							model.cutout(material) ? leafKeep : keep, grow));
+		if (distance > IMPOSTOR) {
+			// Far away: two crossed pictures of the tree instead of its triangles.
+			SourceModel.Impostor picture = model.impostor();
+			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(picture.front()), (pose, consumer) -> card(pose, consumer,
+					picture.frontMin() * drawScale, picture.frontMax() * drawScale, picture.bottom() * drawScale, picture.top() * drawScale, false,
+					light));
+			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(picture.side()), (pose, consumer) -> card(pose, consumer,
+					picture.sideMin() * drawScale, picture.sideMax() * drawScale, picture.bottom() * drawScale, picture.top() * drawScale, true,
+					light));
+		} else {
+			// Near: the whole model, every leaf and branch, so nothing pops in.
+			Identifier[] textures = model.materialTextures();
+			for (int i = 0; i < textures.length; i++) {
+				int material = i;
+				collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(textures[i]),
+						(pose, consumer) -> model.emitMaterial(pose, consumer, material, drawScale, light, OverlayTexture.NO_OVERLAY, 1.0F, 1.0F));
+			}
 		}
 		poseStack.popPose();
 		super.submit(state, poseStack, collector, camera);
+	}
+
+	/**
+	 * One picture card, standing on the model's origin: across Minecraft's x
+	 * axis for the front picture, or across z for the side one. Model x is
+	 * Minecraft's z and model y is Minecraft's x, as in {@link SourceModel}.
+	 */
+	private static void card(PoseStack.Pose pose, VertexConsumer consumer, float min, float max, float bottom, float top, boolean side,
+			int light) {
+		float[][] corners = {{min, top, 0.0F, 0.0F}, {min, bottom, 0.0F, 1.0F}, {max, bottom, 1.0F, 1.0F}, {max, top, 1.0F, 0.0F}};
+		for (int face = 0; face < 2; face++) {
+			for (int k = 0; k < 4; k++) {
+				float[] c = corners[face == 0 ? k : 3 - k];
+				float x = side ? 0.0F : c[0];
+				float z = side ? c[0] : 0.0F;
+				consumer.addVertex(pose, x, c[1], z).setColor(-1).setUv(c[2], c[3]).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light)
+						.setNormal(pose, 0.0F, 1.0F, 0.0F);
+			}
+		}
 	}
 }

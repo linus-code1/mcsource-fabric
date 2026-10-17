@@ -216,6 +216,126 @@ public final class SourceModel {
 		return materialTextures;
 	}
 
+	/** A flat picture of the model from the front and the side, for drawing it far away. */
+	public record Impostor(Identifier front, Identifier side, float frontMin, float frontMax, float sideMin, float sideMax, float bottom,
+			float top) {
+	}
+
+	private Impostor impostor;
+	private static final int IMPOSTOR_WIDTH = 128;
+	private static final int IMPOSTOR_HEIGHT = 256;
+
+	/**
+	 * Pictures of the model seen from the front (along its x axis) and the
+	 * side (along y), drawn once in software from its own triangles and
+	 * textures. Far-off trees are drawn as these two crossed pictures: four
+	 * quads instead of thousands of triangles.
+	 */
+	public Impostor impostor() {
+		if (impostor == null) {
+			float yMin = Float.MAX_VALUE;
+			float yMax = -Float.MAX_VALUE;
+			float xMin = Float.MAX_VALUE;
+			float xMax = -Float.MAX_VALUE;
+			float zMin = Float.MAX_VALUE;
+			float zMax = -Float.MAX_VALUE;
+			for (int i = 0; i < posed.length / 3; i++) {
+				xMin = Math.min(xMin, posed[i * 3]);
+				xMax = Math.max(xMax, posed[i * 3]);
+				yMin = Math.min(yMin, posed[i * 3 + 1]);
+				yMax = Math.max(yMax, posed[i * 3 + 1]);
+				zMin = Math.min(zMin, posed[i * 3 + 2]);
+				zMax = Math.max(zMax, posed[i * 3 + 2]);
+			}
+			Identifier front = picture(1, 0, yMin, yMax, zMin, zMax, "front");
+			Identifier side = picture(0, 1, xMin, xMax, zMin, zMax, "side");
+			impostor = new Impostor(front, side, yMin, yMax, xMin, xMax, zMin, zMax);
+		}
+		return impostor;
+	}
+
+	/**
+	 * Draws the model looking along the {@code depthAxis}, with
+	 * {@code across} running left to right and z up, into a new texture.
+	 */
+	private Identifier picture(int across, int depthAxis, float min, float max, float bottom, float top, String name) {
+		int w = IMPOSTOR_WIDTH;
+		int h = IMPOSTOR_HEIGHT;
+		int[] colour = new int[w * h];
+		float[] depth = new float[w * h];
+		java.util.Arrays.fill(depth, -Float.MAX_VALUE);
+		float sx = (w - 1) / Math.max(1.0E-3F, max - min);
+		float sy = (h - 1) / Math.max(1.0E-3F, top - bottom);
+		float[] px = new float[3];
+		float[] py = new float[3];
+		float[] pd = new float[3];
+		for (int t = 0; t < model.triangleCount(); t++) {
+			if (hidden != null && hidden[t]) {
+				continue;
+			}
+			RiggedModel.Texture texture = model.textures[model.triangleTexture[t]];
+			float shade = 0.0F;
+			for (int k = 0; k < 3; k++) {
+				int v = model.cornerVertex[t * 3 + k] * 3;
+				px[k] = (posed[v + across] - min) * sx;
+				py[k] = (top - posed[v + 2]) * sy;
+				pd[k] = posed[v + depthAxis];
+				int n = model.cornerNormal[t * 3 + k] * 3;
+				// Light from above and in front, both faces of a card lit alike.
+				shade += 0.55F + 0.45F * Math.abs(posedNormals[n + 2] * 0.7F + posedNormals[n + depthAxis] * 0.3F);
+			}
+			shade /= 3.0F;
+			float area = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
+			if (Math.abs(area) < 1.0E-6F) {
+				continue;
+			}
+			int x0 = Math.max(0, (int) Math.floor(Math.min(px[0], Math.min(px[1], px[2]))));
+			int x1 = Math.min(w - 1, (int) Math.ceil(Math.max(px[0], Math.max(px[1], px[2]))));
+			int y0 = Math.max(0, (int) Math.floor(Math.min(py[0], Math.min(py[1], py[2]))));
+			int y1 = Math.min(h - 1, (int) Math.ceil(Math.max(py[0], Math.max(py[1], py[2]))));
+			for (int y = y0; y <= y1; y++) {
+				for (int x = x0; x <= x1; x++) {
+					float cx = x + 0.5F;
+					float cy = y + 0.5F;
+					float b0 = ((px[1] - cx) * (py[2] - cy) - (px[2] - cx) * (py[1] - cy)) / area;
+					float b1 = ((px[2] - cx) * (py[0] - cy) - (px[0] - cx) * (py[2] - cy)) / area;
+					float b2 = 1.0F - b0 - b1;
+					if (b0 < -0.02F || b1 < -0.02F || b2 < -0.02F) {
+						continue;
+					}
+					float d = b0 * pd[0] + b1 * pd[1] + b2 * pd[2];
+					int at = y * w + x;
+					if (d <= depth[at]) {
+						continue;
+					}
+					float u = b0 * model.cornerUv[t * 6] + b1 * model.cornerUv[t * 6 + 2] + b2 * model.cornerUv[t * 6 + 4];
+					float v = b0 * model.cornerUv[t * 6 + 1] + b1 * model.cornerUv[t * 6 + 3] + b2 * model.cornerUv[t * 6 + 5];
+					int tx = Math.floorMod((int) Math.floor(u * texture.width()), Math.max(1, texture.width()));
+					int ty = Math.floorMod((int) Math.floor(v * texture.height()), Math.max(1, texture.height()));
+					int p = texture.pixels()[ty * texture.width() + tx];
+					if (texture.masked() && (p >>> 24) < 128) {
+						continue;
+					}
+					depth[at] = d;
+					int r = Math.min(255, Math.round((p >> 16 & 255) * shade));
+					int g = Math.min(255, Math.round((p >> 8 & 255) * shade));
+					int b = Math.min(255, Math.round((p & 255) * shade));
+					colour[at] = 0xFF000000 | r << 16 | g << 8 | b;
+				}
+			}
+		}
+		NativeImage image = new NativeImage(w, h, true);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				image.setPixel(x, y, colour[y * w + x]);
+			}
+		}
+		Identifier id = Identifier.fromNamespaceAndPath("mcsource", "model/" + textureCount++);
+		String label = source + " " + name;
+		Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(() -> "MC:Source impostor " + label, image));
+		return id;
+	}
+
 	private float[] areas;
 	private float[] sortedAreas;
 

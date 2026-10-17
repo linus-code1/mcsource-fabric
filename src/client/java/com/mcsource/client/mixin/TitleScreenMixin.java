@@ -48,6 +48,12 @@ public abstract class TitleScreenMixin extends Screen {
 		super(minecraft, font, title);
 	}
 
+	/** No Realms news and invitation icons floating over the background. */
+	@Inject(method = "realmsNotificationsEnabled", at = @At("HEAD"), cancellable = true)
+	private void mcsource$noRealmsIcons(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> cir) {
+		cir.setReturnValue(false);
+	}
+
 	private int mcsource$left() {
 		return Math.max(16, width / 12);
 	}
