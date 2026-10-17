@@ -181,6 +181,20 @@ public final class SmoothTerrain {
 		return SmoothMath.cornerOffset(lower, upper);
 	}
 
+	/** Whether a built block touches the grid corner at {@code pos + (gx, gy, gz)}, pinning it in place. */
+	public static boolean widePinned(int[] wide, int gx, int gy, int gz) {
+		for (int oy = gy - 1; oy <= gy; oy++) {
+			for (int oz = gz - 1; oz <= gz; oz++) {
+				for (int ox = gx - 1; ox <= gx; ox++) {
+					if (wide[ox + 2 + 5 * (oz + 2) + 25 * (oy + 2)] == BUILT) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Whether the grid corner at {@code pos + (gx, gy, gz)} (each -1 to 2)
 	 * lies in flat ground: smoothed terrain in all four blocks below it and

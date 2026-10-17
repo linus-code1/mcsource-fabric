@@ -1043,6 +1043,12 @@ public final class BlockTextures {
 			}
 			used.put(name, chosen + " (sprite at " + pick.x + "," + pick.y + ")");
 		}
+		// Sugar cane stacks block on block, so a whole tuft (root clump and
+		// tips) in each looked like a pile of grass tufts. It takes the middle
+		// of a tall tuft instead, where the blades run straight up, stretched to
+		// the full block, so a stack reads as one tall clump of reeds.
+		Sprite reeds = pickShape(green, "tall", 1);
+		writePlant(folder, "sugar_cane", reedImage(sheet, reeds));
 		// More tufts for short grass and ferns, so a meadow is not one sprite
 		// over and over. They are picked at random by grass_tufts below.
 		List<Sprite> wide = new ArrayList<>();
@@ -1217,6 +1223,27 @@ public final class BlockTextures {
 				// Minecraft's cut-out drops pixels below 10% alpha; make edges firm.
 				int a = p >>> 24;
 				out[(oy + y) * w + ox + x] = a < 96 ? 0 : (p | 0xFF000000);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The upright middle of a tall grass sprite filling a whole block, its
+	 * blades running from the bottom edge to the top so blocks of it stack.
+	 */
+	private static int[] reedImage(RiggedModel.Texture sheet, Sprite sprite) {
+		int[] out = new int[SIZE * SIZE];
+		int sheetW = sheet.width();
+		float from = 0.3F;
+		float to = 0.75F;
+		for (int y = 0; y < SIZE; y++) {
+			float row = (float) y / SIZE;
+			int sy = sprite.y + Math.min(sprite.h - 1, (int) ((from + (to - from) * row) * sprite.h));
+			for (int x = 0; x < SIZE; x++) {
+				int sx = sprite.x + Math.min(sprite.w - 1, x * sprite.w / SIZE);
+				int p = sheet.pixels()[sy * sheetW + sx];
+				out[y * SIZE + x] = (p >>> 24) < 96 ? 0 : (p | 0xFF000000);
 			}
 		}
 		return out;

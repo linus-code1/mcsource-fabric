@@ -59,7 +59,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				float[] grid = wide == null ? null : grid(wide, level, pos);
 				if (grid == null && wide != null && blends(level, pos, state) != null) {
 					// Flat, but beside another ground texture to blend with.
-					grid = new float[64];
+					grid = new float[128];
 				}
 				if (grid != null) {
 					emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
@@ -520,7 +520,6 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 */
 	static void spreadTexture(MutableQuadView quad, BlockPos pos) {
 		Vector3fc normal = quad.faceNormal();
-		boolean flat = Math.abs(normal.y()) > 0.5F;
 		float u0 = Float.MAX_VALUE;
 		float u1 = -Float.MAX_VALUE;
 		float v0 = Float.MAX_VALUE;
@@ -534,40 +533,32 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		if (u1 - u0 < 1.0E-6F || v1 - v0 < 1.0E-6F) {
 			return;
 		}
-		// Which world axis each texture direction runs along, and which way.
-		int uAxis = -1;
-		int vAxis = -1;
-		boolean uForward = true;
-		boolean vForward = true;
-		for (int i = 1; i < 4; i++) {
-			float du = quad.u(i) - quad.u(0);
-			float dv = quad.v(i) - quad.v(0);
-			for (int axis = 0; axis < 3; axis++) {
-				float d = quad.posByIndex(i, axis) - quad.posByIndex(0, axis);
-				if (Math.abs(d) < 0.5F) {
-					continue;
-				}
-				if (uAxis < 0 && Math.abs(du) > (u1 - u0) * 0.5F && Math.abs(dv) < (v1 - v0) * 0.5F) {
-					uAxis = axis;
-					uForward = du * d > 0;
-				} else if (vAxis < 0 && Math.abs(dv) > (v1 - v0) * 0.5F && Math.abs(du) < (u1 - u0) * 0.5F) {
-					vAxis = axis;
-					vForward = dv * d > 0;
-				}
+		// The texture is laid by the block's place in the world, not by the
+		// block's model: stone and other ground blocks come in randomly turned
+		// and mirrored models, and following those, each block showed its part
+		// of the texture turned its own way, so the ground looked like a
+		// chequerboard of mismatched squares.
+		if (Math.abs(normal.y()) > 0.5F) {
+			int cx = Math.floorMod(pos.getX(), SPREAD);
+			int cz = Math.floorMod(pos.getZ(), SPREAD);
+			for (int i = 0; i < 4; i++) {
+				float x = Mth.clamp(quad.x(i), 0.0F, 1.0F);
+				float z = Mth.clamp(quad.z(i), 0.0F, 1.0F);
+				quad.uv(i, u0 + (cx + x) / SPREAD * (u1 - u0), v0 + (cz + z) / SPREAD * (v1 - v0));
 			}
+			return;
 		}
-		int uCell = uAxis < 0 || uAxis == 1 && !flat ? -1 : cell(pos, uAxis, uForward);
-		int vCell = vAxis < 0 || vAxis == 1 && !flat ? -1 : cell(pos, vAxis, vForward);
+		// Sides: sideways by the world, looking at the face from outside; up and
+		// down as the model has it, so a grass side keeps its band on top.
+		boolean alongX = Math.abs(normal.z()) >= Math.abs(normal.x());
+		boolean forward = alongX ? normal.z() > 0.0F : normal.x() < 0.0F;
+		int cell = cell(pos, alongX ? 0 : 2, forward);
 		for (int i = 0; i < 4; i++) {
-			float u = quad.u(i);
-			float v = quad.v(i);
-			if (uCell >= 0) {
-				u = u0 + (uCell + (u - u0) / (u1 - u0)) / SPREAD * (u1 - u0);
+			float t = Mth.clamp(alongX ? quad.x(i) : quad.z(i), 0.0F, 1.0F);
+			if (!forward) {
+				t = 1.0F - t;
 			}
-			if (vCell >= 0) {
-				v = v0 + (vCell + (v - v0) / (v1 - v0)) / SPREAD * (v1 - v0);
-			}
-			quad.uv(i, u, v);
+			quad.uv(i, u0 + (cell + t) / SPREAD * (u1 - u0), quad.v(i));
 		}
 	}
 
@@ -635,7 +626,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * 2 on each axis, or null when none of them moves.
 	 */
 	private static float[] grid(int[] wide, BlockAndTintGetter level, BlockPos pos) {
-		float[] grid = new float[64];
+		// Offsets, then (from 64) 1 for corners pinned by a built block beside them.
+		float[] grid = new float[128];
 		boolean moved = false;
 		int[] heights = null;
 		for (int gy = -1; gy <= 2; gy++) {
@@ -650,6 +642,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						value = rounding(heights, gx, gy, gz);
 					}
 					grid[node(gx, gy, gz)] = value;
+					if (SmoothTerrain.widePinned(wide, gx, gy, gz)) {
+						grid[64 + node(gx, gy, gz)] = 1.0F;
+					}
 					moved |= value != 0.0F;
 				}
 			}
@@ -739,6 +734,38 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					sum += wx[i] * wyz * grid[i + 4 * k + 16 * j];
 				}
 			}
+		}
+		// The curve passes through every corner but swings between them; where
+		// a built block (a crate, planks, a wall) pins the corners, that swing
+		// opened a gap along its foot. Hold the surface to the pinned corners
+		// near them: none of the swing along an edge pinned at both ends.
+		float pinned = 0.0F;
+		for (int j = 1; j <= 2; j++) {
+			float fy = j == 1 ? 1.0F - y : y;
+			for (int k = 1; k <= 2; k++) {
+				float fz = k == 1 ? 1.0F - z : z;
+				for (int i = 1; i <= 2; i++) {
+					float fx = i == 1 ? 1.0F - x : x;
+					pinned += fx * fy * fz * grid[64 + i + 4 * k + 16 * j];
+				}
+			}
+		}
+		if (pinned > 0.0F) {
+			// The plain blend of the four corners, which stays at the pinned ones.
+			float linear = 0.0F;
+			for (int j = 1; j <= 2; j++) {
+				float fy = j == 1 ? 1.0F - y : y;
+				for (int k = 1; k <= 2; k++) {
+					float fz = k == 1 ? 1.0F - z : z;
+					for (int i = 1; i <= 2; i++) {
+						float fx = i == 1 ? 1.0F - x : x;
+						linear += fx * fy * fz * grid[i + 4 * k + 16 * j];
+					}
+				}
+			}
+			// Fully the plain blend along a pinned edge, easing back to the curve.
+			float hold = Mth.clamp(pinned * 2.0F, 0.0F, 1.0F);
+			sum = sum + (linear - sum) * hold;
 		}
 		return Mth.clamp(sum, -0.5F, 0.5F);
 	}
@@ -1064,25 +1091,14 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 	/**
 	 * How much rock shows at each corner of one piece of a bent face, from
-	 * 0 to 1: by how steep the smoothed ground is there, and fully where the
-	 * piece itself stands upright (a step the smoothing could not round off).
+	 * 0 to 1, by how steep the smoothed ground is there. It follows the
+	 * smooth normals alone, which run on unbroken from piece to piece, so the
+	 * rock fades in without hard edges.
 	 */
 	private static float[] rockAlpha(float[] px, float[] py, float[] pz, float[] normal) {
-		// The piece's own facing, from its diagonals.
-		float ax = px[2] - px[0];
-		float ay = py[2] - py[0];
-		float az = pz[2] - pz[0];
-		float bx = px[3] - px[1];
-		float by = py[3] - py[1];
-		float bz = pz[3] - pz[1];
-		float cx = ay * bz - az * by;
-		float cy = az * bx - ax * bz;
-		float cz = ax * by - ay * bx;
-		float length = Mth.sqrt(cx * cx + cy * cy + cz * cz);
-		float own = length < 1.0E-5F ? 0.0F : 1.0F - Math.abs(cy) / length;
 		float[] alpha = new float[4];
 		for (int i = 0; i < 4; i++) {
-			float steep = Math.max(1.0F - Math.abs(normal[i * 3 + 1]), own);
+			float steep = 1.0F - Math.abs(normal[i * 3 + 1]);
 			float t = Mth.clamp((steep - ROCK_FROM) / (ROCK_FULL - ROCK_FROM), 0.0F, 1.0F);
 			alpha[i] = t * t * (3.0F - 2.0F * t);
 		}
@@ -1098,11 +1114,24 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 */
 	private static void rockUv(net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos, float[] px, float[] py,
 			float[] pz, float[] normal, float[] u, float[] v) {
-		float nx = 0.0F;
-		float nz = 0.0F;
-		for (int i = 0; i < 4; i++) {
-			nx += Math.abs(normal[i * 3]);
-			nz += Math.abs(normal[i * 3 + 2]);
+		// Projected along the way the piece itself faces, so the texture runs
+		// across it; going by the smoothed normals, a piece at the corner of a
+		// cliff could be projected edge-on and smear into streaks.
+		float ax = px[2] - px[0];
+		float ay = py[2] - py[0];
+		float az = pz[2] - pz[0];
+		float bx = px[3] - px[1];
+		float by = py[3] - py[1];
+		float bz = pz[3] - pz[1];
+		float nx = Math.abs(ay * bz - az * by);
+		float nz = Math.abs(ax * by - ay * bx);
+		if (nx + nz < 1.0E-5F) {
+			nx = 0.0F;
+			nz = 0.0F;
+			for (int i = 0; i < 4; i++) {
+				nx += Math.abs(normal[i * 3]);
+				nz += Math.abs(normal[i * 3 + 2]);
+			}
 		}
 		boolean alongX = nz >= nx;
 		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
@@ -1113,8 +1142,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
-	private static final float ROCK_FROM = 0.12F;
-	private static final float ROCK_FULL = 0.5F;
+	private static final float ROCK_FROM = 0.25F;
+	private static final float ROCK_FULL = 0.6F;
 	/** How far an overlay sits off the face beneath it, in blocks. */
 	private static final float ROCK_LIFT = 0.005F;
 
