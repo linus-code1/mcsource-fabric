@@ -63,6 +63,8 @@ public abstract class FirstPersonHandsMixin {
 	private static long mcsource$swingStart;
 	private static float mcsource$lastAttack;
 	private static int mcsource$swingVariant;
+	/** Whether the crowbar is out for a swing, which hides the held item. */
+	private static boolean mcsource$crowbarOut;
 	/** Held items are drawn this much smaller than Minecraft's, as they are held closer to the eye. */
 	private static final float ITEM_SCALE = 0.4F;
 
@@ -93,6 +95,10 @@ public abstract class FirstPersonHandsMixin {
 		if (palm == null) {
 			return;
 		}
+		if (mcsource$crowbarOut) {
+			ci.cancel();
+			return;
+		}
 		poseStack.pushPose();
 		poseStack.translate(palm.x, palm.y, palm.z);
 		poseStack.scale(ITEM_SCALE, ITEM_SCALE, ITEM_SCALE);
@@ -107,15 +113,31 @@ public abstract class FirstPersonHandsMixin {
 	 */
 	private static Vector3f mcsource$drawHands(PoseStack poseStack, SubmitNodeCollector collector, int light, float attackValue,
 			HumanoidArm arm) {
-		SourceModel hands = SourceModel.first(HANDS);
+		SourceModel hands = null;
+		SourceModel crowbar = null;
+		for (String reference : HANDS) {
+			hands = SourceModel.get(reference);
+			if (hands != null) {
+				// The same view model with its weapon, shown while swinging.
+				int hash = reference.indexOf('#');
+				crowbar = hash < 0 ? null : SourceModel.get(reference.substring(0, hash));
+				break;
+			}
+		}
 		if (hands == null) {
 			return null;
+		}
+		if (crowbar != null && crowbar.model.boneCount() != hands.model.boneCount()) {
+			crowbar = null;
 		}
 		Matrix4f base = new Matrix4f(poseStack.last().pose());
 		if (hands != trimmed) {
 			// The upper arm reaches past the edge of the screen in Source; with
 			// the hands moved into view its open end would show.
 			hands.hideBones("upperarm", "clavicle", "bicep", "shoulder");
+			if (crowbar != null) {
+				crowbar.hideBones("upperarm", "clavicle", "bicep", "shoulder");
+			}
 			trimmed = hands;
 		}
 		RiggedModel model = hands.model;
@@ -162,7 +184,8 @@ public abstract class FirstPersonHandsMixin {
 					: model.find("misscenter2", "hitcenter2", "misscenter1", "act_vm_misscenter", "attack");
 			swingTime = 0.0F;
 		}
-		if (swing != null && mcsource$swingStart > 0 && swingTime < swing.frameCount() - 1) {
+		mcsource$crowbarOut = swing != null && mcsource$swingStart > 0 && swingTime < swing.frameCount() - 1;
+		if (mcsource$crowbarOut) {
 			RiggedModel.Pose swinging = new RiggedModel.Pose(model);
 			model.pose(swing, swingTime, swinging);
 			model.blend(pose, swinging, 1.0F);
@@ -187,9 +210,11 @@ public abstract class FirstPersonHandsMixin {
 		poseStack.translate(-side * UNITS, GameInstalls.setting("viewmodel_offset_z", DEFAULT_OFFSET_Z) * UNITS,
 				GameInstalls.setting("viewmodel_offset_y", DEFAULT_OFFSET_Y) * UNITS);
 		SourceModel.Axes axes = arm == HumanoidArm.LEFT ? SourceModel.Axes.HALF_LIFE_MIRRORED : SourceModel.Axes.HALF_LIFE;
-		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(hands.texture), (matrices, consumer) -> {
-			hands.skin(bones);
-			hands.emit(matrices, consumer, axes, UNITS, light, OverlayTexture.NO_OVERLAY);
+		// While a swing plays, the crowbar is out, as in Half-Life 2.
+		SourceModel shown = mcsource$crowbarOut && crowbar != null ? crowbar : hands;
+		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(shown.texture), (matrices, consumer) -> {
+			shown.skin(bones);
+			shown.emit(matrices, consumer, axes, UNITS, light, OverlayTexture.NO_OVERLAY);
 		});
 		// Where the palm is now, for an item held in it.
 		hands.skin(bones);

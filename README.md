@@ -116,7 +116,8 @@ world to try it in.
   is the HEV suit hand from Half-Life 2's view models, read from your install
   (see *Half-Life models* below), idling and swinging with its own
   animations. Held items sit in its palm and move with those animations
-  instead of Minecraft's jab; items being eaten, drawn or charged, and
+  instead of Minecraft's jab. Hitting swings Half-Life 2's crowbar, which
+  comes out for the swing (the held item is hidden meanwhile); items being eaten, drawn or charged, and
   maps, keep Minecraft's. Its size and place on screen can be tuned in
   `config/mcsource.properties`: `viewmodel_fov` (default 54, smaller makes it
   bigger) and `viewmodel_offset_x`, `viewmodel_offset_y` and
