@@ -936,7 +936,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						} else {
 							// Mostly ground: the face is the ground's top, with rock
 							// faded over it where it is steeper.
-							groundUv(ground, ox, oz, u, v);
+							groundUv(ground, ox, oy, oz, u, v);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
 							}
@@ -1157,11 +1157,33 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				tint);
 	}
 
-	/** The ground's top texture laid on a piece from above, as it lies on the block's top. */
-	private static void groundUv(GroundTop ground, float[] px, float[] pz, float[] u, float[] v) {
+	/**
+	 * The ground's top texture on a piece: laid from above where the piece
+	 * lies flat enough, as on the block's top, and from the side where it is
+	 * steep (spread over two blocks' height, as rock is), so it never
+	 * smears into streaks.
+	 */
+	private static void groundUv(GroundTop ground, float[] px, float[] py, float[] pz, float[] u, float[] v) {
+		float ax = px[2] - px[0];
+		float ay = py[2] - py[0];
+		float az = pz[2] - pz[0];
+		float bx = px[3] - px[1];
+		float by = py[3] - py[1];
+		float bz = pz[3] - pz[1];
+		float cx = ay * bz - az * by;
+		float cy = az * bx - ax * bz;
+		float cz = ax * by - ay * bx;
+		float length = Mth.sqrt(cx * cx + cy * cy + cz * cz);
+		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F;
+		boolean alongX = Math.abs(cz) >= Math.abs(cx);
 		for (int i = 0; i < 4; i++) {
-			u[i] = ground.sprite().getU(Mth.clamp(px[i], 0.0F, 1.0F));
-			v[i] = ground.sprite().getV(Mth.clamp(pz[i], 0.0F, 1.0F));
+			if (flat) {
+				u[i] = ground.sprite().getU(Mth.clamp(px[i], 0.0F, 1.0F));
+				v[i] = ground.sprite().getV(Mth.clamp(pz[i], 0.0F, 1.0F));
+			} else {
+				u[i] = ground.sprite().getU(Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F));
+				v[i] = ground.sprite().getV(1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F));
+			}
 		}
 	}
 
@@ -1177,7 +1199,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		float[] u = new float[4];
 		float[] v = new float[4];
-		groundUv(ground, px, pz, u, v);
+		groundUv(ground, px, py, pz, u, v);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
