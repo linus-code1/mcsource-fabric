@@ -619,7 +619,10 @@ public final class BlockTextures {
 	 */
 	private static void lava(int[] rock, Path folder) throws IOException {
 		int s = ANIMATION_SIZE;
-		int[] small = resample(rock, SIZE, s);
+		// The rock's broad light and dark patches, not its fine detail: a coarse
+		// copy read back smoothly.
+		int coarse = 8;
+		int[] small = resample(rock, SIZE, coarse);
 		float mean = brightness(average(small));
 		int[] strip = new int[s * s * ANIMATION_FRAMES];
 		for (int f = 0; f < ANIMATION_FRAMES; f++) {
@@ -627,9 +630,9 @@ public final class BlockTextures {
 			for (int y = 0; y < s; y++) {
 				for (int x = 0; x < s; x++) {
 					// The crust drifts one way, the glow beneath another; both wrap.
-					int cx = Math.floorMod(x + Math.round((float) (t * s)), s);
-					int cy = Math.floorMod(y + Math.round((float) (Math.sin(t * 2 * Math.PI) * 2)), s);
-					float light = brightness(small[cy * s + cx]);
+					float fx = (float) ((x + t * s) * coarse / s);
+					float fy = (float) ((y + Math.sin(t * 2 * Math.PI) * 2) * coarse / s);
+					float light = smoothBrightness(small, coarse, fx, fy);
 					double u = x * 2 * Math.PI / s;
 					double v = y * 2 * Math.PI / s;
 					double a = t * 2 * Math.PI;
@@ -661,6 +664,22 @@ public final class BlockTextures {
 			writePng(folder.resolve(name + ".png"), strip, s, s * ANIMATION_FRAMES);
 			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
 		}
+	}
+
+	/** Brightness of a small wrapping image at a point, blended between its pixels. */
+	private static float smoothBrightness(int[] image, int size, float x, float y) {
+		int x0 = (int) Math.floor(x);
+		int y0 = (int) Math.floor(y);
+		float ax = x - x0;
+		float ay = y - y0;
+		float out = 0.0F;
+		for (int j = 0; j < 2; j++) {
+			for (int i = 0; i < 2; i++) {
+				float w = (i == 0 ? 1.0F - ax : ax) * (j == 0 ? 1.0F - ay : ay);
+				out += w * brightness(image[Math.floorMod(y0 + j, size) * size + Math.floorMod(x0 + i, size)]);
+			}
+		}
+		return out;
 	}
 
 	/** Half-Life 2's flame sprites, tried in order. */
@@ -696,6 +715,7 @@ public final class BlockTextures {
 			int[] strip = new int[s * s * frames];
 			for (int f = 0; f < frames; f++) {
 				RiggedModel.Texture flame = flames.get((f / 4 + which) % flames.size());
+				int[] box = flameBounds(flame);
 				double t = (double) f / frames;
 				float stretch = (float) (1.0 + 0.12 * Math.sin(t * 2 * Math.PI * 3 + which));
 				float sway = (float) (0.06 * Math.sin(t * 2 * Math.PI * 2 + which * 2));
@@ -711,8 +731,10 @@ public final class BlockTextures {
 						if (su < 0.0F || su >= 1.0F) {
 							continue;
 						}
-						int p = flame.pixels()[Math.min(flame.height() - 1, (int) (sv * flame.height())) * flame.width()
-								+ Math.min(flame.width() - 1, (int) (su * flame.width()))];
+						// Within the part of the sprite that shows, so the flame fills the block.
+						int sx = box[0] + Math.min(box[2] - 1, (int) (su * box[2]));
+						int sy = box[1] + Math.min(box[3] - 1, (int) (sv * box[3]));
+						int p = flame.pixels()[sy * flame.width() + sx];
 						strip[(f * s + y) * s + x] = flamePixel(p);
 					}
 				}
@@ -723,6 +745,28 @@ public final class BlockTextures {
 			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
 		}
 		return String.join(" ", names);
+	}
+
+	/** The bounds of the part of a flame sprite that shows: x, y, width, height. */
+	private static int[] flameBounds(RiggedModel.Texture flame) {
+		int minX = flame.width();
+		int minY = flame.height();
+		int maxX = -1;
+		int maxY = -1;
+		for (int y = 0; y < flame.height(); y++) {
+			for (int x = 0; x < flame.width(); x++) {
+				if (flamePixel(flame.pixels()[y * flame.width() + x]) != 0) {
+					minX = Math.min(minX, x);
+					minY = Math.min(minY, y);
+					maxX = Math.max(maxX, x);
+					maxY = Math.max(maxY, y);
+				}
+			}
+		}
+		if (maxX < 0) {
+			return new int[] {0, 0, flame.width(), flame.height()};
+		}
+		return new int[] {minX, minY, maxX - minX + 1, maxY - minY + 1};
 	}
 
 	/**

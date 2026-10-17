@@ -785,6 +785,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		java.util.List<Blend> blends = blends(level, pos, state);
 		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = cliffSprite(state);
+		GroundTop ground = groundTop(state, snowAbove);
 		float[] ox = new float[4];
 		float[] oy = new float[4];
 		float[] oz = new float[4];
@@ -813,6 +814,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			float fy = face.y();
 			float fz = face.z();
 			boolean top = fy > 0.5F;
+			// A side whose block shows another texture on top (a grass block's
+			// dirt side) is drawn as the ground's top where it lies in a gentle
+			// slope and as rock where it is steep, never as the side texture:
+			// bent into the slope, a strip of dirt side showed as a brown band.
+			boolean sideGround = !top && ground != null;
+			if (sideGround && quad.tintIndex() >= 0) {
+				// The side's tinted overlay (the grass fringe) is not needed.
+				return;
+			}
 			// One rock layer per face: a grass side's tinted overlay quad gets none.
 			boolean rockHere = rock != null && (top || quad.tintIndex() < 0);
 			for (int a = 0; a < PIECES; a++) {
@@ -892,6 +902,52 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						}
 					}
 					boolean allRock = false;
+					if (sideGround) {
+						if (!blendHere && !rockHere) {
+							for (int i = 0; i < 4; i++) {
+								ox[i] = emitter.x(i);
+								oy[i] = emitter.y(i);
+								oz[i] = emitter.z(i);
+								oc[i] = emitter.color(i);
+								ol[i] = emitter.lightmap(i);
+								on[i * 3] = emitter.normalX(i);
+								on[i * 3 + 1] = emitter.normalY(i);
+								on[i * 3 + 2] = emitter.normalZ(i);
+							}
+						}
+						alpha = rock == null ? new float[4] : rockAlpha(ox, oy, oz, on);
+						float mean = (alpha[0] + alpha[1] + alpha[2] + alpha[3]) / 4.0F;
+						float[] u = new float[4];
+						float[] v = new float[4];
+						if (rock != null && mean >= 0.5F) {
+							// Mostly rock: the face is rock, with the ground's top faded
+							// over it where it is less steep.
+							rockUv(rock, pos, ox, oy, oz, on, u, v);
+							for (int i = 0; i < 4; i++) {
+								emitter.uv(i, u[i], v[i]);
+							}
+							emitter.tintIndex(-1);
+							emitter.emit();
+							float[] rest = new float[4];
+							for (int i = 0; i < 4; i++) {
+								rest[i] = 1.0F - alpha[i];
+							}
+							groundOverlay(emitter, ground, ox, oy, oz, oc, ol, on, rest);
+						} else {
+							// Mostly ground: the face is the ground's top, with rock
+							// faded over it where it is steeper.
+							groundUv(ground, ox, oz, u, v);
+							for (int i = 0; i < 4; i++) {
+								emitter.uv(i, u[i], v[i]);
+							}
+							emitter.tintIndex(ground.tint());
+							emitter.emit();
+							if (rock != null) {
+								cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on, alpha);
+							}
+						}
+						continue;
+					}
 					if (rockHere) {
 						alpha = rockAlpha(ox, oy, oz, on);
 						allRock = alpha[0] > 0.996F && alpha[1] > 0.996F && alpha[2] > 0.996F && alpha[3] > 0.996F;
@@ -1067,6 +1123,78 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * ground is at each corner, with the rock texture wrapped round the
 	 * hillside so it doesn't stretch.
 	 */
+	/** The texture on top of a ground block, and whether it takes the grass colour. */
+	private record GroundTop(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite, int tint) {
+	}
+
+	/**
+	 * The top of a ground block whose sides look different from its top (a
+	 * grass block's dirt sides), or null when its sides are its top already.
+	 */
+	private static GroundTop groundTop(BlockState state, boolean snowAbove) {
+		String top;
+		int tint = -1;
+		if (snowAbove && (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.PODZOL) || state.is(Blocks.MYCELIUM))) {
+			top = "block/snow";
+		} else if (state.is(Blocks.GRASS_BLOCK)) {
+			top = "block/grass_block_top";
+			tint = 0;
+		} else if (state.is(Blocks.PODZOL)) {
+			top = "block/podzol_top";
+		} else if (state.is(Blocks.MYCELIUM)) {
+			top = "block/mycelium_top";
+		} else if (state.is(Blocks.DIRT_PATH)) {
+			top = "block/dirt_path_top";
+		} else if (state.is(Blocks.SANDSTONE)) {
+			top = "block/sandstone_top";
+		} else if (state.is(Blocks.RED_SANDSTONE)) {
+			top = "block/red_sandstone_top";
+		} else {
+			return null;
+		}
+		return new GroundTop(net.minecraft.client.Minecraft.getInstance().getAtlasManager()
+				.getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS).getSprite(net.minecraft.resources.Identifier.withDefaultNamespace(top)),
+				tint);
+	}
+
+	/** The ground's top texture laid on a piece from above, as it lies on the block's top. */
+	private static void groundUv(GroundTop ground, float[] px, float[] pz, float[] u, float[] v) {
+		for (int i = 0; i < 4; i++) {
+			u[i] = ground.sprite().getU(Mth.clamp(px[i], 0.0F, 1.0F));
+			v[i] = ground.sprite().getV(Mth.clamp(pz[i], 0.0F, 1.0F));
+		}
+	}
+
+	/** The ground's top faded over one piece of a face by {@code alpha} at each corner. */
+	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, float[] px, float[] py, float[] pz, int[] colour, int[] light,
+			float[] normal, float[] alpha) {
+		boolean any = false;
+		for (int i = 0; i < 4; i++) {
+			any |= alpha[i] > 0.004F;
+		}
+		if (!any) {
+			return;
+		}
+		float[] u = new float[4];
+		float[] v = new float[4];
+		groundUv(ground, px, pz, u, v);
+		emitter.clear();
+		for (int i = 0; i < 4; i++) {
+			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
+			emitter.uv(i, u[i], v[i]);
+			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+			emitter.lightmap(i, light[i]);
+			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+		}
+		emitter.nominalFace(null);
+		emitter.cullFace(null);
+		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+		emitter.ambientOcclusion(TriState.FALSE);
+		emitter.shadeMode(ShadeMode.ENHANCED);
+		emitter.tintIndex(ground.tint());
+		emitter.emit();
+	}
+
 	private static void cliffRock(QuadEmitter emitter, net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos,
 			float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal, float[] alpha) {
 		boolean any = false;
