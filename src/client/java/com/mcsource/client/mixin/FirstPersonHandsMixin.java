@@ -60,6 +60,9 @@ public abstract class FirstPersonHandsMixin {
 	private static long mcsource$drawStart;
 	private static long mcsource$swingStart;
 	private static float mcsource$lastAttack;
+	private static int mcsource$swingVariant;
+	/** Held items are drawn this much smaller than Minecraft's, as they are held closer to the eye. */
+	private static final float ITEM_SCALE = 0.4F;
 
 	@Inject(method = "renderPlayerArm", at = @At("HEAD"), cancellable = true)
 	private void mcsource$halfLife2Hands(PoseStack poseStack, SubmitNodeCollector collector, int light, float inverseArmHeight,
@@ -90,6 +93,7 @@ public abstract class FirstPersonHandsMixin {
 		}
 		poseStack.pushPose();
 		poseStack.translate(palm.x, palm.y, palm.z);
+		poseStack.scale(ITEM_SCALE, ITEM_SCALE, ITEM_SCALE);
 		state.mainHandRenderState.submit(poseStack, collector, lightCoords, OverlayTexture.NO_OVERLAY, 0);
 		poseStack.popPose();
 		ci.cancel();
@@ -116,7 +120,9 @@ public abstract class FirstPersonHandsMixin {
 		RiggedModel.Pose pose = new RiggedModel.Pose(model);
 		RiggedModel.Sequence idle = model.find("idle01", "idle", "act_vm_idle");
 		RiggedModel.Sequence draw = model.find("draw", "act_vm_draw", "deploy");
-		RiggedModel.Sequence swing = model.find("misscenter1", "hitcenter1", "act_vm_misscenter", "act_vm_hitcenter", "attack");
+		RiggedModel.Sequence swing = mcsource$swingVariant == 0
+				? model.find("misscenter1", "hitcenter1", "act_vm_misscenter", "act_vm_hitcenter", "attack")
+				: model.find("misscenter2", "hitcenter2", "misscenter1", "act_vm_misscenter", "attack");
 		long now = Util.getMillis();
 		float seconds = now / 1000.0F;
 		// Minecraft lowers its arm after every hit while the attack recharges and
@@ -129,9 +135,11 @@ public abstract class FirstPersonHandsMixin {
 			mcsource$slot = slot;
 			mcsource$drawStart = now;
 		}
-		if (attackValue > 0.0F && attackValue < mcsource$lastAttack || attackValue > 0.0F && mcsource$lastAttack == 0.0F) {
-			mcsource$swingStart = now;
-		}
+		// A swing always plays through at the model's own speed. Minecraft
+		// restarts its quick jab every few ticks while a block is being mined;
+		// restarting the view model's swing that often cut it into the same
+		// jab, so a new swing starts only once the last one has finished.
+		boolean attackStarted = attackValue > 0.0F && (attackValue < mcsource$lastAttack || mcsource$lastAttack == 0.0F);
 		mcsource$lastAttack = attackValue;
 		float drawTime = draw == null ? 0.0F : (now - mcsource$drawStart) / 1000.0F * draw.fps();
 		boolean drawing = draw != null && drawTime < draw.frameCount() - 1;
@@ -143,6 +151,15 @@ public abstract class FirstPersonHandsMixin {
 			model.bindPose(pose);
 		}
 		float swingTime = swing == null ? 0.0F : (now - mcsource$swingStart) / 1000.0F * swing.fps();
+		boolean playing = swing != null && mcsource$swingStart > 0 && swingTime < swing.frameCount() - 1;
+		if (attackStarted && !playing) {
+			mcsource$swingStart = now;
+			mcsource$swingVariant ^= 1;
+			swing = mcsource$swingVariant == 0
+					? model.find("misscenter1", "hitcenter1", "act_vm_misscenter", "act_vm_hitcenter", "attack")
+					: model.find("misscenter2", "hitcenter2", "misscenter1", "act_vm_misscenter", "attack");
+			swingTime = 0.0F;
+		}
 		if (swing != null && mcsource$swingStart > 0 && swingTime < swing.frameCount() - 1) {
 			RiggedModel.Pose swinging = new RiggedModel.Pose(model);
 			model.pose(swing, swingTime, swinging);

@@ -864,30 +864,39 @@ public final class BlockTextures {
 	}
 
 	/**
-	 * Brings a grass sprite towards the colour of the ground it grows from:
-	 * the whole sprite part of the way, and its lower half more and darker,
-	 * so a tuft rises out of the grass floor instead of sitting on it.
+	 * Recolours a grass sprite with the colour of the ground it grows from,
+	 * keeping only the sprite's own light and shade, and darker towards the
+	 * root, so a tuft rises out of the grass floor in the same green instead
+	 * of standing out from it.
+	 * <p>
+	 * The ground texture is kept with Minecraft's grass colour taken out (so
+	 * the biome colour can go back in), and the sprite has it taken out after
+	 * this; so the colour put in here is the ground's with the grass colour
+	 * put back, or the colour would come out of it twice and the grass pale.
 	 */
 	static void blendWithGround(int[] image) {
 		if (groundColour == 0) {
 			return;
 		}
+		int[] ground = {groundColour};
+		retint(ground, GRASS_TINT);
+		int colour = ground[0];
 		int top = SIZE;
 		int bottom = -1;
+		float total = 0.0F;
+		int count = 0;
 		for (int i = 0; i < image.length; i++) {
 			if ((image[i] >>> 24) >= 128) {
 				top = Math.min(top, i / SIZE);
 				bottom = Math.max(bottom, i / SIZE);
+				total += brightness(image[i]);
+				count++;
 			}
 		}
-		if (bottom < top) {
+		if (bottom < top || count == 0) {
 			return;
 		}
-		int own = average(image);
-		float[] shift = new float[3];
-		for (int c = 0; c < 3; c++) {
-			shift[c] = (groundColour >> (16 - 8 * c) & 255) - (own >> (16 - 8 * c) & 255);
-		}
+		float mean = Math.max(0.02F, total / count);
 		for (int i = 0; i < image.length; i++) {
 			int p = image[i];
 			if ((p >>> 24) < 128) {
@@ -895,13 +904,12 @@ public final class BlockTextures {
 			}
 			// 0 at the tips, 1 at the root.
 			float down = bottom == top ? 1.0F : (i / SIZE - top) / (float) (bottom - top);
-			float toward = 0.7F + 0.3F * down;
-			float dark = 0.88F - 0.25F * down * down;
+			float light = Math.max(0.6F, Math.min(1.3F, brightness(p) / mean));
+			float dark = 0.95F - 0.3F * down * down;
 			int out = p & 0xFF000000;
-			for (int c = 0; c < 3; c++) {
-				int shiftBits = 16 - 8 * c;
-				float v = ((p >> shiftBits & 255) + shift[c] * toward) * dark;
-				out |= Math.max(0, Math.min(255, Math.round(v))) << shiftBits;
+			for (int shift = 0; shift <= 16; shift += 8) {
+				float v = (colour >> shift & 255) * light * dark;
+				out |= Math.max(0, Math.min(255, Math.round(v))) << shift;
 			}
 			image[i] = out;
 		}

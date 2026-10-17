@@ -27,7 +27,7 @@ public final class Trees {
 			EntityType.Builder.<TreeEntity>of(TreeEntity::new, MobCategory.MISC)
 					// Only the trunk is solid.
 					.sized(0.8F, 4.0F)
-					.clientTrackingRange(12)
+					.clientTrackingRange(16)
 					.updateInterval(100)
 					.fireImmune()
 					.build(TREE_KEY));
@@ -62,9 +62,9 @@ public final class Trees {
 			return false;
 		}
 		boolean generating = !(level instanceof ServerLevel);
-		// Half-Life 2 trees are bigger than Minecraft's, so forests are thinned
-		// out to keep their crowns from merging. Saplings always grow.
-		if (generating && (origin.asLong() * 0x9E3779B97F4A7C15L >>> 63) == 0) {
+		// Half-Life 2 trees are bigger than Minecraft's, so one in four is left
+		// out to keep forest crowns from merging. Saplings always grow.
+		if (generating && (origin.asLong() * 0x9E3779B97F4A7C15L >>> 62) == 0) {
 			return true;
 		}
 		BlockState log = feature.trunkProvider().value().getState(level, random, origin);

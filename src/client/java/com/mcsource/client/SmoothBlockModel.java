@@ -70,7 +70,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			return;
 		}
 		boolean terrain = state.is(SmoothTerrain.SMOOTH);
+		boolean snowAbove = terrain && level.getBlockState(pos.above()).is(Blocks.SNOW);
 		emitter.pushTransform(quad -> {
+			if (snowAbove && quad.faceNormal().y() > 0.5F) {
+				// Hidden under the snow sheet; see emitBent.
+				return false;
+			}
 			if (terrain) {
 				spreadTexture(quad, pos);
 			}
@@ -447,10 +452,17 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 		// Collect the block's own quads, then draw each cut into pieces that
 		// follow the curved surface.
+		// Under a snow layer the top is never seen: the snow sheet lies on
+		// exactly the same surface, and two surfaces that close together fight
+		// over which is in front once they are a few dozen blocks away.
+		boolean snowAbove = level.getBlockState(pos.above()).is(Blocks.SNOW);
 		MutableMesh captured = CAPTURED.get();
 		captured.clear();
 		QuadEmitter capture = captured.emitter();
 		emitter.pushTransform(quad -> {
+			if (snowAbove && quad.faceNormal().y() > 0.5F) {
+				return false;
+			}
 			capture.copyFrom(quad);
 			spreadTexture(capture, pos);
 			capture.emit();

@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
@@ -40,6 +41,17 @@ public class TreeRenderer extends EntityRenderer<TreeEntity, TreeRenderer.State>
 		// A soft patch of shade on the ground under the crown.
 		shadowRadius = 2.5F;
 		shadowStrength = 0.55F;
+	}
+
+	// Lit by the air well above the foot, which sits sunk into the ground.
+	@Override
+	protected int getSkyLightLevel(TreeEntity tree, BlockPos pos) {
+		return super.getSkyLightLevel(tree, pos.above(2));
+	}
+
+	@Override
+	protected int getBlockLightLevel(TreeEntity tree, BlockPos pos) {
+		return super.getBlockLightLevel(tree, pos.above(2));
 	}
 
 	@Override
