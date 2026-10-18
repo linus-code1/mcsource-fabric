@@ -943,6 +943,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							}
 						}
 						alpha = rock == null ? new float[4] : rockAlpha(ox, oy, oz, on);
+						if (rock != null) {
+							wallAlpha(grid, ox, oz, alpha);
+						}
 						float mean = (alpha[0] + alpha[1] + alpha[2] + alpha[3]) / 4.0F;
 						float[] u = new float[4];
 						float[] v = new float[4];
@@ -977,6 +980,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					}
 					if (rockHere) {
 						alpha = rockAlpha(ox, oy, oz, on);
+						if (top) {
+							slopeAlpha(grid, ox, oz, py[0], alpha);
+						}
 						allRock = alpha[0] > 0.996F && alpha[1] > 0.996F && alpha[2] > 0.996F && alpha[3] > 0.996F;
 						if (allRock) {
 							// Wholly rock: draw the face itself as rock, with nothing laid
@@ -1074,7 +1080,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			rock = "minecraft:block/sandstone";
 		} else if (state.is(Blocks.RED_SAND) || state.is(Blocks.RED_SANDSTONE)) {
 			rock = "minecraft:block/red_sandstone";
-		} else if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)
+		} else if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.PODZOL)
+				|| state.is(Blocks.MYCELIUM) || state.is(Blocks.COARSE_DIRT) || state.is(Blocks.ROOTED_DIRT) || state.is(Blocks.DIRT)
+				|| state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)
 				|| state.is(Blocks.GRAVEL) || state.is(Blocks.CLAY) || state.is(Blocks.STONE) || state.is(Blocks.ANDESITE)
 				|| state.is(Blocks.DIORITE) || state.is(Blocks.GRANITE) || state.is(Blocks.TUFF) || state.is(Blocks.CALCITE)) {
 			// One rock for every cliff of ordinary ground. Minecraft's ground is
@@ -1104,6 +1112,78 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		return alpha;
 	}
+
+	/**
+	 * Raises {@code alpha} where the bent top itself is steep. The smoothed
+	 * normals come from the blocks round about and stay fairly upright at the
+	 * lip of a short cliff, while the top there is pulled down nearly
+	 * straight: those pieces stayed grass beside rock sides and showed as
+	 * hard-edged tongues of grass. The slope is taken from the same curve the
+	 * top is bent by, so it changes smoothly from piece to piece.
+	 */
+	private static void slopeAlpha(float[] grid, float[] px, float[] pz, float y, float[] alpha) {
+		float ly = Mth.clamp(y, 0.0F, 1.0F);
+		float e = 0.05F;
+		for (int i = 0; i < 4; i++) {
+			float x = Mth.clamp(px[i], 0.0F, 1.0F);
+			float z = Mth.clamp(pz[i], 0.0F, 1.0F);
+			float x0 = Math.max(0.0F, x - e);
+			float x1 = Math.min(1.0F, x + e);
+			float z0 = Math.max(0.0F, z - e);
+			float z1 = Math.min(1.0F, z + e);
+			float dx = (smoothOffset(grid, x1, ly, z) - smoothOffset(grid, x0, ly, z)) / (x1 - x0);
+			float dz = (smoothOffset(grid, x, ly, z1) - smoothOffset(grid, x, ly, z0)) / (z1 - z0);
+			float steep = 1.0F - 1.0F / Mth.sqrt(1.0F + dx * dx + dz * dz);
+			float t = Mth.clamp((steep - SLOPE_FROM) / (SLOPE_FULL - SLOPE_FROM), 0.0F, 1.0F);
+			alpha[i] = Math.max(alpha[i], t * t * (3.0F - 2.0F * t));
+		}
+	}
+
+	/**
+	 * Raises {@code alpha} on a side by how tall it stands once bent. A side
+	 * only moves up and down, so it is always upright; on a smooth slope its
+	 * top is pulled down and its bottom up until it is a sliver, but at a
+	 * short cliff it stays most of a block tall. Going by the smoothed
+	 * normals alone, which lean only part way over at the lip of a short
+	 * cliff, such a wall was drawn as grass beside rock and showed as hard
+	 * tongues of grass hanging down the cliff.
+	 */
+	private static void wallAlpha(float[] grid, float[] px, float[] pz, float[] alpha) {
+		for (int i = 0; i < 4; i++) {
+			float x = Mth.clamp(px[i], 0.0F, 1.0F);
+			float z = Mth.clamp(pz[i], 0.0F, 1.0F);
+			float height = 1.0F + smoothOffset(grid, x, 1.0F, z) - smoothOffset(grid, x, 0.0F, z);
+			float t = Mth.clamp((height - WALL_FROM) / (WALL_FULL - WALL_FROM), 0.0F, 1.0F);
+			alpha[i] = Math.max(alpha[i], t * t * (3.0F - 2.0F * t));
+			// Beside a built block the ground is held to it, so the sides there
+			// stand up a little; they stay ground, not a rim of rock round it.
+			alpha[i] *= 1.0F - Mth.clamp(pinned(grid, x, 0.5F, z) * 2.0F, 0.0F, 1.0F);
+		}
+	}
+
+	/** How much of a built block's pull there is at a point, from 0 to 1. */
+	private static float pinned(float[] grid, float x, float y, float z) {
+		float pinned = 0.0F;
+		for (int j = 1; j <= 2; j++) {
+			float fy = j == 1 ? 1.0F - y : y;
+			for (int k = 1; k <= 2; k++) {
+				float fz = k == 1 ? 1.0F - z : z;
+				for (int i = 1; i <= 2; i++) {
+					float fx = i == 1 ? 1.0F - x : x;
+					pinned += fx * fy * fz * grid[64 + i + 4 * k + 16 * j];
+				}
+			}
+		}
+		return pinned;
+	}
+
+	/** How tall a bent side stands, in blocks, where rock starts to show on it and where it covers it. */
+	private static final float WALL_FROM = 0.75F;
+	private static final float WALL_FULL = 1.0F;
+
+	/** Steepness of a bent top where rock starts to show, and where it covers it. */
+	private static final float SLOPE_FROM = 0.4F;
+	private static final float SLOPE_FULL = 0.65F;
 
 	/**
 	 * Rock texture coordinates for the corners of a piece: projected from
@@ -1142,8 +1222,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
-	private static final float ROCK_FROM = 0.25F;
-	private static final float ROCK_FULL = 0.6F;
+	private static final float ROCK_FROM = 0.4F;
+	private static final float ROCK_FULL = 0.7F;
 	/** How far an overlay sits off the face beneath it, in blocks. */
 	private static final float ROCK_LIFT = 0.005F;
 

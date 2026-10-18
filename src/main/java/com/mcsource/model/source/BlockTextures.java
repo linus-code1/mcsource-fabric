@@ -1229,21 +1229,45 @@ public final class BlockTextures {
 	}
 
 	/**
-	 * The upright middle of a tall grass sprite filling a whole block, its
-	 * blades running from the bottom edge to the top so blocks of it stack.
+	 * Reeds in the colours of a tall grass sprite: a few thin stalks running
+	 * straight from the bottom edge to the top, so blocks of cane stacked on
+	 * each other join into tall reeds. Grass blades fan out from their root,
+	 * so a slice of a tuft was narrow at the bottom and wide at the top, and a
+	 * stack showed a row of fans.
 	 */
 	private static int[] reedImage(RiggedModel.Texture sheet, Sprite sprite) {
 		int[] out = new int[SIZE * SIZE];
 		int sheetW = sheet.width();
-		float from = 0.3F;
-		float to = 0.75F;
-		for (int y = 0; y < SIZE; y++) {
-			float row = (float) y / SIZE;
-			int sy = sprite.y + Math.min(sprite.h - 1, (int) ((from + (to - from) * row) * sprite.h));
-			for (int x = 0; x < SIZE; x++) {
-				int sx = sprite.x + Math.min(sprite.w - 1, x * sprite.w / SIZE);
-				int p = sheet.pixels()[sy * sheetW + sx];
-				out[y * SIZE + x] = (p >>> 24) < 96 ? 0 : (p | 0xFF000000);
+		int[] opaque = new int[sprite.w * sprite.h];
+		int count = 0;
+		for (int sy = 0; sy < sprite.h; sy++) {
+			for (int sx = 0; sx < sprite.w; sx++) {
+				int p = sheet.pixels()[(sprite.y + sy) * sheetW + sprite.x + sx];
+				if ((p >>> 24) >= 96) {
+					opaque[count++] = p | 0xFF000000;
+				}
+			}
+		}
+		if (count == 0) {
+			return out;
+		}
+		int mean = 0xFF000000 | average(java.util.Arrays.copyOf(opaque, count));
+		int width = Math.max(1, SIZE / 16);
+		float[] stalks = {0.1F, 0.27F, 0.46F, 0.63F, 0.84F};
+		java.util.Random random = new java.util.Random(7);
+		for (int k = 0; k < stalks.length; k++) {
+			int left = Math.round(stalks[k] * SIZE);
+			float shade = 0.8F + 0.2F * (k % 3) / 2.0F;
+			for (int y = 0; y < SIZE; y++) {
+				// Grain from the sprite's own pixels, half mixed into its mean
+				// colour so the stalk stays one even colour from a distance.
+				int grain = opaque[random.nextInt(count)];
+				int c = mix(grain, mean, 0.6F);
+				for (int w = 0; w < width && left + w < SIZE; w++) {
+					// The right edge of a stalk is darker, giving it some roundness.
+					float edge = w == width - 1 && width > 1 ? 0.75F : 1.0F;
+					out[y * SIZE + left + w] = 0xFF000000 | mix(c, 0, 1.0F - shade * edge);
+				}
 			}
 		}
 		return out;
