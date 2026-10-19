@@ -1,9 +1,10 @@
 package com.mcsource.client.light;
 
-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
@@ -70,10 +71,11 @@ public final class SourceLight {
 		Object level;
 		int generation;
 		long time;
-		final Long2IntOpenHashMap values = new Long2IntOpenHashMap();
+		/** Light coordinates in the low half, the bounce colour (RGB) in the high half. */
+		final Long2LongOpenHashMap values = new Long2LongOpenHashMap();
 
 		Cache() {
-			values.defaultReturnValue(-1);
+			values.defaultReturnValue(-1L);
 		}
 	}
 
@@ -90,6 +92,22 @@ public final class SourceLight {
 		if (OFF || level == null || state.emissiveRendering() || state.isSolidRender()) {
 			return vanilla;
 		}
+		return (int) lookup(level, pos);
+	}
+
+	/**
+	 * The colour light bounced onto a point takes from what it bounced off
+	 * (green under leaves, warm beside sand), as opaque RGB at full strength:
+	 * white where only the open sky lights it.
+	 */
+	public static int tint(BlockAndLightGetter level, BlockPos pos) {
+		if (OFF || level == null || level.getBlockState(pos).isSolidRender()) {
+			return 0xFFFFFFFF;
+		}
+		return 0xFF000000 | (int) (lookup(level, pos) >>> 32);
+	}
+
+	private static long lookup(BlockAndLightGetter level, BlockPos pos) {
 		long key = pos.asLong();
 		if (level instanceof ClientLevel client) {
 			synchronized (LEVEL_CACHE) {
@@ -101,11 +119,11 @@ public final class SourceLight {
 					cache.time = time;
 					cache.values.clear();
 				}
-				int known = cache.values.get(key);
-				if (known != -1) {
+				long known = cache.values.get(key);
+				if (known != -1L) {
 					return known;
 				}
-				int value = work(level, pos);
+				long value = work(level, pos);
 				cache.values.put(key, value);
 				return value;
 			}
@@ -116,19 +134,22 @@ public final class SourceLight {
 			cache.generation = generation;
 			cache.values.clear();
 		}
-		int known = cache.values.get(key);
-		if (known != -1) {
+		long known = cache.values.get(key);
+		if (known != -1L) {
 			return known;
 		}
-		int value = work(level, pos);
+		long value = work(level, pos);
 		cache.values.put(key, value);
 		return value;
 	}
 
-	private static int work(BlockAndLightGetter level, BlockPos pos) {
-		float sky = sky(level, pos);
+	private static long work(BlockAndLightGetter level, BlockPos pos) {
+		float[] colour = new float[3];
+		float sky = sky(level, pos, colour);
 		float lamps = lamps(level, pos);
-		return LightCoordsUtil.smoothPack(Math.round(Mth.clamp(lamps, 0.0F, 1.0F) * 240.0F), Math.round(Mth.clamp(sky, 0.0F, 1.0F) * 240.0F));
+		int light = LightCoordsUtil.smoothPack(Math.round(Mth.clamp(lamps, 0.0F, 1.0F) * 240.0F), Math.round(Mth.clamp(sky, 0.0F, 1.0F) * 240.0F));
+		int rgb = Math.round(colour[0] * 255.0F) << 16 | Math.round(colour[1] * 255.0F) << 8 | Math.round(colour[2] * 255.0F);
+		return (light & 0xFFFFFFFFL) | (long) rgb << 32;
 	}
 
 	/** Light coordinates as Minecraft light levels, 0 to 15, with the fractions kept. */
@@ -147,11 +168,18 @@ public final class SourceLight {
 	}
 
 	/** Share of the sky dome seen from the middle of a block, with light bounced off what is in the way. */
-	private static float sky(BlockAndLightGetter level, BlockPos pos) {
-		if (level.getBrightness(LightLayer.SKY, pos) == 0) {
+	private static float sky(BlockAndLightGetter level, BlockPos pos, float[] colour) {
+		colour[0] = 1.0F;
+		colour[1] = 1.0F;
+		colour[2] = 1.0F;
+		if (level.getBrightness(LightLayer.SKY, pos) == 0 && !openBeside(level, pos)) {
 			// Sealed off from the sky: nothing to see, and nothing lit by it to bounce.
 			return 0.0F;
 		}
+		float red = 0.0F;
+		float green = 0.0F;
+		float blue = 0.0F;
+		float[] hue = new float[3];
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 		BlockPos.MutableBlockPos last = new BlockPos.MutableBlockPos();
 		float ox = pos.getX() + 0.5F;
@@ -162,6 +190,9 @@ public final class SourceLight {
 		for (float[] ray : SKY_RAYS) {
 			float pass = 1.0F;
 			float got = -1.0F;
+			float pr = 1.0F;
+			float pg = 1.0F;
+			float pb = 1.0F;
 			last.set(pos);
 			for (float t = STEP; t <= SKY_REACH; t += STEP) {
 				int x = Mth.floor(ox + ray[0] * t);
@@ -177,13 +208,24 @@ public final class SourceLight {
 				cursor.set(x, y, z);
 				BlockState state = level.getBlockState(cursor);
 				if (state.is(BlockTags.LEAVES)) {
+					// Light through leaves comes out green.
 					pass *= LEAF_PASS;
+					hue(level, state, cursor, hue);
+					pr *= 0.5F + 0.5F * hue[0];
+					pg *= 0.5F + 0.5F * hue[1];
+					pb *= 0.5F + 0.5F * hue[2];
 				} else if (!state.getFluidState().isEmpty()) {
 					pass *= WATER_PASS;
+					pr *= 0.8F;
+					pg *= 0.92F;
 				} else if (state.canOcclude()) {
 					// Hit something: the light it bounces back, by how lit it is and its colour.
 					float lit = level.getBrightness(LightLayer.SKY, last) / 15.0F;
 					got = pass * BOUNCE * albedo(level, state, cursor) * lit * lit;
+					hue(level, state, cursor, hue);
+					pr *= hue[0];
+					pg *= hue[1];
+					pb *= hue[2];
 					break;
 				}
 				last.set(cursor);
@@ -193,8 +235,54 @@ public final class SourceLight {
 				got = pass * level.getBrightness(LightLayer.SKY, last) / 15.0F;
 			}
 			total += got;
+			red += got * pr;
+			green += got * pg;
+			blue += got * pb;
+		}
+		float most = Math.max(red, Math.max(green, blue));
+		if (most > 1.0E-4F) {
+			colour[0] = red / most;
+			colour[1] = green / most;
+			colour[2] = blue / most;
 		}
 		return total / SKY_RAYS.length;
+	}
+
+	/**
+	 * Whether a block that is not open itself (a prop, a slab) has sky light
+	 * beside it. Minecraft gives such blocks no light of their own, and taken
+	 * as sealed, the ground under every prop showed as a dark square.
+	 */
+	private static boolean openBeside(BlockAndLightGetter level, BlockPos pos) {
+		if (level.getBlockState(pos).isAir()) {
+			return false;
+		}
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (Direction direction : Direction.values()) {
+			if (level.getBrightness(LightLayer.SKY, cursor.setWithOffset(pos, direction)) > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** A block's colour with its brightness taken out (the brightest channel 1), or white when it has none. */
+	private static void hue(BlockAndLightGetter level, BlockState state, BlockPos pos, float[] out) {
+		MapColor colour = state.getMapColor(level, pos);
+		int c = colour == null ? 0 : colour.col;
+		float r = (c >> 16 & 255) / 255.0F;
+		float g = (c >> 8 & 255) / 255.0F;
+		float b = (c & 255) / 255.0F;
+		float most = Math.max(r, Math.max(g, b));
+		if (most < 0.05F) {
+			out[0] = 1.0F;
+			out[1] = 1.0F;
+			out[2] = 1.0F;
+			return;
+		}
+		out[0] = r / most;
+		out[1] = g / most;
+		out[2] = b / most;
 	}
 
 	/** How much light a block's colour sends back, 0 to 1. */
@@ -232,6 +320,91 @@ public final class SourceLight {
 		float flooded = level.getBrightness(LightLayer.BLOCK, pos) / 15.0F;
 		float bounced = LAMP_BOUNCE * flooded * flooded;
 		return sum[0] + bounced * Math.max(0.0F, 1.0F - sum[0]);
+	}
+
+	/**
+	 * Lamp light (0 to 1) at an exact point rather than a block, for drawing
+	 * light that falls off smoothly over a surface instead of block by block.
+	 * The point should sit just off the surface, in the open.
+	 */
+	public static float lampsAt(BlockAndLightGetter level, float px, float py, float pz) {
+		if (OFF) {
+			return -1.0F;
+		}
+		PointCache cache = POINT_CACHE.get();
+		if (cache.level != level || cache.generation != generation) {
+			cache.level = level;
+			cache.generation = generation;
+			cache.values.clear();
+		}
+		long key = ((long) Math.round(px * 16.0F) & 0x3FFFFFL) << 42 | ((long) Math.round(py * 16.0F) & 0xFFFFFL) << 22
+				| (long) Math.round(pz * 16.0F) & 0x3FFFFFL;
+		float known = cache.values.get(key);
+		if (known >= 0.0F) {
+			return known;
+		}
+		float value = lampsAtUncached(level, px, py, pz);
+		cache.values.put(key, value);
+		return value;
+	}
+
+	private static final class PointCache {
+		Object level;
+		int generation;
+		final it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap values = new it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap();
+
+		PointCache() {
+			values.defaultReturnValue(-1.0F);
+		}
+	}
+
+	private static final ThreadLocal<PointCache> POINT_CACHE = ThreadLocal.withInitial(PointCache::new);
+
+	private static float lampsAtUncached(BlockAndLightGetter level, float px, float py, float pz) {
+		float[] sum = {0.0F};
+		int[] seen = {0};
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		Emitters.around(Mth.floor(px), Mth.floor(py), Mth.floor(pz), 15, (x, y, z, emission) -> {
+			if (seen[0]++ >= MAX_LAMPS) {
+				return;
+			}
+			sum[0] += lamp(level, cursor, px, py, pz, x, y, z, emission);
+		});
+		int[] held = HeldLight.source();
+		if (held != null) {
+			sum[0] += lamp(level, cursor, px, py, pz, held[0], held[1], held[2], held[3]);
+		}
+		float flooded = flood(level, cursor, px, py, pz) / 15.0F;
+		float bounced = LAMP_BOUNCE * flooded * flooded;
+		return Mth.clamp(sum[0] + bounced * Math.max(0.0F, 1.0F - sum[0]), 0.0F, 1.0F);
+	}
+
+	/** Minecraft's block light blended between the open blocks round a point. */
+	private static float flood(BlockAndLightGetter level, BlockPos.MutableBlockPos cursor, float px, float py, float pz) {
+		float sx = px - 0.5F;
+		float sy = py - 0.5F;
+		float sz = pz - 0.5F;
+		int x0 = Mth.floor(sx);
+		int y0 = Mth.floor(sy);
+		int z0 = Mth.floor(sz);
+		float fx = sx - x0;
+		float fy = sy - y0;
+		float fz = sz - z0;
+		float total = 0.0F;
+		float weights = 0.0F;
+		for (int corner = 0; corner < 8; corner++) {
+			int cx = corner & 1;
+			int cy = corner >> 1 & 1;
+			int cz = corner >> 2 & 1;
+			cursor.set(x0 + cx, y0 + cy, z0 + cz);
+			if (level.getBlockState(cursor).isSolidRender()) {
+				continue;
+			}
+			float w = (cx == 1 ? fx : 1.0F - fx) * (cy == 1 ? fy : 1.0F - fy) * (cz == 1 ? fz : 1.0F - fz);
+			total += w * level.getBrightness(LightLayer.BLOCK, cursor);
+			weights += w;
+		}
+		return weights < 1.0E-4F ? 0.0F : total / weights;
 	}
 
 	private static float lamp(BlockAndLightGetter level, BlockPos.MutableBlockPos cursor, float ox, float oy, float oz, int x, int y, int z,

@@ -24,6 +24,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import org.joml.Vector3fc;
 
+import com.mcsource.client.light.OwnLight;
+import com.mcsource.client.light.SourceLight;
 import com.mcsource.terrain.SmoothMath;
 import com.mcsource.terrain.SmoothTerrain;
 
@@ -34,6 +36,8 @@ import com.mcsource.terrain.SmoothTerrain;
  * with the ground under them.
  */
 public final class SmoothBlockModel extends WrapperBlockStateModel {
+	/** How far off the surface lamp light is measured, so the ground itself never stands in the way. */
+	private static final float LAMP_PROBE = 0.3F;
 	/** How far a thin snow sheet sits above the ground. */
 	private static final float SNOW_LIFT = 0.035F;
 
@@ -57,12 +61,19 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			if (state.is(SmoothTerrain.SMOOTH) && !buried(level, pos)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, pos, state);
 				float[] grid = wide == null ? null : grid(wide, level, pos);
-				if (grid == null && wide != null && blends(level, pos, state) != null) {
-					// Flat, but beside another ground texture to blend with.
+				if (grid == null && wide != null && (blends(level, pos, state) != null || openAbove(level, pos))) {
+					// Flat ground goes the same way as bent ground, so it is lit
+					// the same way: lit block by block, flat ground next to bent
+					// ground showed as squares of different brightness.
 					grid = new float[128];
 				}
 				if (grid != null) {
-					emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
+					OwnLight.begin();
+					try {
+						emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
+					} finally {
+						OwnLight.end();
+					}
 					return;
 				}
 			} else if (state.is(SmoothTerrain.FOLLOWS)) {
@@ -153,6 +164,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		tops.clear();
 	}
 
+	/** Whether the ground's top is out in the open, not under a prop or other block. */
+	private static boolean openAbove(BlockAndTintGetter level, BlockPos pos) {
+		BlockState above = level.getBlockState(pos.above());
+		return above.isAir() || above.is(SmoothTerrain.FOLLOWS) || above.getCollisionShape(level, pos.above()).isEmpty();
+	}
+
 	private static final ThreadLocal<MutableMesh> TOPS = ThreadLocal.withInitial(() -> Renderer.get().mutableMesh());
 	/** The texture bounds (u0, u1, v0, v1) of a block's faces, four values a face from {@link #boundsAt}. */
 	private static final ThreadLocal<float[]> FACE_BOUNDS = ThreadLocal.withInitial(() -> new float[24]);
@@ -205,6 +222,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	private static float tilingAlpha(BlockPos pos, float x, float z) {
 		float wx = pos.getX() + Mth.clamp(x, 0.0F, 1.0F);
 		float wz = pos.getZ() + Mth.clamp(z, 0.0F, 1.0F);
+		if (NO_TILING) {
+			return 0.0F;
+		}
 		float n = noise(wx / 6.0F, wz / 6.0F, 7) * 0.7F + noise(wx / 2.5F, wz / 2.5F, 8) * 0.3F;
 		float t = Mth.clamp((n - 0.35F) / 0.3F, 0.0F, 1.0F);
 		return 0.85F * t * t * (3.0F - 2.0F * t);
@@ -293,6 +313,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 	/** Test aid: -Dmcsource.debugPaths=true colours each way a terrain piece is textured. */
 	private static final boolean DEBUG_PATHS = Boolean.getBoolean("mcsource.debugPaths");
+	/** Debugging: leaves out the layer that breaks up the ground texture's repeat. */
+	private static final boolean NO_TILING = Boolean.getBoolean("mcsource.noTiling");
 
 	private static void debugTint(MutableQuadView quad, int rgb) {
 		if (!DEBUG_PATHS) {
@@ -618,8 +640,23 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						emitter.pos(i, x, bentY, z);
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
 						// Plants and snow take the sun as if facing up, like the ground.
+						float skyHere = com.mcsource.client.light.SourceLight.skyLevel(lightHere);
+						float blockHere = com.mcsource.client.light.SourceLight.blockLevel(lightHere);
+						if (lying) {
+							// A sheet lying over several blocks is lit smoothly across
+							// them, as the ground is, not one flat level a block.
+							float[] smooth = SmoothLight.at(level, pos.getX() + Mth.clamp(x, 0.0F, 1.0F), pos.getY() + Mth.clamp(bentY, 0.0F, 1.0F),
+									pos.getZ() + Mth.clamp(z, 0.0F, 1.0F));
+							float lamps = SourceLight.lampsAt(level, pos.getX() + x, pos.getY() + bentY + LAMP_PROBE, pos.getZ() + z);
+							if (lamps >= 0.0F) {
+								smooth[0] = lamps * 15.0F;
+							}
+							blockHere = smooth[0];
+							skyHere = smooth[1];
+							emitter.lightmap(i, SmoothLight.pack(smooth));
+						}
 						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
-								com.mcsource.client.light.SourceLight.skyLevel(lightHere), com.mcsource.client.light.SourceLight.blockLevel(lightHere));
+								skyHere, blockHere);
 						emitter.color(i, ARGB.multiply(blendColor(pc, w0, w1, w2, w3), sun));
 						emitter.normal(i, 0.0F, 1.0F, 0.0F);
 					}
@@ -635,7 +672,16 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					// a snow sheet bent over a slope turned into a patchwork of white
 					// and half-dark grey triangles.
 					emitter.shadeDirectionOverride(Direction.UP);
-					emitter.emit();
+					if (lying) {
+						OwnLight.begin();
+						try {
+							emitter.emit();
+						} finally {
+							OwnLight.end();
+						}
+					} else {
+						emitter.emit();
+					}
 				}
 			}
 		});
@@ -836,8 +882,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		float block = com.mcsource.client.light.SourceLight.blockLevel(light);
 		for (int i = 0; i < 4; i++) {
+			// Light blended between blocks, as the renderer blends the face's
+			// own light: one level for the whole face showed each block as a
+			// square of its own brightness.
+			float[] smooth = SmoothLight.at(level, pos.getX() + Mth.clamp(quad.x(i), 0.0F, 1.0F), pos.getY() + Mth.clamp(quad.y(i), 0.0F, 1.0F),
+					pos.getZ() + Mth.clamp(quad.z(i), 0.0F, 1.0F));
 			int sun = SunLight.multiplier(level, pos.getX() + quad.x(i), pos.getY() + quad.y(i), pos.getZ() + quad.z(i),
-					normal.x(), normal.y(), normal.z(), sky, block);
+					normal.x(), normal.y(), normal.z(), smooth[1], smooth[0]);
 			quad.color(i, ARGB.multiply(quad.color(i), sun));
 		}
 	}
@@ -1158,11 +1209,18 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 						// Light, shade and sun blended from the corners, so they change
 						// smoothly across the face instead of in steps.
+						// Light from every open block round about, plants included: the
+						// renderer raises a face to the light of the block above it,
+						// so leaving out a block with a plant in it lit each such block
+						// a step brighter than the ground round it, in squares.
 						float[] one = new float[1];
-						trilinear(blockLight, 1, lx, ly, lz, one);
-						float block = one[0];
-						trilinear(skyLight, 1, lx, ly, lz, one);
-						float sky = one[0];
+						float[] smooth = SmoothLight.at(level, pos.getX() + lx, pos.getY() + ly, pos.getZ() + lz);
+						// Lamps by the exact point, so their light fades smoothly
+						// across the ground instead of block by block.
+						float lamps = SourceLight.lampsAt(level, pos.getX() + x + n[0] * LAMP_PROBE, pos.getY() + bentY + n[1] * LAMP_PROBE,
+								pos.getZ() + z + n[2] * LAMP_PROBE);
+						float block = lamps >= 0.0F ? lamps * 15.0F : smooth[0];
+						float sky = smooth[1];
 						trilinear(shade, 1, lx, ly, lz, one);
 						int grey = Math.round(255.0F * one[0]);
 						int original = blend(pl, w0, w1, w2, w3);
@@ -1274,7 +1332,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					emitter.emit();
 					// Layers laid from above fade out where the top is bent steep,
 					// or their textures smear down it in streaks.
-					float[] keep = top && !allRock ? flatness(grid, ox, oz, py[0]) : null;
+					float[] keep = top && !allRock ? flatness(on) : null;
 					if (keep != null) {
 						breakTiling(emitter, faceBounds, pos, ox, oy, oz, oc, ol, on, tint, keep);
 					}
@@ -1502,20 +1560,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * to lay a texture on from above) to 0 (too steep), taken from the curve
 	 * the top is bent by, so it changes smoothly from piece to piece.
 	 */
-	private static float[] flatness(float[] grid, float[] px, float[] pz, float y) {
+	private static float[] flatness(float[] normal) {
+		// By each corner's smooth normal, which the blocks either side of an
+		// edge agree on: worked out from the block's own grid, the two sides
+		// of an edge disagreed and the layers ended in hard-edged patches.
 		float[] keep = new float[4];
-		float ly = Mth.clamp(y, 0.0F, 1.0F);
-		float e = 0.05F;
 		for (int i = 0; i < 4; i++) {
-			float x = Mth.clamp(px[i], 0.0F, 1.0F);
-			float z = Mth.clamp(pz[i], 0.0F, 1.0F);
-			float x0 = Math.max(0.0F, x - e);
-			float x1 = Math.min(1.0F, x + e);
-			float z0 = Math.max(0.0F, z - e);
-			float z1 = Math.min(1.0F, z + e);
-			float dx = (smoothOffset(grid, x1, ly, z) - smoothOffset(grid, x0, ly, z)) / (x1 - x0);
-			float dz = (smoothOffset(grid, x, ly, z1) - smoothOffset(grid, x, ly, z0)) / (z1 - z0);
-			float steep = 1.0F - 1.0F / Mth.sqrt(1.0F + dx * dx + dz * dz);
+			float steep = 1.0F - Mth.clamp(normal[i * 3 + 1], 0.0F, 1.0F);
 			float t = Mth.clamp((steep - 0.25F) / 0.25F, 0.0F, 1.0F);
 			keep[i] = 1.0F - t * t * (3.0F - 2.0F * t);
 		}

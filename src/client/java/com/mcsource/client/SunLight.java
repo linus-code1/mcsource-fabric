@@ -9,6 +9,7 @@ import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.state.BlockState;
 
+import com.mcsource.client.light.SourceLight;
 import com.mcsource.terrain.SmoothTerrain;
 
 /**
@@ -76,6 +77,9 @@ public final class SunLight {
 		}
 	}
 
+	/** How strongly shade takes the colour of the light bounced into it. */
+	private static final float BOUNCE_TINT = 0.45F;
+
 	private SunLight() {
 	}
 
@@ -96,9 +100,12 @@ public final class SunLight {
 		// Only daylight is shaded: indoors and near lamps the multiplier fades out.
 		float skyShare = sky / 15.0F;
 		float strength = skyShare * skyShare * (1.0F - 0.8F * Mth.clamp(block / 15.0F, 0.0F, 1.0F));
-		int r = channel(0, sun, strength);
-		int g = channel(1, sun, strength);
-		int b = channel(2, sun, strength);
+		// Shade takes the colour of what the light bounced off on its way in.
+		int tint = SourceLight.tint(level, BlockPos.containing(x + nx * 0.5F, y + ny * 0.5F, z + nz * 0.5F));
+		float bounce = BOUNCE_TINT * skyShare * (1.0F - 0.8F * Mth.clamp(block / 15.0F, 0.0F, 1.0F)) * (1.0F - 0.7F * sun);
+		int r = Math.round(channel(0, sun, strength) * Mth.lerp(bounce, 1.0F, ARGB.red(tint) / 255.0F));
+		int g = Math.round(channel(1, sun, strength) * Mth.lerp(bounce, 1.0F, ARGB.green(tint) / 255.0F));
+		int b = Math.round(channel(2, sun, strength) * Mth.lerp(bounce, 1.0F, ARGB.blue(tint) / 255.0F));
 		return ARGB.color(255, r, g, b);
 	}
 
