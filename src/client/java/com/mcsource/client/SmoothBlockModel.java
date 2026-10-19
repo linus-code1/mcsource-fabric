@@ -154,8 +154,22 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	private static final ThreadLocal<MutableMesh> TOPS = ThreadLocal.withInitial(() -> Renderer.get().mutableMesh());
-	/** The texture bounds of a block's top (0 to 3) and bottom (4 to 7) faces: u0, u1, v0, v1. */
-	private static final ThreadLocal<float[]> FACE_BOUNDS = ThreadLocal.withInitial(() -> new float[8]);
+	/** The texture bounds (u0, u1, v0, v1) of a block's faces, four values a face from {@link #boundsAt}. */
+	private static final ThreadLocal<float[]> FACE_BOUNDS = ThreadLocal.withInitial(() -> new float[24]);
+
+	/** Where a face's texture bounds are kept: top, bottom, then the four sides. */
+	private static int boundsAt(Vector3fc normal) {
+		if (normal.y() > 0.5F) {
+			return 0;
+		}
+		if (normal.y() < -0.5F) {
+			return 4;
+		}
+		if (Math.abs(normal.z()) >= Math.abs(normal.x())) {
+			return normal.z() < 0.0F ? 8 : 12;
+		}
+		return normal.x() < 0.0F ? 16 : 20;
+	}
 
 	private static void faceBounds(MutableQuadView quad, float[] bounds, int at) {
 		bounds[at] = Float.MAX_VALUE;
@@ -257,6 +271,24 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			float v = upward(pos.getY() + py[i]);
 			emitter.uv(i, bounds[at] + u * (bounds[at + 1] - bounds[at]), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2]));
 		}		debugTint(emitter, 0x4080FF);
+	}
+
+	/**
+	 * Lays a bent side's own texture up its height by the world, as rock is
+	 * laid on a cliff. Bent, a side keeps its width but not its height, and
+	 * going by the model, the texture's whole height was squeezed into what
+	 * is left: where the side narrows to nothing at one end, it ran together
+	 * into fans of streaks.
+	 */
+	private static void standUp(QuadEmitter emitter, float[] bounds, int at, BlockPos pos, float[] py) {
+		if (bounds[at + 3] <= bounds[at + 2]) {
+			return;
+		}
+		for (int i = 0; i < 4; i++) {
+			float v = upward(pos.getY() + py[i]);
+			emitter.uv(i, emitter.u(i), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2]));
+		}
+		debugTint(emitter, 0xC080FF);
 	}
 
 	/** Test aid: -Dmcsource.debugPaths=true colours each way a terrain piece is textured. */
@@ -1009,8 +1041,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				return false;
 			}
-			if (Math.abs(quad.faceNormal().y()) > 0.5F) {
-				faceBounds(quad, faceBounds, quad.faceNormal().y() > 0.0F ? 0 : 4);
+			if (quad.tintIndex() < 0 || quad.faceNormal().y() > 0.5F) {
+				faceBounds(quad, faceBounds, boundsAt(quad.faceNormal()));
 			}
 			capture.copyFrom(quad);
 			liftLowTop(capture, state);
@@ -1199,11 +1231,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							for (int i = 0; i < 4; i++) {
 								rest[i] = 1.0F - alpha[i];
 							}
-							groundOverlay(emitter, ground, pos, ox, oy, oz, oc, ol, on, rest);
+							groundOverlay(emitter, ground, pos, grid, ox, oy, oz, oc, ol, on, rest);
 						} else {
 							// Mostly ground: the face is the ground's top, with rock
 							// faded over it where it is steeper.
-							groundUv(ground, pos, ox, oy, oz, on, u, v);
+							groundUv(ground, pos, grid, ox, oy, oz, on, u, v);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
 							}
@@ -1236,6 +1268,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					}
 					if (flatFace && !allRock) {
 						steepen(emitter, faceBounds, top ? 0 : 4, pos, ox, oy, oz);
+					} else if (!allRock) {
+						standUp(emitter, faceBounds, boundsAt(face), pos, oy);
 					}
 					emitter.emit();
 					// Layers laid from above fade out where the top is bent steep,
@@ -1596,7 +1630,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * steep (spread over two blocks' height, as rock is), so it never
 	 * smears into streaks.
 	 */
-	private static void groundUv(GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, float[] normal, float[] u, float[] v) {
+	private static void groundUv(GroundTop ground, BlockPos pos, float[] grid, float[] px, float[] py, float[] pz, float[] normal, float[] u,
+			float[] v) {
 		float ax = px[2] - px[0];
 		float ay = py[2] - py[0];
 		float az = pz[2] - pz[0];
@@ -1619,9 +1654,16 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		// Only a short sliver, though: a side still standing tall laid from
 		// above showed the texture smeared down it in streaks.
-		float low = Math.min(Math.min(py[0], py[1]), Math.min(py[2], py[3]));
-		float high = Math.max(Math.max(py[0], py[1]), Math.max(py[2], py[3]));
-		boolean sliver = upright >= FLAT_GROUND && high - low <= SLIVER;
+		// The whole side's height counts, not the piece's: a side is cut into
+		// pieces, and a short wall of several low pieces laid from above was
+		// a band of streaks.
+		float wall = 0.0F;
+		for (int i = 0; i < 4; i++) {
+			float x = Mth.clamp(px[i], 0.0F, 1.0F);
+			float z = Mth.clamp(pz[i], 0.0F, 1.0F);
+			wall = Math.max(wall, grid == null ? 1.0F : 1.0F + smoothOffset(grid, x, 1.0F, z) - smoothOffset(grid, x, 0.0F, z));
+		}
+		boolean sliver = upright >= FLAT_GROUND && wall <= SLIVER;
 		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F || sliver;
 		boolean alongX = Math.abs(cz) >= Math.abs(cx);
 		// Spread over the blocks as the tops are (see spreadTexture), so the
@@ -1642,10 +1684,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	/** How upright the smoothed ground's normal must be for a side piece to be laid from above. */
 	private static final float FLAT_GROUND = 0.6F;
 	/** How tall a side piece may stand, in blocks, and still be laid from above. */
-	private static final float SLIVER = 0.2F;
+	private static final float SLIVER = 0.12F;
 
 	/** The ground's top faded over one piece of a face by {@code alpha} at each corner. */
-	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour, int[] light,
+	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, BlockPos pos, float[] grid, float[] px, float[] py, float[] pz, int[] colour, int[] light,
 			float[] normal, float[] alpha) {
 		boolean any = false;
 		for (int i = 0; i < 4; i++) {
@@ -1656,7 +1698,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		float[] u = new float[4];
 		float[] v = new float[4];
-		groundUv(ground, pos, px, py, pz, normal, u, v);
+		groundUv(ground, pos, grid, px, py, pz, normal, u, v);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
