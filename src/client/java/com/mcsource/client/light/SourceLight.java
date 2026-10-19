@@ -48,6 +48,8 @@ public final class SourceLight {
 	private static final ThreadLocal<Cache> REGION_CACHE = ThreadLocal.withInitial(Cache::new);
 	private static final Cache LEVEL_CACHE = new Cache();
 	private static volatile int generation;
+	/** Test aid: -Dmcsource.vanillaLight=true draws with Minecraft's own light, for comparing. */
+	private static final boolean OFF = Boolean.getBoolean("mcsource.vanillaLight");
 
 	static {
 		int count = 14;
@@ -85,7 +87,7 @@ public final class SourceLight {
 	 * {@code vanilla} light coordinates there.
 	 */
 	public static int at(BlockAndLightGetter level, BlockState state, BlockPos pos, int vanilla) {
-		if (level == null || state.emissiveRendering() || state.isSolidRender()) {
+		if (OFF || level == null || state.emissiveRendering() || state.isSolidRender()) {
 			return vanilla;
 		}
 		long key = pos.asLong();
