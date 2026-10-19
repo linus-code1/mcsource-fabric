@@ -25,13 +25,25 @@ public abstract class BlockStateBaseMixin {
 	@Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
 			at = @At("HEAD"), cancellable = true)
 	private void mcsource$smoothCollision(BlockGetter level, BlockPos pos, CollisionContext context, CallbackInfoReturnable<VoxelShape> cir) {
-		mcsource$applySmoothShape(level, pos, cir);
+		if (!mcsource$keepsOwnCollision()) {
+			mcsource$applySmoothShape(level, pos, cir);
+		}
 	}
 
 	@Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
 			at = @At("HEAD"), cancellable = true)
 	private void mcsource$smoothCachedCollision(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
-		mcsource$applySmoothShape(level, pos, cir);
+		if (!mcsource$keepsOwnCollision()) {
+			mcsource$applySmoothShape(level, pos, cir);
+		}
+	}
+
+	/**
+	 * Powder snow is drawn smoothed with the ground round it, but keeps its
+	 * own collision, so players still sink into it.
+	 */
+	private boolean mcsource$keepsOwnCollision() {
+		return ((BlockState) (Object) this).is(net.minecraft.world.level.block.Blocks.POWDER_SNOW);
 	}
 
 	@Inject(method = "getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",

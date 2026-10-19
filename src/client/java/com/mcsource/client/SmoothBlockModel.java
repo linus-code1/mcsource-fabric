@@ -431,11 +431,17 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						float bentY = thinSnow ? groundY + SNOW_LIFT : y + groundY;
 						emitter.pos(i, x, bentY, z);
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
-						// Plants and snow take the sun as if facing up, like the ground.
-						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
+						// Plants take the sun as if facing up. A snow sheet is shaded as
+						// the ground under it is: lit as if flat, a sheet over a steep
+						// step shone white beside the shaded ground round it.
+						float[] n = {0.0F, 1.0F, 0.0F};
+						if (thinSnow) {
+							surface.normal(Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F), n);
+						}
+						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, n[0], n[1], n[2],
 								LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
 						emitter.color(i, ARGB.multiply(blendColor(pc, w0, w1, w2, w3), sun));
-						emitter.normal(i, 0.0F, 1.0F, 0.0F);
+						emitter.normal(i, n[0], n[1], n[2]);
 					}
 					emitter.ambientOcclusion(TriState.FALSE);
 					if (lying) {
@@ -448,7 +454,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					// the crossed cards of a grass tuft come out light and dark, and
 					// a snow sheet bent over a slope turned into a patchwork of white
 					// and half-dark grey triangles.
-					emitter.shadeDirectionOverride(Direction.UP);
+					if (thinSnow) {
+						emitter.shadeMode(ShadeMode.ENHANCED);
+					} else {
+						emitter.shadeDirectionOverride(Direction.UP);
+					}
 					emitter.emit();
 				}
 			}
@@ -480,15 +490,20 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		private final float base;
 		private final float[] grid;
 		private final float[] corners;
+		/** The ground's smoothed normals, or null where it is not smoothed. */
+		private final float[] normals;
 
 		GroundSurface(BlockAndTintGetter level, BlockPos pos, int packed) {
 			BlockPos below = SmoothTerrain.ground(level, pos);
 			BlockState ground = level.getBlockState(below);
 			float[] bent = null;
+			float[] smooth = null;
 			if (ground.is(SmoothTerrain.SMOOTH)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, below, ground);
 				bent = wide == null ? null : grid(wide, level, below);
+				smooth = wide == null ? null : smoothNormals(wide);
 			}
+			this.normals = smooth;
 			this.base = below.getY() + 1 - pos.getY();
 			this.grid = bent;
 			if (ground.is(SmoothTerrain.SMOOTH)) {
@@ -500,6 +515,23 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					corners[i] = SmoothMath.corner(packed, i) / 8.0F - 1.0F;
 				}
 			}
+		}
+
+		/** The ground's normal at a point on its top, into {@code out}; straight up where it has none. */
+		void normal(float x, float z, float[] out) {
+			if (normals != null) {
+				trilinear(normals, 3, x, 1.0F, z, out);
+				float length = Mth.sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+				if (length > 1.0E-3F) {
+					out[0] /= length;
+					out[1] /= length;
+					out[2] /= length;
+					return;
+				}
+			}
+			out[0] = 0.0F;
+			out[1] = 1.0F;
+			out[2] = 0.0F;
 		}
 
 		float height(float x, float z) {
@@ -941,6 +973,26 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							n[1] /= length;
 							n[2] /= length;
 						}
+						if (!top && fy > -0.5F) {
+							// A side that still stands tall once bent (a step too steep
+							// to smooth away) is a wall: shaded as the way it faces, not
+							// as the smooth ground round it, or it was lit just like the
+							// slope above and showed as flat white or green spikes.
+							float height = 1.0F + smoothOffset(grid, lx, 1.0F, lz) - smoothOffset(grid, lx, 0.0F, lz);
+							float k = Mth.clamp((height - 0.3F) / 0.6F, 0.0F, 1.0F);
+							k = k * k * (3.0F - 2.0F * k);
+							if (k > 0.0F) {
+								n[0] += (fx - n[0]) * k;
+								n[1] += (fy - n[1]) * k;
+								n[2] += (fz - n[2]) * k;
+								float again = Mth.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+								if (again > 1.0E-3F) {
+									n[0] /= again;
+									n[1] /= again;
+									n[2] /= again;
+								}
+							}
+						}
 						// Every vertex gets a normal: a quad missing one is shaded flat
 						// from its face normal, which shows each facet.
 						emitter.normal(i, n[0], n[1], n[2]);
@@ -1022,7 +1074,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						} else {
 							// Mostly ground: the face is the ground's top, with rock
 							// faded over it where it is steeper.
-							groundUv(ground, pos, ox, oy, oz, u, v);
+							groundUv(ground, pos, ox, oy, oz, on, u, v);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
 							}
@@ -1328,7 +1380,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * steep (spread over two blocks' height, as rock is), so it never
 	 * smears into streaks.
 	 */
-	private static void groundUv(GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, float[] u, float[] v) {
+	private static void groundUv(GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, float[] normal, float[] u, float[] v) {
 		float ax = px[2] - px[0];
 		float ay = py[2] - py[0];
 		float az = pz[2] - pz[0];
@@ -1339,7 +1391,17 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		float cy = az * bx - ax * bz;
 		float cz = ax * by - ay * bx;
 		float length = Mth.sqrt(cx * cx + cy * cy + cz * cz);
-		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F;
+		// Laid from above wherever the ground round about is gentle, even on
+		// a piece of a block's side: a side only moves up and down, so laid
+		// from above it lines up exactly with the tops beside it. Going by
+		// the piece itself, every side piece was laid from the side and its
+		// texture broke off along each edge with a top, in long creases
+		// across gentle slopes.
+		float upright = 0.0F;
+		for (int i = 0; i < 4; i++) {
+			upright += Math.abs(normal[i * 3 + 1]) / 4.0F;
+		}
+		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F || upright >= FLAT_GROUND;
 		boolean alongX = Math.abs(cz) >= Math.abs(cx);
 		// Spread over the blocks as the tops are (see spreadTexture), so the
 		// ground keeps one scale from piece to piece.
@@ -1356,6 +1418,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 	}
 
+	/** How upright the smoothed ground's normal must be for a side piece to be laid from above. */
+	private static final float FLAT_GROUND = 0.6F;
+
 	/** The ground's top faded over one piece of a face by {@code alpha} at each corner. */
 	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour, int[] light,
 			float[] normal, float[] alpha) {
@@ -1368,7 +1433,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		float[] u = new float[4];
 		float[] v = new float[4];
-		groundUv(ground, pos, px, py, pz, u, v);
+		groundUv(ground, pos, px, py, pz, normal, u, v);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);

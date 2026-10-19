@@ -85,6 +85,7 @@ public final class BlockTextures {
 			sandstone_bottom = stone/*sand* nature/*sandstone* *sandstone* concrete/concretefloor0*
 			snow = nature/snowfloor00* nature/*snow* *snow*
 			snow_block = nature/snowfloor00* nature/*snow* *snow*
+			powder_snow = nature/snowfloor00* nature/*snow* *snow*
 			ice = nature/ice* */ice0* nature/*frozen*
 			packed_ice = nature/ice* */ice0* nature/*frozen*
 			oak_planks = wood/woodfloor005a wood/woodfloor007a wood/woodfloor00* wood/*plank* wood/*floor* wood/*
