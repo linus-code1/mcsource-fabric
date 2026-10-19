@@ -202,11 +202,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * read as the same square laid over and over.
 	 */
 	private static void breakTiling(QuadEmitter emitter, float[] bounds, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour,
-			int[] light, float[] normal, int tint) {
+			int[] light, float[] normal, int tint, float[] keep) {
 		float[] alpha = new float[4];
 		boolean any = false;
 		for (int i = 0; i < 4; i++) {
-			alpha[i] = tilingAlpha(pos, px[i], pz[i]);
+			alpha[i] = tilingAlpha(pos, px[i], pz[i]) * keep[i];
 			any |= alpha[i] > 0.004F;
 		}
 		if (!any) {
@@ -1222,12 +1222,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						steepen(emitter, faceBounds, top ? 0 : 4, pos, ox, oy, oz);
 					}
 					emitter.emit();
-					if (top && !allRock) {
-						breakTiling(emitter, faceBounds, pos, ox, oy, oz, oc, ol, on, tint);
+					// Layers laid from above fade out where the top is bent steep,
+					// or their textures smear down it in streaks.
+					float[] keep = top && !allRock ? flatness(grid, ox, oz, py[0]) : null;
+					if (keep != null) {
+						breakTiling(emitter, faceBounds, pos, ox, oy, oz, oc, ol, on, tint, keep);
 					}
 					if (blendHere && !allRock) {
 						for (Blend blend : blends) {
-							blend.emit(emitter, ox, oy, oz, oc, ol, on);
+							blend.emit(emitter, ox, oy, oz, oc, ol, on, keep);
 						}
 					}
 					if (rockHere && !allRock) {
@@ -1403,6 +1406,31 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 		}
 		return pinned;
+	}
+
+	/**
+	 * How flat a bent top lies at each corner of a piece, from 1 (flat enough
+	 * to lay a texture on from above) to 0 (too steep), taken from the curve
+	 * the top is bent by, so it changes smoothly from piece to piece.
+	 */
+	private static float[] flatness(float[] grid, float[] px, float[] pz, float y) {
+		float[] keep = new float[4];
+		float ly = Mth.clamp(y, 0.0F, 1.0F);
+		float e = 0.05F;
+		for (int i = 0; i < 4; i++) {
+			float x = Mth.clamp(px[i], 0.0F, 1.0F);
+			float z = Mth.clamp(pz[i], 0.0F, 1.0F);
+			float x0 = Math.max(0.0F, x - e);
+			float x1 = Math.min(1.0F, x + e);
+			float z0 = Math.max(0.0F, z - e);
+			float z1 = Math.min(1.0F, z + e);
+			float dx = (smoothOffset(grid, x1, ly, z) - smoothOffset(grid, x0, ly, z)) / (x1 - x0);
+			float dz = (smoothOffset(grid, x, ly, z1) - smoothOffset(grid, x, ly, z0)) / (z1 - z0);
+			float steep = 1.0F - 1.0F / Mth.sqrt(1.0F + dx * dx + dz * dz);
+			float t = Mth.clamp((steep - 0.25F) / 0.25F, 0.0F, 1.0F);
+			keep[i] = 1.0F - t * t * (3.0F - 2.0F * t);
+		}
+		return keep;
 	}
 
 	/** How tall a bent side stands, in blocks, where rock starts to show on it and where it covers it. */
@@ -1634,7 +1662,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * other instead of stopping at a hard block edge.
 	 */
 	private record Blend(Direction side, float[] u, float[] v, float[] x, float[] z, int tint) {
-		void emit(QuadEmitter emitter, float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal) {
+		void emit(QuadEmitter emitter, float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal, float[] keep) {
 			float[] alpha = new float[4];
 			boolean any = false;
 			for (int i = 0; i < 4; i++) {
@@ -1645,7 +1673,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					default -> pz[i];
 				};
 				float t = Mth.clamp(1.0F - distance / BLEND_WIDTH, 0.0F, 1.0F);
-				alpha[i] = BLEND_EDGE * t * t * (3.0F - 2.0F * t);
+				alpha[i] = BLEND_EDGE * t * t * (3.0F - 2.0F * t) * (keep == null ? 1.0F : keep[i]);
 				any |= alpha[i] > 0.004F;
 			}
 			if (!any) {

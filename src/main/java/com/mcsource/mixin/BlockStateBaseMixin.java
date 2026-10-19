@@ -43,7 +43,9 @@ public abstract class BlockStateBaseMixin {
 	 * own collision, so players still sink into it.
 	 */
 	private boolean mcsource$keepsOwnCollision() {
-		return ((BlockState) (Object) this).is(net.minecraft.world.level.block.Blocks.POWDER_SNOW);
+		// On a server without the mod, everything collides as plain blocks; see ServerSupport.
+		return !com.mcsource.terrain.ServerSupport.smoothCollision()
+				|| ((BlockState) (Object) this).is(net.minecraft.world.level.block.Blocks.POWDER_SNOW);
 	}
 
 	@Inject(method = "getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
@@ -58,7 +60,7 @@ public abstract class BlockStateBaseMixin {
 	 */
 	@Inject(method = "hasLargeCollisionShape()Z", at = @At("HEAD"), cancellable = true)
 	private void mcsource$smoothReachesOut(CallbackInfoReturnable<Boolean> cir) {
-		if (((BlockState) (Object) this).is(SmoothTerrain.SMOOTH)) {
+		if (com.mcsource.terrain.ServerSupport.smoothCollision() && ((BlockState) (Object) this).is(SmoothTerrain.SMOOTH)) {
 			cir.setReturnValue(true);
 		}
 	}
@@ -71,7 +73,8 @@ public abstract class BlockStateBaseMixin {
 	@Inject(method = "isSuffocating(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z",
 			at = @At("HEAD"), cancellable = true)
 	private void mcsource$smoothNotSuffocating(BlockGetter level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-		if (SmoothTerrain.corners(level, pos, (BlockState) (Object) this) != SmoothMath.FULL) {
+		if (com.mcsource.terrain.ServerSupport.smoothCollision()
+				&& SmoothTerrain.corners(level, pos, (BlockState) (Object) this) != SmoothMath.FULL) {
 			cir.setReturnValue(false);
 		}
 	}

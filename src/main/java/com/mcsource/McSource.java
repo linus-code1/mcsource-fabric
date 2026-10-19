@@ -25,6 +25,7 @@ public class McSource implements ModInitializer {
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, id("test_hills"), TestHillsGenerator.CODEC);
 		Karts.register();
 		Trees.register();
+		com.mcsource.terrain.ServerSupport.register();
 		LOGGER.info("MC:Source loaded");
 	}
 }
