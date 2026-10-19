@@ -227,6 +227,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		emitter.ambientOcclusion(TriState.FALSE);
 		emitter.shadeMode(ShadeMode.ENHANCED);
 		emitter.tintIndex(tint);
+		debugTint(emitter, 0x00FFFF);
 		emitter.emit();
 	}
 
@@ -255,6 +256,18 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			float u = (cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD;
 			float v = upward(pos.getY() + py[i]);
 			emitter.uv(i, bounds[at] + u * (bounds[at + 1] - bounds[at]), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2]));
+		}		debugTint(emitter, 0x4080FF);
+	}
+
+	/** Test aid: -Dmcsource.debugPaths=true colours each way a terrain piece is textured. */
+	private static final boolean DEBUG_PATHS = Boolean.getBoolean("mcsource.debugPaths");
+
+	private static void debugTint(MutableQuadView quad, int rgb) {
+		if (!DEBUG_PATHS) {
+			return;
+		}
+		for (int i = 0; i < 4; i++) {
+			quad.color(i, ARGB.multiply(quad.color(i), 0xFF000000 | rgb));
 		}
 	}
 
@@ -1180,6 +1193,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 								emitter.uv(i, u[i], v[i]);
 							}
 							emitter.tintIndex(-1);
+							debugTint(emitter, 0xFF0000);
 							emitter.emit();
 							float[] rest = new float[4];
 							for (int i = 0; i < 4; i++) {
@@ -1194,6 +1208,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 								emitter.uv(i, u[i], v[i]);
 							}
 							emitter.tintIndex(ground.tint());
+							debugTint(emitter, 0x00FF00);
 							emitter.emit();
 							if (rock != null) {
 								cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on, alpha);
@@ -1656,6 +1671,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		emitter.ambientOcclusion(TriState.FALSE);
 		emitter.shadeMode(ShadeMode.ENHANCED);
 		emitter.tintIndex(ground.tint());
+		debugTint(emitter, 0xFF00FF);
 		emitter.emit();
 	}
 
@@ -1686,6 +1702,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		emitter.ambientOcclusion(TriState.FALSE);
 		emitter.shadeMode(ShadeMode.ENHANCED);
 		emitter.tintIndex(-1);
+		debugTint(emitter, 0xFFFF00);
 		emitter.emit();
 	}
 
@@ -1734,6 +1751,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			emitter.ambientOcclusion(TriState.FALSE);
 			emitter.shadeMode(ShadeMode.ENHANCED);
 			emitter.tintIndex(-1);
+			debugTint(emitter, 0xFF8000);
 			emitter.emit();
 		}
 
