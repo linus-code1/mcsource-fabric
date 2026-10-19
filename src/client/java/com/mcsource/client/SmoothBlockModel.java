@@ -554,6 +554,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				pv[i] = quad.v(i);
 				pc[i] = quad.color(i);
 			}
+			float lift = lying ? 0.0F : plantLift(surface, px, py, pz);
 			for (int a = 0; a < pieces; a++) {
 				for (int b = 0; b < pieces; b++) {
 					emitter.copyFrom(quad);
@@ -568,7 +569,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						float y = py[0] * w0 + py[1] * w1 + py[2] * w2 + py[3] * w3;
 						float z = pz[0] * w0 + pz[1] * w1 + pz[2] * w2 + pz[3] * w3;
 						float groundY = surface.height(Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F));
-						float bentY = thinSnow ? groundY + SNOW_LIFT : y + groundY;
+						float bentY = thinSnow ? groundY + SNOW_LIFT : y + groundY + lift;
 						emitter.pos(i, x, bentY, z);
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
 						// Plants and snow take the sun as if facing up, like the ground.
@@ -1343,6 +1344,45 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		return alpha;
 	}
+
+	/**
+	 * How far to raise a standing card of a plant so all of it shows above
+	 * the ground. Its bottom corners sit on the ground, but its bottom edge is
+	 * straight between them while the ground curves up in between, so on a
+	 * rise the ground cut off the plant's lower part.
+	 */
+	private static float plantLift(GroundSurface surface, float[] px, float[] py, float[] pz) {
+		int a = 0;
+		for (int i = 1; i < 4; i++) {
+			if (py[i] < py[a]) {
+				a = i;
+			}
+		}
+		int b = -1;
+		for (int i = 0; i < 4; i++) {
+			if (i != a && (b < 0 || py[i] < py[b])) {
+				b = i;
+			}
+		}
+		float ax = Mth.clamp(px[a], 0.0F, 1.0F);
+		float az = Mth.clamp(pz[a], 0.0F, 1.0F);
+		float bx = Mth.clamp(px[b], 0.0F, 1.0F);
+		float bz = Mth.clamp(pz[b], 0.0F, 1.0F);
+		float ga = surface.height(ax, az);
+		float gb = surface.height(bx, bz);
+		float lift = 0.0F;
+		for (int k = 1; k < PLANT_SAMPLES; k++) {
+			float t = k / (float) PLANT_SAMPLES;
+			float ground = surface.height(Mth.lerp(t, ax, bx), Mth.lerp(t, az, bz));
+			lift = Math.max(lift, ground - Mth.lerp(t, ga, gb));
+		}
+		return lift > 0.0F ? lift + PLANT_CLEAR : 0.0F;
+	}
+
+	/** Points along a plant card's bottom edge checked against the ground. */
+	private static final int PLANT_SAMPLES = 8;
+	/** Extra room left under a raised plant card, in blocks. */
+	private static final float PLANT_CLEAR = 0.02F;
 
 	/**
 	 * Raises {@code alpha} where the bent top itself is steep. The smoothed
