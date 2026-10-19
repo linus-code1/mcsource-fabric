@@ -39,7 +39,7 @@ import com.mcsource.model.source.SkyTextures;
 public final class HalfLife2BlockPack implements RepositorySource {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	/** Bump when the way textures are built changes, so old packs are rebuilt. */
-	private static final String VERSION = "18";
+	private static final String VERSION = "19";
 	private static final String USER_LIST = """
 			# Your changes to which Half-Life 2 material each Minecraft block texture uses.
 			# A line here replaces the mod's own line for that texture, for example:

@@ -94,17 +94,19 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				}
 				// Mapped as cliffRock maps it, so the two kinds of cliff meet.
 				boolean alongX = Math.abs(quad.faceNormal().z()) >= Math.abs(quad.faceNormal().x());
-				int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
+				int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), SPREAD);
 				for (int i = 0; i < 4; i++) {
-					float u = (cell + Mth.clamp(alongX ? quad.x(i) : quad.z(i), 0.0F, 1.0F)) / 2.0F;
-					quad.uv(i, rock.getU(u), rock.getV(1.0F - Mth.clamp((quad.y(i) + 0.5F) / 2.0F, 0.0F, 1.0F)));
+					float u = (cell + Mth.clamp(alongX ? quad.x(i) : quad.z(i), 0.0F, 1.0F)) / SPREAD;
+					quad.uv(i, rock.getU(u), rock.getV(upward(pos.getY() + quad.y(i))));
 				}
+				vary(quad, pos);
 				applySun(quad, level, pos);
 				return true;
 			}
 			if (terrain) {
 				liftLowTop(quad, state);
 				spreadTexture(quad, pos);
+				vary(quad, pos);
 			}
 			applySun(quad, level, pos);
 			return true;
@@ -508,8 +510,61 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 	}
 
+	/**
+	 * Texture height (0 at the top of the texture) for a height in the world,
+	 * laid over {@link #SPREAD} blocks and mirrored every other time, so a
+	 * tall cliff runs on unbroken from block to block and a bent side, which
+	 * can reach a little past its own block, never jumps back to the top of
+	 * the texture partway up.
+	 */
+	private static float upward(float y) {
+		float t = y / SPREAD;
+		int whole = Mth.floor(t);
+		float part = t - whole;
+		return (whole & 1) == 0 ? 1.0F - part : part;
+	}
+
+	/**
+	 * Darkens and tints the ground gently by its place in the world, in broad
+	 * patches several blocks across, so a texture laid over and over does not
+	 * read as a grid of the same square.
+	 */
+	private static void vary(MutableQuadView quad, BlockPos pos) {
+		for (int i = 0; i < 4; i++) {
+			float x = pos.getX() + Mth.clamp(quad.x(i), 0.0F, 1.0F);
+			float z = pos.getZ() + Mth.clamp(quad.z(i), 0.0F, 1.0F);
+			float broad = noise(x / 13.0F, z / 13.0F, 0) * 0.65F + noise(x / 5.0F, z / 5.0F, 1) * 0.35F;
+			float hue = noise(x / 19.0F, z / 19.0F, 2) * 2.0F - 1.0F;
+			float light = 0.86F + 0.16F * broad;
+			int r = Math.round(255.0F * Mth.clamp(light * (1.0F + 0.05F * hue), 0.0F, 1.0F));
+			int g = Math.round(255.0F * Mth.clamp(light, 0.0F, 1.0F));
+			int b = Math.round(255.0F * Mth.clamp(light * (1.0F - 0.06F * hue), 0.0F, 1.0F));
+			quad.color(i, ARGB.multiply(quad.color(i), ARGB.color(255, r, g, b)));
+		}
+	}
+
+	/** Smooth value noise from 0 to 1. */
+	private static float noise(float x, float z, int seed) {
+		int x0 = Mth.floor(x);
+		int z0 = Mth.floor(z);
+		float fx = x - x0;
+		float fz = z - z0;
+		fx = fx * fx * (3.0F - 2.0F * fx);
+		fz = fz * fz * (3.0F - 2.0F * fz);
+		float a = Mth.lerp(fx, hash(x0, z0, seed), hash(x0 + 1, z0, seed));
+		float b = Mth.lerp(fx, hash(x0, z0 + 1, seed), hash(x0 + 1, z0 + 1, seed));
+		return Mth.lerp(fz, a, b);
+	}
+
+	private static float hash(int x, int z, int seed) {
+		int h = x * 374761393 + z * 668265263 + seed * 1442695041;
+		h = (h ^ (h >>> 13)) * 1274126177;
+		h ^= h >>> 16;
+		return (h & 0xFFFFFF) / (float) 0xFFFFFF;
+	}
+
 	/** Ground textures stretch over this many blocks each way, as Source's do over several metres. */
-	static final int SPREAD = 2;
+	static final int SPREAD = 3;
 
 	/**
 	 * Stretches a terrain face's texture over {@link #SPREAD} blocks: each
@@ -802,6 +857,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			capture.copyFrom(quad);
 			liftLowTop(capture, state);
 			spreadTexture(capture, pos);
+			vary(capture, pos);
 			capture.emit();
 			return false;
 		});
@@ -962,11 +1018,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							for (int i = 0; i < 4; i++) {
 								rest[i] = 1.0F - alpha[i];
 							}
-							groundOverlay(emitter, ground, ox, oy, oz, oc, ol, on, rest);
+							groundOverlay(emitter, ground, pos, ox, oy, oz, oc, ol, on, rest);
 						} else {
 							// Mostly ground: the face is the ground's top, with rock
 							// faded over it where it is steeper.
-							groundUv(ground, ox, oy, oz, u, v);
+							groundUv(ground, pos, ox, oy, oz, u, v);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
 							}
@@ -1214,10 +1270,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 		}
 		boolean alongX = nz >= nx;
-		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
+		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), SPREAD);
 		for (int i = 0; i < 4; i++) {
-			u[i] = rock.getU((cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / 2.0F);
-			v[i] = rock.getV(1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F));
+			u[i] = rock.getU((cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD);
+			v[i] = rock.getV(upward(pos.getY() + py[i]));
 		}
 	}
 
@@ -1272,7 +1328,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * steep (spread over two blocks' height, as rock is), so it never
 	 * smears into streaks.
 	 */
-	private static void groundUv(GroundTop ground, float[] px, float[] py, float[] pz, float[] u, float[] v) {
+	private static void groundUv(GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, float[] u, float[] v) {
 		float ax = px[2] - px[0];
 		float ay = py[2] - py[0];
 		float az = pz[2] - pz[0];
@@ -1285,19 +1341,23 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		float length = Mth.sqrt(cx * cx + cy * cy + cz * cz);
 		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F;
 		boolean alongX = Math.abs(cz) >= Math.abs(cx);
+		// Spread over the blocks as the tops are (see spreadTexture), so the
+		// ground keeps one scale from piece to piece.
+		int cellX = Math.floorMod(pos.getX(), SPREAD);
+		int cellZ = Math.floorMod(pos.getZ(), SPREAD);
 		for (int i = 0; i < 4; i++) {
 			if (flat) {
-				u[i] = ground.sprite().getU(Mth.clamp(px[i], 0.0F, 1.0F));
-				v[i] = ground.sprite().getV(Mth.clamp(pz[i], 0.0F, 1.0F));
+				u[i] = ground.sprite().getU((cellX + Mth.clamp(px[i], 0.0F, 1.0F)) / SPREAD);
+				v[i] = ground.sprite().getV((cellZ + Mth.clamp(pz[i], 0.0F, 1.0F)) / SPREAD);
 			} else {
-				u[i] = ground.sprite().getU(Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F));
-				v[i] = ground.sprite().getV(1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F));
+				u[i] = ground.sprite().getU(((alongX ? cellX : cellZ) + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD);
+				v[i] = ground.sprite().getV(upward(pos.getY() + py[i]));
 			}
 		}
 	}
 
 	/** The ground's top faded over one piece of a face by {@code alpha} at each corner. */
-	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, float[] px, float[] py, float[] pz, int[] colour, int[] light,
+	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour, int[] light,
 			float[] normal, float[] alpha) {
 		boolean any = false;
 		for (int i = 0; i < 4; i++) {
@@ -1308,7 +1368,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		float[] u = new float[4];
 		float[] v = new float[4];
-		groundUv(ground, px, py, pz, u, v);
+		groundUv(ground, pos, px, py, pz, u, v);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);

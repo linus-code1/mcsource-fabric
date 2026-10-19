@@ -744,7 +744,70 @@ public final class BlockTextures {
 			writePng(folder.resolve(name + ".png"), strip, s, s * frames);
 			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
 		}
+		// The little flames over torches, candles and furnaces.
+		Path particles = folder.getParent().resolve("particle");
+		Files.createDirectories(particles);
+		writePng(particles.resolve("flame.png"), flameSprite(flames.get(0), 32), 32);
+		writePng(particles.resolve("small_flame.png"), flameSprite(flames.get(Math.min(1, flames.size() - 1)), 16), 16);
+		writePng(folder.resolve("torch.png"), flare(flames.get(0)), 64);
 		return String.join(" ", names);
+	}
+
+	/** A flame sprite filling a square image, its bottom on the bottom edge. */
+	private static int[] flameSprite(RiggedModel.Texture flame, int size) {
+		int[] box = flameBounds(flame);
+		int[] out = new int[size * size];
+		// Square, so it is not squashed: as wide as it is tall, centred.
+		int side = Math.max(box[2], box[3]);
+		int left = box[0] + box[2] / 2 - side / 2;
+		int top = box[1] + box[3] - side;
+		for (int y = 0; y < size; y++) {
+			for (int x = 0; x < size; x++) {
+				int sx = left + x * side / size;
+				int sy = top + y * side / size;
+				if (sx < 0 || sy < 0 || sx >= flame.width() || sy >= flame.height()) {
+					continue;
+				}
+				out[y * size + x] = flamePixel(flame.pixels()[sy * flame.width() + sx]);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * A torch as a Half-Life 2 road flare: a red stick with a grey cap and a
+	 * burning tip, laid out where Minecraft's torch model takes its texture
+	 * (a stick two sixteenths wide, from six sixteenths down to the bottom).
+	 */
+	private static int[] flare(RiggedModel.Texture flame) {
+		int size = 64;
+		int scale = size / 16;
+		int[] out = new int[size * size];
+		int[] box = flameBounds(flame);
+		java.util.Random random = new java.util.Random(11);
+		for (int y = 6 * scale; y < size; y++) {
+			for (int x = 7 * scale; x < 9 * scale; x++) {
+				// Rounded: lit in the middle of the stick, darker at its edges.
+				float across = (x - 7 * scale + 0.5F) / (2 * scale);
+				float round = 0.7F + 0.3F * (float) Math.sin(Math.PI * across);
+				int colour;
+				if (y < 8 * scale) {
+					// The burning tip, from the middle of the flame sprite.
+					int sx = box[0] + box[2] / 2 + (int) ((across - 0.5F) * box[2] * 0.3F);
+					int sy = box[1] + box[3] * 3 / 4 + (y - 6 * scale) * box[3] / (8 * scale);
+					int p = flamePixel(flame.pixels()[Math.min(flame.height() - 1, sy) * flame.width() + Math.min(flame.width() - 1, sx)]);
+					colour = p != 0 ? p : 0xFFFFD27A;
+					round = 1.0F;
+				} else if (y < 9 * scale) {
+					colour = 0xFF5A5A5A;
+				} else {
+					colour = y >= 13 * scale && y < 14 * scale ? 0xFFD8D0B8 : 0xFFB3201C;
+				}
+				float grain = 0.92F + 0.08F * random.nextFloat();
+				out[y * size + x] = 0xFF000000 | mix(colour, 0, 1.0F - round * grain);
+			}
+		}
+		return out;
 	}
 
 	/** The bounds of the part of a flame sprite that shows: x, y, width, height. */

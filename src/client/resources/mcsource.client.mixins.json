@@ -9,6 +9,7 @@
 		"FirstPersonHandsMixin",
 		"GameRendererMixin",
 		"GuiGraphicsExtractorMixin",
+		"LightCoordsMixin",
 		"LivingEntityRendererMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",

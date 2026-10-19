@@ -28,6 +28,7 @@ public class McSourceClient implements ClientModInitializer {
 					return new SmoothBlockModel(model);
 				}));
 		SourceHud.register();
+		com.mcsource.client.light.HeldLight.register();
 		EntityRendererRegistry.register(Karts.KART, KartRenderer::new);
 		EntityRendererRegistry.register(Trees.TREE, TreeRenderer::new);
 		// New trees are tree models when there are tree models to draw them with.
