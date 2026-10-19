@@ -431,17 +431,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						float bentY = thinSnow ? groundY + SNOW_LIFT : y + groundY;
 						emitter.pos(i, x, bentY, z);
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
-						// Plants take the sun as if facing up. A snow sheet is shaded as
-						// the ground under it is: lit as if flat, a sheet over a steep
-						// step shone white beside the shaded ground round it.
-						float[] n = {0.0F, 1.0F, 0.0F};
-						if (thinSnow) {
-							surface.normal(Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F), n);
-						}
-						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, n[0], n[1], n[2],
+						// Plants and snow take the sun as if facing up, like the ground.
+						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
 								LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
 						emitter.color(i, ARGB.multiply(blendColor(pc, w0, w1, w2, w3), sun));
-						emitter.normal(i, n[0], n[1], n[2]);
+						emitter.normal(i, 0.0F, 1.0F, 0.0F);
 					}
 					emitter.ambientOcclusion(TriState.FALSE);
 					if (lying) {
@@ -454,11 +448,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					// the crossed cards of a grass tuft come out light and dark, and
 					// a snow sheet bent over a slope turned into a patchwork of white
 					// and half-dark grey triangles.
-					if (thinSnow) {
-						emitter.shadeMode(ShadeMode.ENHANCED);
-					} else {
-						emitter.shadeDirectionOverride(Direction.UP);
-					}
+					emitter.shadeDirectionOverride(Direction.UP);
 					emitter.emit();
 				}
 			}
@@ -490,20 +480,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		private final float base;
 		private final float[] grid;
 		private final float[] corners;
-		/** The ground's smoothed normals, or null where it is not smoothed. */
-		private final float[] normals;
 
 		GroundSurface(BlockAndTintGetter level, BlockPos pos, int packed) {
 			BlockPos below = SmoothTerrain.ground(level, pos);
 			BlockState ground = level.getBlockState(below);
 			float[] bent = null;
-			float[] smooth = null;
 			if (ground.is(SmoothTerrain.SMOOTH)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, below, ground);
 				bent = wide == null ? null : grid(wide, level, below);
-				smooth = wide == null ? null : smoothNormals(wide);
 			}
-			this.normals = smooth;
 			this.base = below.getY() + 1 - pos.getY();
 			this.grid = bent;
 			if (ground.is(SmoothTerrain.SMOOTH)) {
@@ -515,23 +500,6 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					corners[i] = SmoothMath.corner(packed, i) / 8.0F - 1.0F;
 				}
 			}
-		}
-
-		/** The ground's normal at a point on its top, into {@code out}; straight up where it has none. */
-		void normal(float x, float z, float[] out) {
-			if (normals != null) {
-				trilinear(normals, 3, x, 1.0F, z, out);
-				float length = Mth.sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
-				if (length > 1.0E-3F) {
-					out[0] /= length;
-					out[1] /= length;
-					out[2] /= length;
-					return;
-				}
-			}
-			out[0] = 0.0F;
-			out[1] = 1.0F;
-			out[2] = 0.0F;
 		}
 
 		float height(float x, float z) {
