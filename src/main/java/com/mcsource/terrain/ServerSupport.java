@@ -12,7 +12,8 @@ import com.mcsource.McSource;
  * Whether the server has this mod too. Smooth collision only works when the
  * server moves players over the same shapes; on a server without the mod the
  * player would walk on slopes the server doesn't know about and get pulled
- * back, so there the ground is drawn smoothed but collides as plain blocks.
+ * back, so there the ground is drawn smoothed but collides as plain blocks,
+ * and the player moves as in plain Minecraft.
  */
 public final class ServerSupport {
 	private ServerSupport() {

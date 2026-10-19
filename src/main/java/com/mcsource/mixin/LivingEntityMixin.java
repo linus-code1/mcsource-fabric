@@ -39,7 +39,9 @@ public abstract class LivingEntityMixin {
 
 	private boolean mcsource$usesSourceMovement() {
 		LivingEntity self = (LivingEntity) (Object) this;
-		return self instanceof Player player && player.isLocalPlayer() && !player.getAbilities().flying && !player.isPassenger()
+		// Off on a server without the mod, which checks movement by its own
+		// rules and pulls back a player who moves faster than they allow.
+		return com.mcsource.terrain.ServerSupport.smoothCollision() && self instanceof Player player && player.isLocalPlayer() && !player.getAbilities().flying && !player.isPassenger()
 				&& !self.shouldDiscardFriction() && !onClimbable() && !self.hasEffect(MobEffects.LEVITATION)
 				&& self.level().hasChunkAt(self.blockPosition());
 	}
