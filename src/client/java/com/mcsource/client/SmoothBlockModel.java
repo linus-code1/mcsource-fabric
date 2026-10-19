@@ -266,49 +266,144 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/**
-	 * Where a piece of a block's top or bottom is bent steeper than it lies
-	 * flat, lays its own texture on it from the side, as rock is laid on a
-	 * cliff: laid from above, as a flat top is, it smeared down the piece in
-	 * streaks.
+	 * How much of a piece's texture is laid from above, from the north or
+	 * south, and from the east or west, at each corner ({y, z, x} weights a
+	 * corner, adding to 1). They follow the smooth normals, which the pieces
+	 * either side of an edge share, so a slope turns from one way of laying
+	 * the texture to the next gradually. Laying each piece one way only, the
+	 * texture broke off along every edge where the way changed, in bands of
+	 * streaks down the middle of every step and across cave walls.
+	 * A way the piece itself is seen edge-on is left out, or the texture
+	 * would smear across it.
 	 */
-	private static void steepen(QuadEmitter emitter, float[] bounds, int at, BlockPos pos, float[] px, float[] py, float[] pz) {
+	private static float[] projectionWeights(float[] px, float[] py, float[] pz, float[] normal) {
 		float ax = px[2] - px[0];
 		float ay = py[2] - py[0];
 		float az = pz[2] - pz[0];
 		float bx = px[3] - px[1];
 		float by = py[3] - py[1];
 		float bz = pz[3] - pz[1];
-		float nx = Math.abs(ay * bz - az * by);
-		float ny = Math.abs(az * bx - ax * bz);
-		float nz = Math.abs(ax * by - ay * bx);
-		if (ny >= Math.max(nx, nz) || bounds[at + 1] <= bounds[at]) {
-			return;
+		float gx = Math.abs(ay * bz - az * by);
+		float gy = Math.abs(az * bx - ax * bz);
+		float gz = Math.abs(ax * by - ay * bx);
+		float glen = Mth.sqrt(gx * gx + gy * gy + gz * gz);
+		float[] facing = new float[3];
+		if (glen > 1.0E-6F) {
+			facing[0] = edgeOn(gy / glen);
+			facing[1] = edgeOn(gz / glen);
+			facing[2] = edgeOn(gx / glen);
+		} else {
+			facing[0] = facing[1] = facing[2] = 1.0F;
 		}
-		boolean alongX = nz >= nx;
-		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), SPREAD);
+		float[] w = new float[12];
 		for (int i = 0; i < 4; i++) {
-			float u = (cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD;
-			float v = upward(pos.getY() + py[i]);
-			emitter.uv(i, bounds[at] + u * (bounds[at + 1] - bounds[at]), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2]));
-		}		debugTint(emitter, 0x4080FF);
+			float wy = sharpen(Math.abs(normal[i * 3 + 1])) * facing[0];
+			float wz = sharpen(Math.abs(normal[i * 3 + 2])) * facing[1];
+			float wx = sharpen(Math.abs(normal[i * 3])) * facing[2];
+			float sum = wy + wz + wx;
+			if (sum < 1.0E-5F) {
+				// Nothing left (the smooth normal and the piece disagree
+				// entirely): lay it the way the piece itself faces most.
+				wy = gy >= gz && gy >= gx ? 1.0F : 0.0F;
+				wz = wy == 0.0F && gz >= gx ? 1.0F : 0.0F;
+				wx = wy == 0.0F && wz == 0.0F ? 1.0F : 0.0F;
+				sum = 1.0F;
+			}
+			w[i * 3] = wy / sum;
+			w[i * 3 + 1] = wz / sum;
+			w[i * 3 + 2] = wx / sum;
+		}
+		return w;
+	}
+
+	/** A normal's part along one way, made to favour the way it faces most. */
+	private static float sharpen(float component) {
+		float t = Math.max(0.0F, component - 0.3F);
+		return t * t;
+	}
+
+	/** 0 where a piece is seen edge-on from a way (its normal's part that way is small), 1 where it is not. */
+	private static float edgeOn(float component) {
+		float t = Mth.clamp((component - 0.2F) / 0.25F, 0.0F, 1.0F);
+		return t * t * (3.0F - 2.0F * t);
+	}
+
+	/** Texture coordinates (0 to 1 across the texture) for a corner laid one way: 0 from above, 1 from north/south, 2 from east/west. */
+	private static void projectedUv(int way, BlockPos pos, float x, float y, float z, float[] out) {
+		float lx = Mth.clamp(x, 0.0F, 1.0F);
+		float lz = Mth.clamp(z, 0.0F, 1.0F);
+		int cellX = Math.floorMod(pos.getX(), SPREAD);
+		int cellZ = Math.floorMod(pos.getZ(), SPREAD);
+		if (way == 0) {
+			out[0] = (cellX + lx) / SPREAD;
+			out[1] = (cellZ + lz) / SPREAD;
+		} else if (way == 1) {
+			out[0] = (cellX + lx) / SPREAD;
+			out[1] = upward(pos.getY() + y);
+		} else {
+			out[0] = (cellZ + lz) / SPREAD;
+			out[1] = upward(pos.getY() + y);
+		}
 	}
 
 	/**
-	 * Lays a bent side's own texture up its height by the world, as rock is
-	 * laid on a cliff. Bent, a side keeps its width but not its height, and
-	 * going by the model, the texture's whole height was squeezed into what
-	 * is left: where the side narrows to nothing at one end, it ran together
-	 * into fans of streaks.
+	 * Draws a piece with a texture laid three ways and blended by
+	 * {@link #projectionWeights}: from above as the piece itself (the
+	 * emitter must hold it, with its colour and light), then the other two
+	 * ways over it, faded in as the slope turns. With {@code alpha} it is all
+	 * laid over what is there already, faded by alpha at each corner.
 	 */
-	private static void standUp(QuadEmitter emitter, float[] bounds, int at, BlockPos pos, float[] py) {
-		if (bounds[at + 3] <= bounds[at + 2]) {
-			return;
+	private static void projected(QuadEmitter emitter, float u0, float u1, float v0, float v1, BlockPos pos, float[] px, float[] py,
+			float[] pz, int[] colour, int[] light, float[] normal, int tint, float[] alpha, float lift, int debug) {
+		float[] w = projectionWeights(px, py, pz, normal);
+		float[] uv = new float[2];
+		if (alpha == null) {
+			for (int i = 0; i < 4; i++) {
+				projectedUv(0, pos, px[i], py[i], pz[i], uv);
+				emitter.uv(i, u0 + uv[0] * (u1 - u0), v0 + uv[1] * (v1 - v0));
+			}
+			emitter.tintIndex(tint);
+			debugTint(emitter, debug);
+			emitter.emit();
 		}
-		for (int i = 0; i < 4; i++) {
-			float v = upward(pos.getY() + py[i]);
-			emitter.uv(i, emitter.u(i), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2]));
+		for (int way = alpha == null ? 1 : 0; way < 3; way++) {
+			float[] a = new float[4];
+			boolean any = false;
+			for (int i = 0; i < 4; i++) {
+				// Laid over the ways before it, so each comes out in its share.
+				float before = 0.0F;
+				for (int k = 0; k <= way; k++) {
+					before += w[i * 3 + k];
+				}
+				float share = before < 1.0E-5F ? 0.0F : w[i * 3 + way] / before;
+				if (alpha != null && way == 0) {
+					share = w[i * 3] > 1.0E-5F ? 1.0F : 0.0F;
+				}
+				a[i] = share * (alpha == null ? 1.0F : alpha[i]);
+				any |= a[i] > 0.004F;
+			}
+			if (!any) {
+				continue;
+			}
+			float off = lift + ROCK_LIFT * 0.3F * way;
+			emitter.clear();
+			for (int i = 0; i < 4; i++) {
+				projectedUv(way, pos, px[i], py[i], pz[i], uv);
+				emitter.pos(i, px[i] + normal[i * 3] * off, py[i] + normal[i * 3 + 1] * off, pz[i] + normal[i * 3 + 2] * off);
+				emitter.uv(i, u0 + uv[0] * (u1 - u0), v0 + uv[1] * (v1 - v0));
+				emitter.color(i, ARGB.color(Math.round(a[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+				emitter.lightmap(i, light[i]);
+				emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+			}
+			emitter.nominalFace(null);
+			emitter.cullFace(null);
+			emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+			emitter.ambientOcclusion(TriState.FALSE);
+			emitter.shadeMode(ShadeMode.ENHANCED);
+			emitter.tintIndex(tint);
+			debugTint(emitter, debug);
+			emitter.emit();
 		}
-		debugTint(emitter, 0xC080FF);
 	}
 
 	/** Test aid: -Dmcsource.debugPaths=true colours each way a terrain piece is textured. */
@@ -1242,7 +1337,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					boolean blendHere = top && blends != null;
 					float[] alpha = null;
 					boolean flatFace = Math.abs(fy) > 0.5F;
-					if (blendHere || rockHere || flatFace) {
+					{
 						for (int i = 0; i < 4; i++) {
 							ox[i] = emitter.x(i);
 							oy[i] = emitter.y(i);
@@ -1278,30 +1373,24 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						if (rock != null && mean >= 0.5F) {
 							// Mostly rock: the face is rock, with the ground's top faded
 							// over it where it is less steep.
-							rockUv(rock, pos, ox, oy, oz, on, u, v);
-							for (int i = 0; i < 4; i++) {
-								emitter.uv(i, u[i], v[i]);
-							}
-							emitter.tintIndex(-1);
-							debugTint(emitter, 0xFF0000);
-							emitter.emit();
+							projected(emitter, rock.getU0(), rock.getU1(), rock.getV0(), rock.getV1(), pos, ox, oy, oz, oc, ol, on, -1, null, ROCK_LIFT * 0.2F,
+									0xFF0000);
 							float[] rest = new float[4];
 							for (int i = 0; i < 4; i++) {
 								rest[i] = 1.0F - alpha[i];
 							}
-							groundOverlay(emitter, ground, pos, grid, ox, oy, oz, oc, ol, on, rest);
+							net.minecraft.client.renderer.texture.TextureAtlasSprite g = ground.sprite();
+							projected(emitter, g.getU0(), g.getU1(), g.getV0(), g.getV1(), pos, ox, oy, oz, oc, ol, on, ground.tint(), rest, ROCK_LIFT,
+									0xFF00FF);
 						} else {
 							// Mostly ground: the face is the ground's top, with rock
 							// faded over it where it is steeper.
-							groundUv(ground, pos, grid, ox, oy, oz, on, u, v);
-							for (int i = 0; i < 4; i++) {
-								emitter.uv(i, u[i], v[i]);
-							}
-							emitter.tintIndex(ground.tint());
-							debugTint(emitter, 0x00FF00);
-							emitter.emit();
+							net.minecraft.client.renderer.texture.TextureAtlasSprite g = ground.sprite();
+							projected(emitter, g.getU0(), g.getU1(), g.getV0(), g.getV1(), pos, ox, oy, oz, oc, ol, on, ground.tint(), null, ROCK_LIFT * 0.2F,
+									0x00FF00);
 							if (rock != null) {
-								cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on, alpha);
+								projected(emitter, rock.getU0(), rock.getU1(), rock.getV0(), rock.getV1(), pos, ox, oy, oz, oc, ol, on, -1, alpha, ROCK_LIFT,
+										0xFFFF00);
 							}
 						}
 						continue;
@@ -1315,21 +1404,20 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						if (allRock) {
 							// Wholly rock: draw the face itself as rock, with nothing laid
 							// over it, the same as a straight cliff.
-							float[] u = new float[4];
-							float[] v = new float[4];
-							rockUv(rock, pos, ox, oy, oz, on, u, v);
-							for (int i = 0; i < 4; i++) {
-								emitter.uv(i, u[i], v[i]);
-							}
-							emitter.tintIndex(-1);
+							projected(emitter, rock.getU0(), rock.getU1(), rock.getV0(), rock.getV1(), pos, ox, oy, oz, oc, ol, on, -1, null,
+									ROCK_LIFT * 0.2F, 0xFF0000);
 						}
 					}
-					if (flatFace && !allRock) {
-						steepen(emitter, faceBounds, top ? 0 : 4, pos, ox, oy, oz);
-					} else if (!allRock) {
-						standUp(emitter, faceBounds, boundsAt(face), pos, oy);
+					if (!allRock) {
+						// The face's own texture, laid by the way each part of it faces.
+						int at = flatFace ? (top ? 0 : 4) : boundsAt(face);
+						if (faceBounds[at + 1] > faceBounds[at] && faceBounds[at + 3] > faceBounds[at + 2]) {
+							projected(emitter, faceBounds[at], faceBounds[at + 1], faceBounds[at + 2], faceBounds[at + 3], pos, ox, oy, oz, oc, ol, on, tint,
+									null, ROCK_LIFT * 0.2F, 0x00FF00);
+						} else {
+							emitter.emit();
+						}
 					}
-					emitter.emit();
 					// Layers laid from above fade out where the top is bent steep,
 					// or their textures smear down it in streaks.
 					float[] keep = top && !allRock ? flatness(on) : null;
@@ -1342,7 +1430,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						}
 					}
 					if (rockHere && !allRock) {
-						cliffRock(emitter, rock, pos, ox, oy, oz, oc, ol, on, alpha);
+						projected(emitter, rock.getU0(), rock.getU1(), rock.getV0(), rock.getV1(), pos, ox, oy, oz, oc, ol, on, -1, alpha, ROCK_LIFT * 1.6F,
+								0xFFFF00);
 					}
 				}
 			}
@@ -1581,55 +1670,6 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	private static final float SLOPE_FROM = 0.4F;
 	private static final float SLOPE_FULL = 0.65F;
 
-	/**
-	 * Rock texture coordinates for the corners of a piece: projected from
-	 * the side the slope faces most, one tile over two blocks: across, by the
-	 * block's place in the world, and up, over the two blocks' height a bent
-	 * block can reach (half a block below its bottom to half a block above
-	 * its top), so it never stretches.
-	 */
-	private static void rockUv(net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos, float[] px, float[] py,
-			float[] pz, float[] normal, float[] u, float[] v) {
-		// Projected along the way the piece itself faces, so the texture runs
-		// across it; going by the smoothed normals, a piece at the corner of a
-		// cliff could be projected edge-on and smear into streaks.
-		float ax = px[2] - px[0];
-		float ay = py[2] - py[0];
-		float az = pz[2] - pz[0];
-		float bx = px[3] - px[1];
-		float by = py[3] - py[1];
-		float bz = pz[3] - pz[1];
-		float nx = Math.abs(ay * bz - az * by);
-		float ny = Math.abs(az * bx - ax * bz);
-		float nz = Math.abs(ax * by - ay * bx);
-		if (ny > Math.max(nx, nz)) {
-			// Lying flatter than it stands (an overhang's underside, a cave
-			// roof, the top of a steep lip): laid from above. Laid from the
-			// side, its texture smeared across it in streaks.
-			int cellX = Math.floorMod(pos.getX(), SPREAD);
-			int cellZ = Math.floorMod(pos.getZ(), SPREAD);
-			for (int i = 0; i < 4; i++) {
-				u[i] = rock.getU((cellX + Mth.clamp(px[i], 0.0F, 1.0F)) / SPREAD);
-				v[i] = rock.getV((cellZ + Mth.clamp(pz[i], 0.0F, 1.0F)) / SPREAD);
-			}
-			return;
-		}
-		if (nx + nz < 1.0E-5F) {
-			nx = 0.0F;
-			nz = 0.0F;
-			for (int i = 0; i < 4; i++) {
-				nx += Math.abs(normal[i * 3]);
-				nz += Math.abs(normal[i * 3 + 2]);
-			}
-		}
-		boolean alongX = nz >= nx;
-		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), SPREAD);
-		for (int i = 0; i < 4; i++) {
-			u[i] = rock.getU((cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD);
-			v[i] = rock.getV(upward(pos.getY() + py[i]));
-		}
-	}
-
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
 	private static final float ROCK_FROM = 0.4F;
 	private static final float ROCK_FULL = 0.7F;
@@ -1673,130 +1713,6 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		return new GroundTop(net.minecraft.client.Minecraft.getInstance().getAtlasManager()
 				.getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS).getSprite(net.minecraft.resources.Identifier.withDefaultNamespace(top)),
 				tint);
-	}
-
-	/**
-	 * The ground's top texture on a piece: laid from above where the piece
-	 * lies flat enough, as on the block's top, and from the side where it is
-	 * steep (spread over two blocks' height, as rock is), so it never
-	 * smears into streaks.
-	 */
-	private static void groundUv(GroundTop ground, BlockPos pos, float[] grid, float[] px, float[] py, float[] pz, float[] normal, float[] u,
-			float[] v) {
-		float ax = px[2] - px[0];
-		float ay = py[2] - py[0];
-		float az = pz[2] - pz[0];
-		float bx = px[3] - px[1];
-		float by = py[3] - py[1];
-		float bz = pz[3] - pz[1];
-		float cx = ay * bz - az * by;
-		float cy = az * bx - ax * bz;
-		float cz = ax * by - ay * bx;
-		float length = Mth.sqrt(cx * cx + cy * cy + cz * cz);
-		// Laid from above wherever the ground round about is gentle, even on
-		// a piece of a block's side: a side only moves up and down, so laid
-		// from above it lines up exactly with the tops beside it. Going by
-		// the piece itself, every side piece was laid from the side and its
-		// texture broke off along each edge with a top, in long creases
-		// across gentle slopes.
-		float upright = 0.0F;
-		for (int i = 0; i < 4; i++) {
-			upright += Math.abs(normal[i * 3 + 1]) / 4.0F;
-		}
-		// Only a short sliver, though: a side still standing tall laid from
-		// above showed the texture smeared down it in streaks.
-		// The whole side's height counts, not the piece's: a side is cut into
-		// pieces, and a short wall of several low pieces laid from above was
-		// a band of streaks.
-		float wall = 0.0F;
-		for (int i = 0; i < 4; i++) {
-			float x = Mth.clamp(px[i], 0.0F, 1.0F);
-			float z = Mth.clamp(pz[i], 0.0F, 1.0F);
-			wall = Math.max(wall, grid == null ? 1.0F : 1.0F + smoothOffset(grid, x, 1.0F, z) - smoothOffset(grid, x, 0.0F, z));
-		}
-		boolean sliver = upright >= FLAT_GROUND && wall <= SLIVER;
-		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F || sliver;
-		boolean alongX = Math.abs(cz) >= Math.abs(cx);
-		// Spread over the blocks as the tops are (see spreadTexture), so the
-		// ground keeps one scale from piece to piece.
-		int cellX = Math.floorMod(pos.getX(), SPREAD);
-		int cellZ = Math.floorMod(pos.getZ(), SPREAD);
-		for (int i = 0; i < 4; i++) {
-			if (flat) {
-				u[i] = ground.sprite().getU((cellX + Mth.clamp(px[i], 0.0F, 1.0F)) / SPREAD);
-				v[i] = ground.sprite().getV((cellZ + Mth.clamp(pz[i], 0.0F, 1.0F)) / SPREAD);
-			} else {
-				u[i] = ground.sprite().getU(((alongX ? cellX : cellZ) + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD);
-				v[i] = ground.sprite().getV(upward(pos.getY() + py[i]));
-			}
-		}
-	}
-
-	/** How upright the smoothed ground's normal must be for a side piece to be laid from above. */
-	private static final float FLAT_GROUND = 0.6F;
-	/** How tall a side piece may stand, in blocks, and still be laid from above. */
-	private static final float SLIVER = 0.12F;
-
-	/** The ground's top faded over one piece of a face by {@code alpha} at each corner. */
-	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, BlockPos pos, float[] grid, float[] px, float[] py, float[] pz, int[] colour, int[] light,
-			float[] normal, float[] alpha) {
-		boolean any = false;
-		for (int i = 0; i < 4; i++) {
-			any |= alpha[i] > 0.004F;
-		}
-		if (!any) {
-			return;
-		}
-		float[] u = new float[4];
-		float[] v = new float[4];
-		groundUv(ground, pos, grid, px, py, pz, normal, u, v);
-		emitter.clear();
-		for (int i = 0; i < 4; i++) {
-			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
-			emitter.uv(i, u[i], v[i]);
-			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
-			emitter.lightmap(i, light[i]);
-			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
-		}
-		emitter.nominalFace(null);
-		emitter.cullFace(null);
-		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
-		emitter.ambientOcclusion(TriState.FALSE);
-		emitter.shadeMode(ShadeMode.ENHANCED);
-		emitter.tintIndex(ground.tint());
-		debugTint(emitter, 0xFF00FF);
-		emitter.emit();
-	}
-
-	private static void cliffRock(QuadEmitter emitter, net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos,
-			float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal, float[] alpha) {
-		boolean any = false;
-		for (int i = 0; i < 4; i++) {
-			any |= alpha[i] > 0.004F;
-		}
-		if (!any) {
-			return;
-		}
-		float[] u = new float[4];
-		float[] v = new float[4];
-		rockUv(rock, pos, px, py, pz, normal, u, v);
-		emitter.clear();
-		for (int i = 0; i < 4; i++) {
-			// Lift the overlay a little off the face along its normal.
-			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
-			emitter.uv(i, u[i], v[i]);
-			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
-			emitter.lightmap(i, light[i]);
-			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
-		}
-		emitter.nominalFace(null);
-		emitter.cullFace(null);
-		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
-		emitter.ambientOcclusion(TriState.FALSE);
-		emitter.shadeMode(ShadeMode.ENHANCED);
-		emitter.tintIndex(-1);
-		debugTint(emitter, 0xFFFF00);
-		emitter.emit();
 	}
 
 	/** How far into a block a neighbouring ground texture fades, in blocks. */
