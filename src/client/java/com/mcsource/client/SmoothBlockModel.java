@@ -81,6 +81,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		boolean terrain = state.is(SmoothTerrain.SMOOTH);
 		boolean snowAbove = terrain && level.getBlockState(pos.above()).is(Blocks.SNOW);
 		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = terrain ? cliffSprite(state) : null;
+		MutableMesh tops = TOPS.get();
+		tops.clear();
+		float[] bounds = FACE_BOUNDS.get();
 		emitter.pushTransform(quad -> {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				// Hidden under the snow sheet; see emitBent.
@@ -103,18 +106,155 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				applySun(quad, level, pos);
 				return true;
 			}
+			boolean topHere = terrain && quad.faceNormal().y() > 0.5F;
+			if (topHere) {
+				faceBounds(quad, bounds, 0);
+			}
 			if (terrain) {
 				liftLowTop(quad, state);
 				spreadTexture(quad, pos);
 				vary(quad, pos);
 			}
 			applySun(quad, level, pos);
+			if (topHere) {
+				tops.emitter().copyFrom(quad);
+				tops.emitter().emit();
+			}
 			return true;
 		});
 		try {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 		} finally {
 			emitter.popTransform();
+		}
+		// The second layer that breaks up the texture's repeat (see breakTiling),
+		// as a copy of the top, so it takes exactly the top's light and shade.
+		tops.forEachMutable(top -> {
+			float[] alpha = new float[4];
+			boolean any = false;
+			for (int i = 0; i < 4; i++) {
+				alpha[i] = tilingAlpha(pos, top.x(i), top.z(i));
+				any |= alpha[i] > 0.004F;
+			}
+			if (!any) {
+				return;
+			}
+			emitter.copyFrom(top);
+			for (int i = 0; i < 4; i++) {
+				float[] uv = tilingUv(bounds, 0, pos, top.x(i), top.z(i));
+				emitter.uv(i, uv[0], uv[1]);
+				emitter.pos(i, top.x(i), top.y(i) + ROCK_LIFT, top.z(i));
+				int c = top.color(i);
+				emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(c), ARGB.green(c), ARGB.blue(c)));
+			}
+			emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+			emitter.emit();
+		});
+		tops.clear();
+	}
+
+	private static final ThreadLocal<MutableMesh> TOPS = ThreadLocal.withInitial(() -> Renderer.get().mutableMesh());
+	/** The texture bounds of a block's top (0 to 3) and bottom (4 to 7) faces: u0, u1, v0, v1. */
+	private static final ThreadLocal<float[]> FACE_BOUNDS = ThreadLocal.withInitial(() -> new float[8]);
+
+	private static void faceBounds(MutableQuadView quad, float[] bounds, int at) {
+		bounds[at] = Float.MAX_VALUE;
+		bounds[at + 1] = -Float.MAX_VALUE;
+		bounds[at + 2] = Float.MAX_VALUE;
+		bounds[at + 3] = -Float.MAX_VALUE;
+		for (int i = 0; i < 4; i++) {
+			bounds[at] = Math.min(bounds[at], quad.u(i));
+			bounds[at + 1] = Math.max(bounds[at + 1], quad.u(i));
+			bounds[at + 2] = Math.min(bounds[at + 2], quad.v(i));
+			bounds[at + 3] = Math.max(bounds[at + 3], quad.v(i));
+		}
+	}
+
+	/** The second layer's texture repeats over this many blocks each way. */
+	private static final int TILING_SPREAD = 5;
+
+	/**
+	 * Texture coordinates of the second layer laid over a top: the same
+	 * texture turned a quarter round and spread over {@link #TILING_SPREAD}
+	 * blocks instead of {@link #SPREAD}, so where it shows, the spots and
+	 * tufts of the texture no longer come back on a regular grid.
+	 */
+	private static float[] tilingUv(float[] bounds, int at, BlockPos pos, float x, float z) {
+		float cx = Math.floorMod(pos.getX(), TILING_SPREAD) + Mth.clamp(x, 0.0F, 1.0F);
+		float cz = Math.floorMod(pos.getZ(), TILING_SPREAD) + Mth.clamp(z, 0.0F, 1.0F);
+		float u = cz / TILING_SPREAD;
+		float v = 1.0F - cx / TILING_SPREAD;
+		return new float[] {bounds[at] + u * (bounds[at + 1] - bounds[at]), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2])};
+	}
+
+	/** How much of the second layer shows at a point: in broad, soft patches, none in between. */
+	private static float tilingAlpha(BlockPos pos, float x, float z) {
+		float wx = pos.getX() + Mth.clamp(x, 0.0F, 1.0F);
+		float wz = pos.getZ() + Mth.clamp(z, 0.0F, 1.0F);
+		float n = noise(wx / 6.0F, wz / 6.0F, 7) * 0.7F + noise(wx / 2.5F, wz / 2.5F, 8) * 0.3F;
+		float t = Mth.clamp((n - 0.35F) / 0.3F, 0.0F, 1.0F);
+		return 0.85F * t * t * (3.0F - 2.0F * t);
+	}
+
+	/**
+	 * Lays the second layer (see {@link #tilingUv}) over one piece of a bent
+	 * top, faded in and out in broad patches, so the ground's texture does not
+	 * read as the same square laid over and over.
+	 */
+	private static void breakTiling(QuadEmitter emitter, float[] bounds, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour,
+			int[] light, float[] normal, int tint) {
+		float[] alpha = new float[4];
+		boolean any = false;
+		for (int i = 0; i < 4; i++) {
+			alpha[i] = tilingAlpha(pos, px[i], pz[i]);
+			any |= alpha[i] > 0.004F;
+		}
+		if (!any) {
+			return;
+		}
+		emitter.clear();
+		for (int i = 0; i < 4; i++) {
+			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
+			float[] uv = tilingUv(bounds, 0, pos, px[i], pz[i]);
+			emitter.uv(i, uv[0], uv[1]);
+			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+			emitter.lightmap(i, light[i]);
+			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+		}
+		emitter.nominalFace(null);
+		emitter.cullFace(null);
+		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+		emitter.ambientOcclusion(TriState.FALSE);
+		emitter.shadeMode(ShadeMode.ENHANCED);
+		emitter.tintIndex(tint);
+		emitter.emit();
+	}
+
+	/**
+	 * Where a piece of a block's top or bottom is bent steeper than it lies
+	 * flat, lays its own texture on it from the side, as rock is laid on a
+	 * cliff: laid from above, as a flat top is, it smeared down the piece in
+	 * streaks.
+	 */
+	private static void steepen(QuadEmitter emitter, float[] bounds, int at, BlockPos pos, float[] px, float[] py, float[] pz) {
+		float ax = px[2] - px[0];
+		float ay = py[2] - py[0];
+		float az = pz[2] - pz[0];
+		float bx = px[3] - px[1];
+		float by = py[3] - py[1];
+		float bz = pz[3] - pz[1];
+		float nx = Math.abs(ay * bz - az * by);
+		float ny = Math.abs(az * bx - ax * bz);
+		float nz = Math.abs(ax * by - ay * bx);
+		if (ny >= Math.max(nx, nz) || bounds[at + 1] <= bounds[at]) {
+			return;
+		}
+		boolean alongX = nz >= nx;
+		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), SPREAD);
+		for (int i = 0; i < 4; i++) {
+			float u = (cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / SPREAD;
+			float v = upward(pos.getY() + py[i]);
+			emitter.uv(i, bounds[at] + u * (bounds[at + 1] - bounds[at]), bounds[at + 2] + v * (bounds[at + 3] - bounds[at + 2]));
 		}
 	}
 
@@ -849,10 +989,14 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		boolean snowAbove = level.getBlockState(pos.above()).is(Blocks.SNOW);
 		MutableMesh captured = CAPTURED.get();
 		captured.clear();
+		float[] faceBounds = FACE_BOUNDS.get();
 		QuadEmitter capture = captured.emitter();
 		emitter.pushTransform(quad -> {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				return false;
+			}
+			if (Math.abs(quad.faceNormal().y()) > 0.5F) {
+				faceBounds(quad, faceBounds, quad.faceNormal().y() > 0.0F ? 0 : 4);
 			}
 			capture.copyFrom(quad);
 			liftLowTop(capture, state);
@@ -893,6 +1037,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				pl[i] = quad.lightmap(i);
 			}
 			Vector3fc face = quad.faceNormal();
+			int tint = quad.tintIndex();
 			float fx = face.x();
 			float fy = face.y();
 			float fz = face.z();
@@ -992,7 +1137,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					splitAlongFlatterDiagonal(emitter);
 					boolean blendHere = top && blends != null;
 					float[] alpha = null;
-					if (blendHere || rockHere) {
+					boolean flatFace = Math.abs(fy) > 0.5F;
+					if (blendHere || rockHere || flatFace) {
 						for (int i = 0; i < 4; i++) {
 							ox[i] = emitter.x(i);
 							oy[i] = emitter.y(i);
@@ -1072,7 +1218,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							emitter.tintIndex(-1);
 						}
 					}
+					if (flatFace && !allRock) {
+						steepen(emitter, faceBounds, top ? 0 : 4, pos, ox, oy, oz);
+					}
 					emitter.emit();
+					if (top && !allRock) {
+						breakTiling(emitter, faceBounds, pos, ox, oy, oz, oc, ol, on, tint);
+					}
 					if (blendHere && !allRock) {
 						for (Blend blend : blends) {
 							blend.emit(emitter, ox, oy, oz, oc, ol, on);
@@ -1280,7 +1432,20 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		float by = py[3] - py[1];
 		float bz = pz[3] - pz[1];
 		float nx = Math.abs(ay * bz - az * by);
+		float ny = Math.abs(az * bx - ax * bz);
 		float nz = Math.abs(ax * by - ay * bx);
+		if (ny > Math.max(nx, nz)) {
+			// Lying flatter than it stands (an overhang's underside, a cave
+			// roof, the top of a steep lip): laid from above. Laid from the
+			// side, its texture smeared across it in streaks.
+			int cellX = Math.floorMod(pos.getX(), SPREAD);
+			int cellZ = Math.floorMod(pos.getZ(), SPREAD);
+			for (int i = 0; i < 4; i++) {
+				u[i] = rock.getU((cellX + Mth.clamp(px[i], 0.0F, 1.0F)) / SPREAD);
+				v[i] = rock.getV((cellZ + Mth.clamp(pz[i], 0.0F, 1.0F)) / SPREAD);
+			}
+			return;
+		}
 		if (nx + nz < 1.0E-5F) {
 			nx = 0.0F;
 			nz = 0.0F;
@@ -1369,7 +1534,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		for (int i = 0; i < 4; i++) {
 			upright += Math.abs(normal[i * 3 + 1]) / 4.0F;
 		}
-		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F || upright >= FLAT_GROUND;
+		// Only a short sliver, though: a side still standing tall laid from
+		// above showed the texture smeared down it in streaks.
+		float low = Math.min(Math.min(py[0], py[1]), Math.min(py[2], py[3]));
+		float high = Math.max(Math.max(py[0], py[1]), Math.max(py[2], py[3]));
+		boolean sliver = upright >= FLAT_GROUND && high - low <= SLIVER;
+		boolean flat = length < 1.0E-5F || Math.abs(cy) / length >= 0.5F || sliver;
 		boolean alongX = Math.abs(cz) >= Math.abs(cx);
 		// Spread over the blocks as the tops are (see spreadTexture), so the
 		// ground keeps one scale from piece to piece.
@@ -1388,6 +1558,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 	/** How upright the smoothed ground's normal must be for a side piece to be laid from above. */
 	private static final float FLAT_GROUND = 0.6F;
+	/** How tall a side piece may stand, in blocks, and still be laid from above. */
+	private static final float SLIVER = 0.2F;
 
 	/** The ground's top faded over one piece of a face by {@code alpha} at each corner. */
 	private static void groundOverlay(QuadEmitter emitter, GroundTop ground, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour, int[] light,

@@ -80,9 +80,9 @@ public final class BlockTextures {
 			gravel = nature/gravelfloor002a nature/gravelfloor00* nature/*gravel* *gravel*
 			sand = nature/sandfloor009a nature/sandfloor0* nature/*sand* *sand*
 			red_sand = nature/sandfloor0* nature/*sand* *sand*
-			sandstone = stone/*sand* nature/*sandstone* *sandstone* concrete/concretewall0*
-			sandstone_top = stone/*sand* nature/*sandstone* *sandstone* concrete/concretefloor0*
-			sandstone_bottom = stone/*sand* nature/*sandstone* *sandstone* concrete/concretefloor0*
+			sandstone = nature/*sandstone* *sandstone* nature/sandfloor0* nature/*sand* nature/rockwall00*
+			sandstone_top = nature/*sandstone* *sandstone* nature/sandfloor0* nature/*sand* nature/rockfloor00*
+			sandstone_bottom = nature/*sandstone* *sandstone* nature/sandfloor0* nature/*sand* nature/rockfloor00*
 			snow = nature/snowfloor00* nature/*snow* *snow*
 			snow_block = nature/snowfloor00* nature/*snow* *snow*
 			powder_snow = nature/snowfloor00* nature/*snow* *snow*
