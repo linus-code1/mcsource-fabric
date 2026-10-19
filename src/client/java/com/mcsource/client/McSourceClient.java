@@ -29,6 +29,7 @@ public class McSourceClient implements ClientModInitializer {
 				}));
 		SourceHud.register();
 		com.mcsource.client.light.HeldLight.register();
+		com.mcsource.client.light.Emitters.register();
 		// Smoothed ground collides as smoothed only where the server has the mod too.
 		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
 			boolean modded = net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(com.mcsource.terrain.ServerSupport.Present.TYPE);
@@ -36,8 +37,10 @@ public class McSourceClient implements ClientModInitializer {
 			com.mcsource.McSource.LOGGER.info(modded ? "Server has MC:Source: smooth collision on"
 					: "Server lacks MC:Source: ground collides as plain blocks");
 		});
-		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-				com.mcsource.terrain.ServerSupport.setSmoothCollision(true));
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			com.mcsource.terrain.ServerSupport.setSmoothCollision(true);
+			com.mcsource.client.light.Emitters.clear();
+		});
 		EntityRendererRegistry.register(Karts.KART, KartRenderer::new);
 		EntityRendererRegistry.register(Trees.TREE, TreeRenderer::new);
 		// New trees are tree models when there are tree models to draw them with.

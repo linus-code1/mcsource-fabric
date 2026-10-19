@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.mcsource.client.light.HeldLight;
+import com.mcsource.client.light.SourceLight;
 
 /** Adds the light of a torch held in the player's hand to the light blocks and things are drawn with. */
 @Mixin(LightCoordsUtil.class)
@@ -19,7 +19,7 @@ public abstract class LightCoordsMixin {
 	private static void mcsource$heldLight(LightCoordsUtil.BrightnessGetter getter, BlockAndLightGetter level, BlockState state, BlockPos pos,
 			CallbackInfoReturnable<Integer> cir) {
 		int packed = cir.getReturnValueI();
-		int lit = HeldLight.apply(packed, pos);
+		int lit = SourceLight.at(level, state, pos, packed);
 		if (lit != packed) {
 			cir.setReturnValue(lit);
 		}

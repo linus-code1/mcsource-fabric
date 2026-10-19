@@ -503,10 +503,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		int light = LightCoordsUtil.getLightCoords(level, pos);
 		for (Direction direction : Direction.values()) {
-			light = LightCoordsUtil.max(light, LightCoordsUtil.getLightCoords(level, pos.relative(direction)));
+			light = com.mcsource.client.light.SourceLight.max(light, LightCoordsUtil.getLightCoords(level, pos.relative(direction)));
 		}
-		int sky = LightCoordsUtil.sky(light);
-		int block = LightCoordsUtil.block(light);
+		float sky = com.mcsource.client.light.SourceLight.skyLevel(light);
+		float block = com.mcsource.client.light.SourceLight.blockLevel(light);
 		float[] positions = mesh.positions();
 		float[] uvs = mesh.uvs();
 		// Sit down onto smoothed ground that curves away below the block.
@@ -619,7 +619,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
 						// Plants and snow take the sun as if facing up, like the ground.
 						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
-								LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
+								com.mcsource.client.light.SourceLight.skyLevel(lightHere), com.mcsource.client.light.SourceLight.blockLevel(lightHere));
 						emitter.color(i, ARGB.multiply(blendColor(pc, w0, w1, w2, w3), sun));
 						emitter.normal(i, 0.0F, 1.0F, 0.0F);
 					}
@@ -830,11 +830,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		Vector3fc normal = quad.faceNormal();
 		Direction face = quad.lightFace();
 		int light = LightCoordsUtil.getLightCoords(level, quad.cullFace() == null && !touchesSide(quad, face) ? pos : pos.relative(face));
-		int sky = LightCoordsUtil.sky(light);
-		if (sky == 0) {
+		float sky = com.mcsource.client.light.SourceLight.skyLevel(light);
+		if (sky <= 0.0F) {
 			return;
 		}
-		int block = LightCoordsUtil.block(light);
+		float block = com.mcsource.client.light.SourceLight.blockLevel(light);
 		for (int i = 0; i < 4; i++) {
 			int sun = SunLight.multiplier(level, pos.getX() + quad.x(i), pos.getY() + quad.y(i), pos.getZ() + quad.z(i),
 					normal.x(), normal.y(), normal.z(), sky, block);
@@ -1330,7 +1330,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		var sprite = net.minecraft.client.Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)
 				.getSprite(net.minecraft.resources.Identifier.withDefaultNamespace("block/water_still"));
 		int tint = net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(level, water);
-		int light = LightCoordsUtil.max(LightCoordsUtil.getLightCoords(level, pos.above()), LightCoordsUtil.getLightCoords(level, water));
+		int light = com.mcsource.client.light.SourceLight.max(LightCoordsUtil.getLightCoords(level, pos.above()), LightCoordsUtil.getLightCoords(level, water));
 		float[][] corners = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
 		for (int i = 0; i < 4; i++) {
 			float x = corners[i][0];
@@ -2037,8 +2037,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			int cy = corner >> 1 & 1;
 			int cz = corner >> 2 & 1;
 			int count = 0;
-			int blockMax = 0;
-			int skyMax = 0;
+			float blockMax = 0.0F;
+			float skyMax = 0.0F;
 			for (int oy = cy - 1; oy <= cy; oy++) {
 				for (int oz = cz - 1; oz <= cz; oz++) {
 					for (int ox = cx - 1; ox <= cx; ox++) {
@@ -2046,8 +2046,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						if (open[index] != 0) {
 							int cell = cellLight[index];
 							count++;
-							blockMax = Math.max(blockMax, LightCoordsUtil.block(cell));
-							skyMax = Math.max(skyMax, LightCoordsUtil.sky(cell));
+							blockMax = Math.max(blockMax, com.mcsource.client.light.SourceLight.blockLevel(cell));
+							skyMax = Math.max(skyMax, com.mcsource.client.light.SourceLight.skyLevel(cell));
 						}
 					}
 				}
@@ -2056,8 +2056,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			// face be darker than the cell it faces, so an average would be raised
 			// on some faces and not others, and the facets would show.
 			if (count == 0) {
-				blockMax = LightCoordsUtil.block(fallback);
-				skyMax = LightCoordsUtil.sky(fallback);
+				blockMax = com.mcsource.client.light.SourceLight.blockLevel(fallback);
+				skyMax = com.mcsource.client.light.SourceLight.skyLevel(fallback);
 			}
 			blockLight[corner] = blockMax;
 			skyLight[corner] = skyMax;

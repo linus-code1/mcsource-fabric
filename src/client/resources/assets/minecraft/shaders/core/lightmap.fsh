@@ -2,12 +2,14 @@
 #extension GL_ARB_separate_shader_objects : require
 
 // MC:Source lightmap. Builds the 16x16 light colour table that every block and
-// mob is lit through, styled after the look of Source engine maps: warm lamps
-// that fall off with the square of distance, daylight made of a warm sun and a
-// cool blue sky fill, and soft highlights instead of hard clipping. Sun
-// direction and shadows are baked into block vertices by SunLight, which takes
-// away the sun share where it does not reach. Written for this mod from the
-// published descriptions of Source lighting; no Valve code is used.
+// mob is lit through, styled after the look of Source engine maps: warm lamps,
+// daylight made of a warm sun and a cool blue sky fill, and soft highlights
+// instead of hard clipping. The two inputs are not Minecraft's light levels:
+// SourceLight works out how much lamp light reaches a point (already fallen
+// off with distance and shadowed by walls) and how much of the sky it sees,
+// and this only turns those into colour. Sun direction and shadows are baked
+// into block vertices by SunLight. Written for this mod from the published
+// descriptions of Source lighting; no Valve code is used.
 
 layout(std140) uniform LightmapInfo {
     float SkyFactor;
@@ -30,9 +32,6 @@ layout(location = 0) out vec4 fragColor;
 // a deeper orange, like bounced incandescent light.
 const vec3 LAMP_HOT = vec3(1.00, 0.86, 0.68);
 const vec3 LAMP_EDGE = vec3(1.00, 0.58, 0.30);
-// How quickly lamp light dies away. Minecraft block light drops one level per
-// block, so (15 - level) is about the distance to the lamp.
-const float LAMP_FALLOFF = 0.10;
 // Lamps are slightly overbright right next to the source.
 const float LAMP_INTENSITY = 1.35;
 
@@ -46,12 +45,6 @@ const float SKY_FILL_STRENGTH = 0.7;
 // white after the soft clip.
 const float DAYLIGHT = 0.9;
 
-float lamp_brightness(float level) {
-    float distance = (1.0 - level) * 15.0;
-    float inverseSquare = 1.0 / (1.0 + LAMP_FALLOFF * distance * distance);
-    // Reach zero at level 0 so light still ends where Minecraft says it does.
-    return inverseSquare * smoothstep(0.0, 0.3, level);
-}
 
 // Keeps colours linear up to the knee and rolls brighter light off smoothly
 // towards white, standing in for Source's HDR tone mapping.
@@ -79,14 +72,13 @@ void main() {
     vec3 nightVision = lightmapInfo.NightVisionColor * lightmapInfo.NightVisionFactor;
     vec3 color = max(lightmapInfo.AmbientColor, nightVision);
 
-    // Sky light fades in gently with how much sky is visible, so the edge of
-    // cover is a soft gradient rather than a step.
-    vec3 daylight = (SKY_FILL_COLOR * SKY_FILL_STRENGTH + SUN_COLOR * SUN_STRENGTH) * DAYLIGHT * pow(skyLevel, 1.5);
+    // Daylight in proportion to how much sky is seen (and bounced in).
+    vec3 daylight = (SKY_FILL_COLOR * SKY_FILL_STRENGTH + SUN_COLOR * SUN_STRENGTH) * DAYLIGHT * skyLevel;
     color += lightmapInfo.SkyLightColor * daylight * lightmapInfo.SkyFactor;
 
-    // Lamps: inverse square falloff, whiter near the flame. The dimension's
-    // block light tint still nudges the colour (the Nether stays redder).
-    float lamp = lamp_brightness(blockLevel);
+    // Lamps: whiter near the flame. The dimension's block light tint still
+    // nudges the colour (the Nether stays redder).
+    float lamp = blockLevel;
     vec3 tint = lightmapInfo.BlockLightTint / max(max(max(lightmapInfo.BlockLightTint.r, lightmapInfo.BlockLightTint.g), lightmapInfo.BlockLightTint.b), 0.001);
     vec3 lampColor = mix(LAMP_EDGE, LAMP_HOT, lamp) * mix(vec3(1.0), tint, 0.35);
     color += lampColor * lamp * LAMP_INTENSITY * lightmapInfo.BlockFactor;

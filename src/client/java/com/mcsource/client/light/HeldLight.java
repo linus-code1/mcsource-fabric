@@ -47,6 +47,7 @@ public final class HeldLight {
 			return;
 		}
 		current = next;
+		SourceLight.forget();
 		if (level != null) {
 			// The blocks round where the light was and where it is now are drawn again.
 			dirty(level, last);
@@ -76,6 +77,12 @@ public final class HeldLight {
 			return block.getBlock().defaultBlockState().getLightEmission();
 		}
 		return 0;
+	}
+
+	/** The held light as x, y, z and brightness (1 to 15), or null when nothing bright is held. */
+	public static int[] source() {
+		Source source = current;
+		return source == null ? null : new int[] {source.x(), source.y(), source.z(), source.level()};
 	}
 
 	/**
