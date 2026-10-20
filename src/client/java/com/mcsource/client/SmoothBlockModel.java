@@ -996,7 +996,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					}
 					boolean allRock = false;
 					if (sideGround) {
-						alpha = rock == null ? new float[4] : rockAlpha(ox, oy, oz, on);
+						alpha = rock == null ? new float[4] : rockAlpha(ox, oy, oz, on, ground != null);
 						if (lipHere) {
 							for (int i = 0; i < 4; i++) {
 								alpha[i] = Math.min(alpha[i], 1.0F - lip(grid, pos, ox[i], oy[i], oz[i]));
@@ -1035,7 +1035,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						continue;
 					}
 					if (rockHere) {
-						alpha = rockAlpha(ox, oy, oz, on);
+						alpha = rockAlpha(ox, oy, oz, on, ground != null);
 						allRock = alpha[0] > 0.996F && alpha[1] > 0.996F && alpha[2] > 0.996F && alpha[3] > 0.996F;
 						if (allRock) {
 							// Wholly rock: draw the face itself as rock, with nothing laid
@@ -1268,11 +1268,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * smooth normals alone, which run on unbroken from piece to piece, so the
 	 * rock fades in without hard edges.
 	 */
-	private static float[] rockAlpha(float[] px, float[] py, float[] pz, float[] normal) {
+	private static float[] rockAlpha(float[] px, float[] py, float[] pz, float[] normal, boolean grassy) {
+		// Grass keeps to hillsides much steeper than bare ground does: a hill
+		// of one-block steps stays green, and only real cliffs turn to rock.
+		float from = grassy ? GRASS_ROCK_FROM : ROCK_FROM;
+		float full = grassy ? GRASS_ROCK_FULL : ROCK_FULL;
 		float[] alpha = new float[4];
 		for (int i = 0; i < 4; i++) {
 			float steep = 1.0F - Math.abs(normal[i * 3 + 1]);
-			float t = Mth.clamp((steep - ROCK_FROM) / (ROCK_FULL - ROCK_FROM), 0.0F, 1.0F);
+			float t = Mth.clamp((steep - from) / (full - from), 0.0F, 1.0F);
 			alpha[i] = t * t * (3.0F - 2.0F * t);
 		}
 		return alpha;
@@ -1317,6 +1321,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
 	private static final float ROCK_FROM = 0.25F;
 	private static final float ROCK_FULL = 0.6F;
+	/** The same for grassy ground (grass, podzol, mycelium, nylium, snowy tops). */
+	private static final float GRASS_ROCK_FROM = 0.45F;
+	private static final float GRASS_ROCK_FULL = 0.8F;
 	/** How far an overlay sits off the face beneath it, in blocks. */
 	private static final float ROCK_LIFT = 0.005F;
 
