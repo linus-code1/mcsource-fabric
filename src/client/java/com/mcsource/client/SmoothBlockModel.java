@@ -992,7 +992,20 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		// are always drawn mapped as rock, by the world, so a cliff of it runs
 		// on unbroken instead of showing each block's own copy of the texture.
 		boolean selfRock = rock != null && rock == ownSprite(state);
-		GroundTop ground = groundTop(state, snowAbove);
+		GroundTop own = groundTop(state, snowAbove);
+		if (own == null && (state.is(Blocks.DIRT) || state.is(Blocks.COARSE_DIRT) || state.is(Blocks.ROOTED_DIRT))) {
+			// Dirt under grass, bared where a hill steps down: its sides take
+			// the grass above it, so a grassy hill's steps stay green and fade
+			// into rock like the grass beside them, instead of showing hard
+			// slivers of rock between the grass.
+			BlockState above = level.getBlockState(pos.above());
+			GroundTop cover = groundTop(above, level.getBlockState(pos.above(2)).is(Blocks.SNOW));
+			if (cover != null) {
+				own = cover.tint() < 0 ? cover
+						: new GroundTop(cover.sprite(), -1, net.minecraft.client.renderer.BiomeColors.getAverageGrassColor(level, pos.above()));
+			}
+		}
+		GroundTop ground = own;
 		// Grass hangs a little way down over the lip of a cliff, as Source
 		// blends it over the top of its rock faces, instead of stopping at a
 		// hard edge where the top turns down.
@@ -1149,6 +1162,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							groundUv(ground, ox, oy, oz, u, v);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
+								emitter.color(i, ground.colour(oc[i]));
 							}
 							emitter.tintIndex(ground.tint());
 							emitter.emit();
@@ -1255,6 +1269,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	/**
 	 * How much of the ground's top hangs over a side point just below the top
 	 * of the block, from 1 at the lip fading to 0 a ragged distance down.
+	 * It reaches about a block down, so the one-block steps of a grassy hill
+	 * stay grass instead of showing hard slivers of rock, and only taller
+	 * cliffs turn to rock below their lip.
 	 */
 	private static float lip(float[] grid, BlockPos pos, float x, float y, float z) {
 		float lx = Mth.clamp(x, 0.0F, 1.0F);
@@ -1263,7 +1280,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		float depth = surface - y;
 		float wx = pos.getX() + lx;
 		float wz = pos.getZ() + lz;
-		float reach = 0.15F + 0.45F * (noise(wx / 1.3F + wz / 2.1F, pos.getY() * 0.7F, 11) * 0.7F + noise(wx * 1.9F, wz * 1.9F, 12) * 0.3F);
+		float reach = 0.55F + 0.85F * (noise(wx / 1.3F + wz / 2.1F, pos.getY() * 0.7F, 11) * 0.7F + noise(wx * 1.9F, wz * 1.9F, 12) * 0.3F);
 		float t = Mth.clamp(depth / reach, 0.0F, 1.0F);
 		return 1.0F - t * t * (3.0F - 2.0F * t);
 	}
@@ -1491,7 +1508,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	 * hillside so it doesn't stretch.
 	 */
 	/** The texture on top of a ground block, and whether it takes the grass colour. */
-	private record GroundTop(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite, int tint) {
+	private record GroundTop(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite, int tint, int colour) {
+		GroundTop(net.minecraft.client.renderer.texture.TextureAtlasSprite sprite, int tint) {
+			this(sprite, tint, -1);
+		}
+
+		/** A vertex colour with this ground's own colour, if it has one, laid over it. */
+		int colour(int vertex) {
+			return colour == -1 ? vertex : ARGB.multiply(vertex, 0xFF000000 | colour);
+		}
 	}
 
 	/**
@@ -1575,7 +1600,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		for (int i = 0; i < 4; i++) {
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
 			emitter.uv(i, u[i], v[i]);
-			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+			int c = ground.colour(colour[i]);
+			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(c), ARGB.green(c), ARGB.blue(c)));
 			emitter.lightmap(i, light[i]);
 			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
 		}
