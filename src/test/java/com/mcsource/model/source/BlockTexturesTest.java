@@ -132,7 +132,8 @@ class BlockTexturesTest {
 		Path blocks = dir.resolve("assets/minecraft/textures/block");
 		assertTrue(Files.exists(blocks.resolve("water_still.png.mcmeta")));
 		byte[] png = Files.readAllBytes(blocks.resolve("water_flow.png"));
-		assertEquals(64 * 32, ByteBuffer.wrap(png, 20, 4).getInt());
+		// Twice the ripple size (see FluidUvMixin), 32 frames tall.
+		assertEquals(128 * 32, ByteBuffer.wrap(png, 20, 4).getInt());
 	}
 
 	private static byte[] vtf(int size, int[] argb) {

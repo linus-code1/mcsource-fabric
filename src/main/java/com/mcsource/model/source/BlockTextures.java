@@ -515,9 +515,7 @@ public final class BlockTextures {
 		}
 		String meta = "{\"animation\": {\"frametime\": 3, \"interpolate\": true}}\n";
 		// Still water ripples drift gently; flowing water's ripples run along
-		// the flow. The flow texture is twice the size, as Minecraft draws only
-		// half of it on a face, so its ripples come out the same size.
-		// Both are twice the size: the still texture is laid over two blocks
+		// the flow. Both are twice the size: the still texture is laid over two blocks
 		// (see FluidUvMixin), and Minecraft draws half the flow texture on a face.
 		int size = WATER_SIZE * 2;
 		writePng(folder.resolve("water_still.png"), waterStrip(normals, base, size, false), size, size * WATER_FRAMES);
