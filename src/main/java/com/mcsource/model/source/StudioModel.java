@@ -326,7 +326,7 @@ public final class StudioModel {
 			String label = string(mdl, seq + mdl.getInt(seq + 4));
 			String activity = string(mdl, seq + mdl.getInt(seq + 8));
 			boolean looping = (mdl.getInt(seq + 12) & SEQ_LOOPING) != 0;
-			int anim = mdl.getShort(seq + mdl.getInt(seq + 60));
+			int anim = pickBlend(mdl, seq, animIndex, animCount);
 			if (anim < 0 || anim >= animCount) {
 				continue;
 			}
@@ -349,15 +349,69 @@ public final class StudioModel {
 
 	/** How far an animation moves in one cycle, from its movement records. */
 	private static float movement(ByteBuffer mdl, int desc) {
+		float[] v = movementVector(mdl, desc);
+		return (float) Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	}
+
+	/** Where an animation has moved the model by the end of one cycle, in model space (x forward), or zero. */
+	private static float[] movementVector(ByteBuffer mdl, int desc) {
 		int count = mdl.getInt(desc + 20);
 		if (count <= 0) {
-			return 0.0F;
+			return new float[3];
 		}
 		int last = desc + mdl.getInt(desc + 24) + (count - 1) * MOVEMENT_SIZE;
-		float x = mdl.getFloat(last + 32);
-		float y = mdl.getFloat(last + 36);
-		float z = mdl.getFloat(last + 40);
-		return (float) Math.sqrt(x * x + y * y + z * z);
+		if (last < 0 || last + 44 > mdl.capacity()) {
+			return new float[3];
+		}
+		return new float[] {mdl.getFloat(last + 32), mdl.getFloat(last + 36), mdl.getFloat(last + 40)};
+	}
+
+	/**
+	 * Which of a sequence's animations to use when it blends several (one
+	 * per point of a grid over one or two parameters). Walks and runs blended
+	 * over the direction of travel take the one heading straightest forward,
+	 * since the first is usually walking backwards; other blends (aiming,
+	 * leaning) take the one nearest the middle, where each parameter is zero.
+	 */
+	private static int pickBlend(ByteBuffer mdl, int seq, int animIndex, int animCount) {
+		int table = seq + mdl.getInt(seq + 60);
+		int first = mdl.getShort(table);
+		int across = Math.max(1, mdl.getInt(seq + 68));
+		int down = Math.max(1, mdl.getInt(seq + 72));
+		int blends = across * down;
+		if (blends <= 1 || blends > 256 || table + blends * 2 > mdl.capacity()) {
+			return first;
+		}
+		int forward = -1;
+		float straightest = 0.5F;
+		for (int i = 0; i < blends; i++) {
+			int anim = mdl.getShort(table + i * 2);
+			if (anim < 0 || anim >= animCount) {
+				continue;
+			}
+			float[] v = movementVector(mdl, animIndex + anim * ANIMDESC_SIZE);
+			float length = (float) Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+			if (length > 1.0F && v[0] / length > straightest) {
+				straightest = v[0] / length;
+				forward = anim;
+			}
+		}
+		if (forward >= 0) {
+			return forward;
+		}
+		int x = nearestZero(mdl.getFloat(seq + 84), mdl.getFloat(seq + 92), across);
+		int y = nearestZero(mdl.getFloat(seq + 88), mdl.getFloat(seq + 96), down);
+		int anim = mdl.getShort(table + (y * across + x) * 2);
+		return anim >= 0 && anim < animCount ? anim : first;
+	}
+
+	/** The grid point nearest zero along a parameter running from start to end over count points. */
+	private static int nearestZero(float start, float end, int count) {
+		if (count <= 1 || !(Math.abs(end - start) > 1.0E-6F)) {
+			return 0;
+		}
+		float t = Math.max(0.0F, Math.min(1.0F, -start / (end - start)));
+		return Math.round(t * (count - 1));
 	}
 
 	private static float[][] readAnimation(ByteBuffer mdl, ByteBuffer ani, int blockIndex, int blockCount, int desc, Bone[] bones)

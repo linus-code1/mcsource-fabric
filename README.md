@@ -158,6 +158,17 @@ world to try it in.
   mob's height and plays its own idle, walk and attack animations. Mobs with
   no match look as in Minecraft. Without Half-Life 2, zombies use Half-Life
   1's zombie if you own it, else the mod's own rigged zombie scientist.
+- **Half-Life 2 player.** In third person and for other players, players are
+  drawn as a Half-Life 2 rebel (or citizen, or a player model from your
+  install) instead of the skin, playing its own idle, walk, run, crouch,
+  jump and sitting animations in step with how the player moves, swinging
+  its arms on a hit and turning its head to where the player looks. Name
+  tags and shadows stay; armour, capes and held items aren't drawn on it.
+  Set `hl2_player=false` in `config/mcsource.properties` to keep the skin.
+- **Half-Life 2 view bob.** Walking bobs the view as in Half-Life 2: a gentle
+  dip at each footstep and a slight sway every other, with almost no roll,
+  growing with speed and fading out in the air and at a standstill. The
+  first-person hands move with it. The View Bobbing option still turns it off.
 - **Kart.** A drivable go-kart, found in the Tools & Utilities tab. Use it on
   the ground to place it, use the kart to get in, then drive with W and S and
   steer with A and D; it slides a little through fast corners and climbs
@@ -252,6 +263,9 @@ client with the mod loaded.
   models), `Vtf` textures, `.vmt` materials, `Vpk` archives and Half-Life 1
   `Pak` files. Both readers produce a `RiggedModel`. `GameInstalls` (client)
   finds the games on disk.
+- `SourcePlayerRenderer` (client) poses the player model, and
+  `PlayerBodyMixin` draws it in place of the skin model; `ViewBob` is the
+  walking view bob.
 - `SourceRigs` (client) lists which mobs get which models (tried in order)
   and which animations stand for idle, walk, attack and death; adding a mob
   there is all a new rig needs. `SourceMobRenderer` poses and skins the model each frame, and

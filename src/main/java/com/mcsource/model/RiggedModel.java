@@ -171,6 +171,23 @@ public final class RiggedModel {
 		}
 	}
 
+	/** Blends {@code other} into {@code pose} by {@code weight}, only for the bones marked in {@code bones}. */
+	public void blend(Pose pose, Pose other, float weight, boolean[] bones) {
+		if (weight <= 0.0F) {
+			return;
+		}
+		for (int bone = 0; bone < boneCount(); bone++) {
+			if (!bones[bone]) {
+				continue;
+			}
+			for (int c = 0; c < 3; c++) {
+				int i = bone * 3 + c;
+				pose.position[i] += (other.position[i] - pose.position[i]) * weight;
+			}
+			pose.rotation[bone].slerp(other.rotation[bone], weight);
+		}
+	}
+
 	/** Each bone's skinning matrix for a pose: model-space bind vertex to posed model space. */
 	public void skinning(Pose pose, Matrix4f[] out) {
 		Matrix4f[] world = new Matrix4f[boneCount()];

@@ -16,6 +16,7 @@
 		"LivingEntityRendererMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",
+		"PlayerBodyMixin",
 		"PropCullMixin",
 		"ShadowMixin",
 		"TitleScreenMixin"
