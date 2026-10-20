@@ -15,11 +15,14 @@ import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.Player;
 
 import com.mcsource.model.RiggedModel;
@@ -67,6 +70,8 @@ public final class SourcePlayerRenderer {
 	/** Walking is about 4.3 blocks a second, sprinting 5.6. */
 	private static final float RUN_FROM = 4.7F;
 	private static final float RUN_FULL = 5.4F;
+	/** How far a sword's tip stands out of the fist, in blocks; other held things are sized from it. */
+	private static final float HELD_REACH = 0.85F;
 	/** How quickly blends follow what the player does, per second. */
 	private static final float BLEND_RATE = 10.0F;
 
@@ -145,8 +150,64 @@ public final class SourcePlayerRenderer {
 			loaded.skin(bones);
 			loaded.emit(matrices, consumer, SourceModel.Axes.HALF_LIFE, scale, light, overlay);
 		});
+		submitHeld(model, bones, scale, state, HumanoidArm.RIGHT, poseStack, collector, light);
+		submitHeld(model, bones, scale, state, HumanoidArm.LEFT, poseStack, collector, light);
 		poseStack.popPose();
 		return true;
+	}
+
+	/**
+	 * Draws what the player holds in one hand, in the model's fist. Weapons,
+	 * tools and the like are gripped as a Half-Life 2 character grips the
+	 * crowbar (see {@link HeldItems}); anything else is placed by
+	 * Minecraft's own display transform for a hand, from a hand frame built
+	 * out of the model's fist the way Minecraft builds one from its blocky
+	 * arm: up the arm, forward out of the thumb side, and out to the side.
+	 */
+	private static void submitHeld(RiggedModel model, Matrix4f[] bones, float scale, AvatarRenderState state, HumanoidArm arm,
+			PoseStack poseStack, SubmitNodeCollector collector, int light) {
+		boolean right = arm == HumanoidArm.RIGHT;
+		ItemStackRenderState item = right ? state.rightHandItemState : state.leftHandItemState;
+		if (item.isEmpty()) {
+			return;
+		}
+		HeldItems.Fist fist = HeldItems.fist(model, bones, right);
+		if (fist == null) {
+			return;
+		}
+		// Half-Life's axes to the ones the model is drawn in (see SourceModel.Axes.HALF_LIFE).
+		Vector3f at = new Vector3f(fist.grip().y, fist.grip().z, fist.grip().x).mul(scale);
+		Vector3f along = new Vector3f(fist.along().y, fist.along().z, fist.along().x);
+		Vector3f up = new Vector3f(fist.up().y, fist.up().z, fist.up().x);
+		up.fma(-up.dot(along), along);
+		if (up.lengthSquared() < 1.0E-8F) {
+			return;
+		}
+		up.normalize();
+		HeldItems.Grip grip = HeldItems.grip(right ? state.rightHandItemStack : state.leftHandItemStack);
+		Matrix4f frame;
+		if (grip != null) {
+			// The handle along the fist, the item's face to the side so a blade's
+			// edge and an axe's head point down, away from the elbow.
+			Vector3f face = new Vector3f(up).cross(along);
+			Vector3f side = new Vector3f(along).cross(face);
+			frame = new Matrix4f(side.x, side.y, side.z, 0.0F, along.x, along.y, along.z, 0.0F, face.x, face.y, face.z, 0.0F, at.x, at.y,
+					at.z, 1.0F);
+		} else {
+			// Minecraft's hand frame for held items: x to the player's right,
+			// y forward and z up the arm (see ItemInHandLayer).
+			Vector3f side = new Vector3f(along).cross(up);
+			frame = new Matrix4f(side.x, side.y, side.z, 0.0F, along.x, along.y, along.z, 0.0F, up.x, up.y, up.z, 0.0F, at.x, at.y, at.z,
+					1.0F);
+		}
+		poseStack.pushPose();
+		poseStack.mulPose(frame);
+		if (grip != null) {
+			HeldItems.submit(item, grip, HELD_REACH, poseStack, collector, light, state.outlineColor);
+		} else {
+			item.submit(poseStack, collector, light, OverlayTexture.NO_OVERLAY, state.outlineColor);
+		}
+		poseStack.popPose();
 	}
 
 	/** Updates how this player is moving, smoothly, from where they are now. */

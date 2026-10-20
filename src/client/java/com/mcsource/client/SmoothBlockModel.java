@@ -398,6 +398,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				&& state.getValue(net.minecraft.world.level.block.BedBlock.PART) == net.minecraft.world.level.block.state.properties.BedPart.FOOT) {
 			return;
 		}
+		// A door's model stands over both its blocks, drawn by the lower one,
+		// laid out from its hinge (see DoorProps).
+		float[] door = mesh.door() ? com.mcsource.client.prop.DoorProps.placement(state) : null;
+		if (door != null && com.mcsource.client.prop.DoorProps.upper(state)) {
+			return;
+		}
 		if (mesh.keepSlanted()) {
 			// The block's own slanted cards (a campfire's flames) stay on the prop.
 			emitter.pushTransform(quad -> {
@@ -427,12 +433,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		for (Direction direction : Direction.values()) {
 			light = LightCoordsUtil.max(light, LightCoordsUtil.getLightCoords(level, pos.relative(direction)));
 		}
+		if (door != null) {
+			light = LightCoordsUtil.max(light, LightCoordsUtil.getLightCoords(level, pos.above()));
+		}
 		int sky = LightCoordsUtil.sky(light);
 		int block = LightCoordsUtil.block(light);
 		float[] positions = mesh.positions();
 		float[] uvs = mesh.uvs();
 		// Sit down onto smoothed ground that curves away below the block.
-		float drop = groundDrop(level, pos);
+		float drop = door != null ? 0.0F : groundDrop(level, pos);
 		float minX = Float.MAX_VALUE;
 		float maxX = -Float.MAX_VALUE;
 		float minZ = Float.MAX_VALUE;
@@ -448,6 +457,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				float z = positions[t * 9 + k * 3 + 2] - 0.5F;
 				float wx = 0.5F + x * cos - z * sin;
 				float wz = 0.5F + x * sin + z * cos;
+				if (door != null) {
+					x += 0.5F;
+					z += 0.5F;
+					wx = door[0] + x * door[2] - z * door[3];
+					wz = door[1] + x * door[3] + z * door[2];
+				}
 				minX = Math.min(minX, wx);
 				maxX = Math.max(maxX, wx);
 				minZ = Math.min(minZ, wz);
@@ -470,7 +485,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			emitter.tintIndex(-1);
 			emitter.emit();
 		}
-		if (minX < maxX && sky + block > 0) {
+		if (minX < maxX && sky + block > 0 && door == null) {
 			contactShadow(emitter, sprites[0], minX, maxX, minZ, maxZ, drop);
 		}
 	}

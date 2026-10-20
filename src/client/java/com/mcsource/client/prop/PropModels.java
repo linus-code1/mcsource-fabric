@@ -55,10 +55,20 @@ public final class PropModels {
 	 * {@code h=} the most height it may take, {@code fill=} how much of
 	 * the footprint it fills, {@code yaw=} turns the model, {@code turn=no}
 	 * keeps it from turning with the block, {@code keep=slanted} keeps
-	 * the block's own slanted quads (a campfire's flames), and
-	 * {@code tint=RRGGBB} recolours its textures (a watermelon as a pumpkin).
+	 * the block's own slanted quads (a campfire's flames),
+	 * {@code tint=RRGGBB} recolours its textures (a watermelon as a pumpkin)
+	 * and {@code fit=door} stretches the model over a door's two blocks,
+	 * turning about its hinge as the door opens (see {@link DoorProps}).
+	 * The metal doors come before {@code *_door}, which takes the wooden
+	 * doors they leave.
 	 */
 	public static final String DEFAULTS = """
+			iron_door = models/props_doors/door03_slotted_left.mdl models/props_doors/door03*_left*.mdl models/props_c17/door01_left.mdl fit=door
+			*exposed_copper_door = models/props_doors/door03_slotted_left.mdl models/props_c17/door01_left.mdl fit=door tint=A97E62
+			*weathered_copper_door = models/props_doors/door03_slotted_left.mdl models/props_c17/door01_left.mdl fit=door tint=6A9670
+			*oxidized_copper_door = models/props_doors/door03_slotted_left.mdl models/props_c17/door01_left.mdl fit=door tint=4FA58A
+			*copper_door = models/props_doors/door03_slotted_left.mdl models/props_c17/door01_left.mdl fit=door tint=C06F4C
+			*_door = models/props_c17/door01_left.mdl models/props_c17/door0*_left.mdl models/props_doors/*_left*.mdl fit=door
 			chest = models/props_junk/wood_crate001a.mdl models/props_junk/wood_crate002a.mdl models/props_junk/wood_crate00*.mdl fill=0.88
 			trapped_chest = models/props_junk/wood_crate002a.mdl models/props_junk/wood_crate001a.mdl models/props_junk/wood_crate00*.mdl fill=0.88
 			crafting_table = models/props_c17/furnituretable002a.mdl models/props_c17/furnituretable001a.mdl models/props_c17/furnituretable00*.mdl models/props_wasteland/cafeteria_table001a.mdl models/props_interiors/furniture_desk01a.mdl
@@ -89,13 +99,18 @@ public final class PropModels {
 			#   crafting_table =
 			# Options: size=WxD (footprint in blocks), h= (most height), fill= (how
 			# much of the footprint), yaw= (degrees), turn=no, keep=slanted,
-			# tint=RRGGBB (recolour).
+			# tint=RRGGBB (recolour), fit=door (a door over its two blocks).
 			# Delete the hl2_block_pack folder or change this file, then restart.
 			""";
 
-	/** A prop fitted into its block: triangles in block units, for a block facing south. */
-	public record Mesh(String[] sprites, boolean[] masked, boolean turns, boolean keepSlanted, short[] texture, float[] positions,
-			float[] uvs) {
+	/**
+	 * A prop fitted into its block: triangles in block units, for a block
+	 * facing south. A door's triangles are laid out from its hinge instead:
+	 * x runs across the door from the hinge (0) to its far edge (1), y up
+	 * its two blocks and z through its thickness, about 0.
+	 */
+	public record Mesh(String[] sprites, boolean[] masked, boolean turns, boolean keepSlanted, boolean door, short[] texture,
+			float[] positions, float[] uvs) {
 		public int triangles() {
 			return texture.length;
 		}
@@ -173,6 +188,7 @@ public final class PropModels {
 		for (Entry entry : parse(userList)) {
 			entries.put(entry.key, entry);
 		}
+		java.util.Set<Block> iconed = new java.util.HashSet<>();
 		Path textures = packRoot.resolve("assets/mcsource/textures/block/props");
 		Path meshFolder = packRoot.resolve("assets/mcsource/props");
 		Files.createDirectories(textures);
@@ -191,7 +207,7 @@ public final class PropModels {
 						if (model == null || model.triangleCount() == 0) {
 							continue;
 						}
-						byte[] mesh = fit(model, entry, textures);
+						byte[] mesh = fit(model, entry, textures, packRoot, iconed);
 						if (mesh == null) {
 							continue;
 						}
@@ -274,7 +290,7 @@ public final class PropModels {
 	}
 
 	/** Poses the model, fits it into the block and writes its textures; the mesh file's bytes, or null. */
-	private static byte[] fit(RiggedModel model, Entry entry, Path textures) throws IOException {
+	private static byte[] fit(RiggedModel model, Entry entry, Path textures, Path packRoot, java.util.Set<Block> iconed) throws IOException {
 		RiggedModel.Pose pose = new RiggedModel.Pose(model);
 		model.bindPose(pose);
 		Matrix4f[] bones = new Matrix4f[model.boneCount()];
@@ -339,6 +355,7 @@ public final class PropModels {
 		if (dx <= 0.0F || dy <= 0.0F || dz <= 0.0F) {
 			return null;
 		}
+		float[] doorPositions = isDoor(entry) ? doorLayout(posed, vertices, low, high) : null;
 		// A long prop lies along the long side of its footprint.
 		boolean swap = (width > depth) != (dx > dz) && Math.abs(width - depth) > 0.01F;
 		if (swap) {
@@ -397,7 +414,7 @@ public final class PropModels {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		DataOutputStream out = new DataOutputStream(bytes);
 		out.writeInt(MAGIC);
-		out.writeInt(1);
+		out.writeInt(2);
 		out.writeInt(count);
 		for (int i = 0; i < count; i++) {
 			out.writeUTF(sprites[i]);
@@ -405,6 +422,7 @@ public final class PropModels {
 		}
 		out.writeBoolean(!"no".equals(entry.options.get("turn")));
 		out.writeBoolean("slanted".equals(entry.options.get("keep")));
+		out.writeBoolean(doorPositions != null);
 		int triangles = model.triangleCount();
 		out.writeInt(triangles);
 		for (int t = 0; t < triangles; t++) {
@@ -421,6 +439,14 @@ public final class PropModels {
 			float shiftV = (float) Math.floor(Math.min(v[0], Math.min(v[1], v[2])));
 			for (int k = 0; k < 3; k++) {
 				int vertex = model.cornerVertex[t * 3 + k];
+				if (doorPositions != null) {
+					out.writeFloat(doorPositions[vertex * 3]);
+					out.writeFloat(doorPositions[vertex * 3 + 1]);
+					out.writeFloat(doorPositions[vertex * 3 + 2]);
+					out.writeFloat(clamp01(u[k] - shiftU));
+					out.writeFloat(clamp01(v[k] - shiftV));
+					continue;
+				}
 				float x = posed[vertex * 3] - midX;
 				float y = posed[vertex * 3 + 1] - low[1];
 				float z = posed[vertex * 3 + 2] - midZ;
@@ -437,7 +463,141 @@ public final class PropModels {
 			}
 		}
 		out.flush();
+		if (doorPositions != null) {
+			doorIcons(model, entry, doorPositions, packRoot, iconed);
+		}
 		return bytes.toByteArray();
+	}
+
+	private static boolean isDoor(Entry entry) {
+		return "door".equals(entry.options.get("fit"));
+	}
+
+	/**
+	 * A door model laid out over a door's two blocks, as {@link Mesh} keeps
+	 * doors: across from the hinge, up and through. Source doors turn about
+	 * their model's origin, so the hinge is the end of the door nearer to it.
+	 * The model is only ever turned here, never mirrored, so its faces keep
+	 * their winding.
+	 */
+	private static float[] doorLayout(float[] posed, int vertices, float[] low, float[] high) {
+		int along = high[0] - low[0] >= high[2] - low[2] ? 0 : 2;
+		int through = 2 - along;
+		float start = low[along];
+		float end = high[along];
+		boolean hingeAtStart = Math.abs(start) <= Math.abs(end);
+		float width = end - start;
+		float height = high[1] - low[1];
+		float middle = (low[through] + high[through]) / 2.0F;
+		// Turning the long side onto x by a quarter or a half turn carries the
+		// thickness with it; this is the sign that keeps it a turn.
+		float sign = (along == 0) == hingeAtStart ? 1.0F : -1.0F;
+		float[] out = new float[vertices * 3];
+		for (int i = 0; i < vertices; i++) {
+			float across = hingeAtStart ? posed[i * 3 + along] - start : end - posed[i * 3 + along];
+			out[i * 3] = across / width;
+			out[i * 3 + 1] = (posed[i * 3 + 1] - low[1]) / height * 2.0F;
+			// Through its thickness at the same scale as across it, so the door keeps its depth.
+			out[i * 3 + 2] = sign * (posed[i * 3 + through] - middle) / width;
+		}
+		return out;
+	}
+
+	private static final int ICON_SIZE = 32;
+
+	/**
+	 * Item pictures of the door model for the doors it stands for, seen from
+	 * the front, so the door in the inventory looks like the one placed.
+	 * Earlier lines win, as when the models are given to blocks.
+	 */
+	private static void doorIcons(RiggedModel model, Entry entry, float[] layout, Path packRoot, java.util.Set<Block> iconed) {
+		List<Identifier> doors = new ArrayList<>();
+		try {
+			for (Block block : BuiltInRegistries.BLOCK) {
+				Identifier id = BuiltInRegistries.BLOCK.getKey(block);
+				if (block instanceof net.minecraft.world.level.block.DoorBlock && entry.blocks.matcher(id.toString()).matches()
+						&& iconed.add(block)) {
+					doors.add(id);
+				}
+			}
+		} catch (RuntimeException e) {
+			// No registry (outside the game): no pictures.
+			return;
+		}
+		if (doors.isEmpty()) {
+			return;
+		}
+		int[][] pixels = new int[model.textures.length][];
+		String tint = entry.options.get("tint");
+		for (int i = 0; i < pixels.length; i++) {
+			pixels[i] = tint == null ? model.textures[i].pixels() : tinted(model.textures[i].pixels(), tint);
+		}
+		int size = ICON_SIZE;
+		int[] colour = new int[size * size];
+		float[] depth = new float[size * size];
+		java.util.Arrays.fill(depth, -Float.MAX_VALUE);
+		// The door is twice as tall as it is wide: it fills the height, centred.
+		float scale = (size - 2) / 2.0F;
+		float left = (size - scale) / 2.0F;
+		float[] px = new float[3];
+		float[] py = new float[3];
+		float[] pd = new float[3];
+		for (int t = 0; t < model.triangleCount(); t++) {
+			RiggedModel.Texture texture = model.textures[model.triangleTexture[t]];
+			int[] image = pixels[model.triangleTexture[t]];
+			for (int k = 0; k < 3; k++) {
+				int v = model.cornerVertex[t * 3 + k] * 3;
+				px[k] = left + layout[v] * scale;
+				py[k] = size - 1 - layout[v + 1] * scale;
+				pd[k] = layout[v + 2];
+			}
+			float area = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
+			if (Math.abs(area) < 1.0E-6F) {
+				continue;
+			}
+			int x0 = Math.max(0, (int) Math.floor(Math.min(px[0], Math.min(px[1], px[2]))));
+			int x1 = Math.min(size - 1, (int) Math.ceil(Math.max(px[0], Math.max(px[1], px[2]))));
+			int y0 = Math.max(0, (int) Math.floor(Math.min(py[0], Math.min(py[1], py[2]))));
+			int y1 = Math.min(size - 1, (int) Math.ceil(Math.max(py[0], Math.max(py[1], py[2]))));
+			for (int y = y0; y <= y1; y++) {
+				for (int x = x0; x <= x1; x++) {
+					float cx = x + 0.5F;
+					float cy = y + 0.5F;
+					float b0 = ((px[1] - cx) * (py[2] - cy) - (px[2] - cx) * (py[1] - cy)) / area;
+					float b1 = ((px[2] - cx) * (py[0] - cy) - (px[0] - cx) * (py[2] - cy)) / area;
+					float b2 = 1.0F - b0 - b1;
+					if (b0 < -0.02F || b1 < -0.02F || b2 < -0.02F) {
+						continue;
+					}
+					float d = b0 * pd[0] + b1 * pd[1] + b2 * pd[2];
+					int at = y * size + x;
+					if (d <= depth[at]) {
+						continue;
+					}
+					float u = b0 * model.cornerUv[t * 6] + b1 * model.cornerUv[t * 6 + 2] + b2 * model.cornerUv[t * 6 + 4];
+					float w = b0 * model.cornerUv[t * 6 + 1] + b1 * model.cornerUv[t * 6 + 3] + b2 * model.cornerUv[t * 6 + 5];
+					int tw = Math.max(1, texture.width());
+					int th = Math.max(1, texture.height());
+					int p = image[Math.floorMod((int) Math.floor(w * th), th) * tw + Math.floorMod((int) Math.floor(u * tw), tw)];
+					if (texture.masked() && (p >>> 24) < 128) {
+						continue;
+					}
+					depth[at] = d;
+					colour[at] = 0xFF000000 | p & 0xFFFFFF;
+				}
+			}
+		}
+		for (Identifier id : doors) {
+			// Waxed copper doors share the unwaxed door's picture.
+			String name = id.getPath().startsWith("waxed_") ? id.getPath().substring("waxed_".length()) : id.getPath();
+			try {
+				Path folder = packRoot.resolve("assets/" + id.getNamespace() + "/textures/item");
+				Files.createDirectories(folder);
+				BlockTextures.writePng(folder.resolve(name + ".png"), colour, size);
+			} catch (IOException e) {
+				LOGGER.warn("Could not write the item picture for {}", id, e);
+			}
+		}
 	}
 
 	private static float clamp01(float value) {
@@ -547,7 +707,7 @@ public final class PropModels {
 
 	private static Mesh read(byte[] bytes) throws IOException {
 		DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
-		if (in.readInt() != MAGIC || in.readInt() != 1) {
+		if (in.readInt() != MAGIC || in.readInt() != 2) {
 			return null;
 		}
 		int count = in.readInt();
@@ -559,6 +719,7 @@ public final class PropModels {
 		}
 		boolean turns = in.readBoolean();
 		boolean keep = in.readBoolean();
+		boolean door = in.readBoolean();
 		int triangles = in.readInt();
 		short[] texture = new short[triangles];
 		float[] positions = new float[triangles * 9];
@@ -573,6 +734,6 @@ public final class PropModels {
 				uvs[t * 6 + k * 2 + 1] = in.readFloat();
 			}
 		}
-		return new Mesh(sprites, masked, turns, keep, texture, positions, uvs);
+		return new Mesh(sprites, masked, turns, keep, door, texture, positions, uvs);
 	}
 }

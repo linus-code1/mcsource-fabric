@@ -13,6 +13,8 @@
 		"FirstPersonHandsMixin",
 		"GameRendererMixin",
 		"GuiGraphicsExtractorMixin",
+		"ItemLayerAccessor",
+		"ItemStackRenderStateAccessor",
 		"LightCoordsMixin",
 		"LivingEntityRendererMixin",
 		"PackRepositoryMixin",
