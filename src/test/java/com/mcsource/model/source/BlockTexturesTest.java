@@ -67,6 +67,32 @@ class BlockTexturesTest {
 	}
 
 	@Test
+	void splitsOneDoorMaterialOverBothHalves() throws IOException {
+		Map<String, byte[]> files = new HashMap<>();
+		material(files, "wood/wooddoor001a", 0xFF805030);
+		GameFiles game = new GameFiles() {
+			@Override
+			public byte[] read(String path) {
+				return files.get(path.toLowerCase());
+			}
+
+			@Override
+			public List<String> list(String folder) {
+				return new ArrayList<>(files.keySet());
+			}
+		};
+		Map<String, String> used = BlockTextures.generate(game, BlockTextures.parse("oak_door = wood/*door*\n"), dir);
+		assertEquals("wood/wooddoor001a", used.get("oak_door"));
+		Path blocks = dir.resolve("assets/minecraft/textures/block");
+		for (String name : new String[] {"oak_door_top", "oak_door_bottom"}) {
+			byte[] png = Files.readAllBytes(blocks.resolve(name + ".png"));
+			assertEquals(BlockTextures.SIZE, ByteBuffer.wrap(png, 16, 4).getInt());
+			assertEquals(BlockTextures.SIZE, ByteBuffer.wrap(png, 20, 4).getInt());
+		}
+		assertTrue(Files.notExists(blocks.resolve("oak_door.png")));
+	}
+
+	@Test
 	void cutsPlantsFromSpriteSheet() throws IOException {
 		Map<String, byte[]> files = new HashMap<>();
 		// A 64x64 sheet: a green tuft on the left, a red flower on the right.

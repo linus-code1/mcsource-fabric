@@ -169,12 +169,22 @@ public final class BlockTextures {
 			vine = models/props_foliage/*ivy* nature/*ivy* *ivy* *vine* models/props_foliage/*leaves* models/props_foliage/*leaf*
 			rooted_dirt = nature/dirtfloor006a nature/*dirt* *dirt*
 			iron_bars = metal/*grate* metal/*fence* *grate*
-			iron_door_top = metal/metaldoor0* metal/*door* metal/*
-			iron_door_bottom = metal/metaldoor0* metal/*door* metal/*
-			oak_door_top = wood/*door* wood/woodwall0*
-			oak_door_bottom = wood/*door* wood/woodwall0*
-			spruce_door_top = wood/*door* wood/woodwall0*
-			spruce_door_bottom = wood/*door* wood/woodwall0*
+			# A door is one material over both of its blocks: its top half on the upper
+			# block and its bottom half on the lower, so it isn't repeated on each.
+			iron_door = metal/metaldoor0* metal/*door* metal/*
+			oak_door = wood/*door* wood/woodwall0*
+			spruce_door = wood/*door* wood/woodwall0*
+			birch_door = wood/*door* wood/woodwall0*
+			jungle_door = wood/*door* wood/woodwall0*
+			acacia_door = wood/*door* wood/woodwall0*
+			dark_oak_door = wood/*door* wood/woodwall0*
+			mangrove_door = wood/*door* wood/woodwall0*
+			cherry_door = wood/*door* wood/woodwall0*
+			bamboo_door = wood/*door* wood/woodwall0*
+			crimson_door = wood/*door* wood/woodwall0*
+			warped_door = wood/*door* wood/woodwall0*
+			pale_oak_door = wood/*door* wood/woodwall0*
+			poplar_door = wood/*door* wood/woodwall0*
 			anvil = metal/*
 			coal_block = nature/*coal* stone/*dark* metal/*dark*
 			gold_block = metal/*gold* *brass* metal/*
@@ -204,16 +214,6 @@ public final class BlockTextures {
 			acacia_trapdoor = wood/*door* wood/woodwall0* wood/*
 			dark_oak_trapdoor = wood/*door* wood/woodwall0* wood/*
 			mangrove_trapdoor = wood/*door* wood/woodwall0* wood/*
-			birch_door_top = wood/*door* wood/woodwall0*
-			birch_door_bottom = wood/*door* wood/woodwall0*
-			jungle_door_top = wood/*door* wood/woodwall0*
-			jungle_door_bottom = wood/*door* wood/woodwall0*
-			acacia_door_top = wood/*door* wood/woodwall0*
-			acacia_door_bottom = wood/*door* wood/woodwall0*
-			dark_oak_door_top = wood/*door* wood/woodwall0*
-			dark_oak_door_bottom = wood/*door* wood/woodwall0*
-			mangrove_door_top = wood/*door* wood/woodwall0*
-			mangrove_door_bottom = wood/*door* wood/woodwall0*
 			blue_ice = nature/ice* */ice0* nature/*frozen*
 			frosted_ice_0 = nature/ice* */ice0* nature/*frozen*
 			frosted_ice_1 = nature/ice* */ice0* nature/*frozen*
@@ -344,6 +344,8 @@ public final class BlockTextures {
 					continue;
 				} else if (name.equals("water")) {
 					water(files, entry.getValue(), materials, folder, used);
+				} else if (name.endsWith("_door")) {
+					door(files, name, entry.getValue(), materials, folder, used);
 				} else {
 					one(files, name, entry.getValue(), materials, folder, used, made);
 				}
@@ -440,6 +442,37 @@ public final class BlockTextures {
 		}
 		made.put(name, image);
 		writePng(folder.resolve(name + ".png"), image, SIZE);
+	}
+
+	/**
+	 * A door's two textures from one material: the material is stretched over
+	 * the door's full height, two blocks, and cut in two, so the upper block
+	 * shows its top half and the lower block its bottom half instead of the
+	 * whole material repeated on each.
+	 */
+	private static void door(GameFiles files, String name, String[] patterns, List<String> materials, Path folder, Map<String, String> used)
+			throws IOException {
+		String chosen = null;
+		int[] image = null;
+		for (String pattern : patterns) {
+			for (String material : candidates(pattern, materials)) {
+				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, false);
+				if (texture != null) {
+					chosen = material;
+					image = stretched(texture, SIZE, SIZE * 2);
+					break;
+				}
+			}
+			if (image != null) {
+				break;
+			}
+		}
+		used.put(name, chosen);
+		if (image == null) {
+			return;
+		}
+		writePng(folder.resolve(name + "_top.png"), java.util.Arrays.copyOfRange(image, 0, SIZE * SIZE), SIZE);
+		writePng(folder.resolve(name + "_bottom.png"), java.util.Arrays.copyOfRange(image, SIZE * SIZE, SIZE * SIZE * 2), SIZE);
 	}
 
 	/** A material, or null if it is missing or can't be read (a broken one is passed over). */
@@ -1975,16 +2008,21 @@ public final class BlockTextures {
 
 	/** Resamples a texture to {@link #SIZE} by {@link #SIZE}, wrapping at the edges so it still tiles. */
 	private static int[] square(RiggedModel.Texture texture) {
+		return stretched(texture, SIZE, SIZE);
+	}
+
+	/** Resamples a texture to {@code width} by {@code height}, wrapping at the edges so it still tiles. */
+	private static int[] stretched(RiggedModel.Texture texture, int width, int height) {
 		int w = texture.width();
 		int h = texture.height();
 		int[] in = texture.pixels();
-		int[] out = new int[SIZE * SIZE];
+		int[] out = new int[width * height];
 		// Average the source texels each output texel covers (box filter), or
 		// interpolate when the source is smaller.
-		float sx = (float) w / SIZE;
-		float sy = (float) h / SIZE;
-		for (int y = 0; y < SIZE; y++) {
-			for (int x = 0; x < SIZE; x++) {
+		float sx = (float) w / width;
+		float sy = (float) h / height;
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
 				int x0 = (int) Math.floor(x * sx);
 				int y0 = (int) Math.floor(y * sy);
 				int nx = Math.max(1, Math.round(sx));
@@ -2003,7 +2041,7 @@ public final class BlockTextures {
 					}
 				}
 				int n = nx * ny;
-				out[y * SIZE + x] = (int) (a / n) << 24 | (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n);
+				out[y * width + x] = (int) (a / n) << 24 | (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n);
 			}
 		}
 		return out;

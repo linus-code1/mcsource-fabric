@@ -93,7 +93,12 @@ world to try it in.
   so on, and melons and pumpkins become Half-Life 2's watermelon (orange for
   pumpkins). They stay ordinary blocks (open a crate-chest as before); only the
   look changes, and blocks beside them still show their faces. Campfires keep
-  their flames. The models picked are listed in
+  their flames. Doors (every wood, iron and copper) become Half-Life 2 doors
+  standing over both their blocks, turning about their hinge as they open and
+  close; collision and opening are Minecraft's, and the door item in the
+  inventory is a picture of the same model. Without a door model, the door's
+  Half-Life 2 texture is stretched over both blocks (top half above, bottom
+  half below) instead of repeating on each. The models picked are listed in
   `hl2_block_pack/used_materials.txt`; choose your own in
   `config/mcsource/props.txt` (restart to apply).
 - **Finer stairs.** Stairs are drawn as four shallow steps instead of
@@ -145,14 +150,16 @@ world to try it in.
   is the HEV suit hand from Half-Life 2's view models, read from your install
   (see *Half-Life models* below), idling and swinging with its own
   animations. Held items sit in its palm and move with those animations
-  instead of Minecraft's jab. Hitting with an empty hand swings Half-Life 2's
+  instead of Minecraft's jab. Weapons, tools, torches, bows, spears and the
+  trident are gripped in the fist the way the view model holds its crowbar,
+  at about the crowbar's size, and swing with the hand. Hitting with an empty hand swings Half-Life 2's
   crowbar, which comes out for the swing; items being eaten, drawn or charged, and
   maps, keep Minecraft's. Its size and place on screen can be tuned in
   `config/mcsource.properties`: `viewmodel_fov` (default 54, smaller makes it
   bigger) and `viewmodel_offset_x`, `viewmodel_offset_y` and
   `viewmodel_offset_z` in Source units (right, forward and up), and where a
-  held item sits in the fist with `viewmodel_item_x`, `viewmodel_item_y` and
-  `viewmodel_item_z`. Without it, the hand is the mod's own rigged suit hand: an
+  held item without a handle (a block, food) sits in the fist with
+  `viewmodel_item_x`, `viewmodel_item_y` and `viewmodel_item_z`. Without it, the hand is the mod's own rigged suit hand: an
   orange sleeve and a black glove with a full finger skeleton.
 - **Half-Life 2 mobs.** With Half-Life 2 installed, mobs use the closest
   Half-Life 2 (and Episode One and Two) characters, read at run time from your
@@ -173,7 +180,9 @@ world to try it in.
   install) instead of the skin, playing its own idle, walk, run, crouch,
   jump and sitting animations in step with how the player moves, swinging
   its arms on a hit and turning its head to where the player looks. Name
-  tags and shadows stay; armour, capes and held items aren't drawn on it.
+  tags and shadows stay; armour and capes aren't drawn on it. Held items are
+  in its hands: weapons and tools gripped like a crowbar, anything else
+  placed as Minecraft places it in a hand.
   Set `hl2_player=false` in `config/mcsource.properties` to keep the skin.
 - **Half-Life 2 view bob.** Walking bobs the view as in Half-Life 2: a gentle
   dip at each footstep and a slight sway every other, with almost no roll,
@@ -281,6 +290,12 @@ client with the mod loaded.
   there is all a new rig needs. `SourceMobRenderer` poses and skins the model each frame, and
   `LivingEntityRendererMixin` draws it in place of the Minecraft model.
   `FirstPersonHandsMixin` draws Half-Life 2's hands in first person.
+  `HeldItems` finds the fist from the hand's bones (or, for the first-person
+  hands, from where the view model holds its crowbar) and grips weapons and
+  tools in it.
+- `PropModels` makes the furniture and door props into the block pack, and
+  `DoorProps` places a door's model from Minecraft's own door shapes, so it
+  stands and turns exactly where the door collides.
 - `tools/models` builds the models: shapes sculpted from blended distance
   fields, meshed with surface nets, bound to a skeleton, painted with
   procedural textures and animated in code. Run `python3 hand.py`,

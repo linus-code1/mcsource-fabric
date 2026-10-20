@@ -22,9 +22,11 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.InteractionHand;
 
 import com.mcsource.client.mob.GameInstalls;
+import com.mcsource.client.mob.HeldItems;
 import com.mcsource.client.mob.SourceModel;
 import com.mcsource.model.RiggedModel;
 
@@ -68,6 +70,14 @@ public abstract class FirstPersonHandsMixin {
 	private static int mcsource$swingVariant;
 	/** Held items are drawn this much smaller than Minecraft's, as they are held closer to the eye. */
 	private static final float ITEM_SCALE = 0.4F;
+	/** A crossbow is a weapon held out in front, so it is drawn larger than other things in the hand. */
+	private static final float CROSSBOW_SCALE = 0.65F;
+	/**
+	 * How far a gripped item's tip stands out of the fist, in Source units,
+	 * when the hands don't come with a crowbar to measure: about the
+	 * crowbar's own length beyond the fist.
+	 */
+	private static final float DEFAULT_REACH = 22.0F;
 	/** Where a held item sits from the palm, in Source units: right, forward and up. */
 	private static final float DEFAULT_ITEM_X = -1.2F;
 	private static final float DEFAULT_ITEM_Y = 0.0F;
@@ -84,8 +94,11 @@ public abstract class FirstPersonHandsMixin {
 	/**
 	 * A held item is held in Half-Life 2's hand: the hand is drawn with its
 	 * own animations and the item rides in its palm, instead of Minecraft's
-	 * floating item with its jab and dip. Items being used (eaten, drawn,
-	 * charged) and maps keep Minecraft's own animations.
+	 * floating item with its jab and dip. Weapons, tools, torches and other
+	 * things with a handle are gripped in the fist as the crowbar is, at
+	 * about the crowbar's size, and turn with the hand as it swings (see
+	 * {@link HeldItems}). Items being used (eaten, drawn, charged) and maps
+	 * keep Minecraft's own animations.
 	 */
 	@Inject(method = "submitArmWithItem", at = @At("HEAD"), cancellable = true)
 	private void mcsource$itemInHalfLife2Hand(PlayerRenderState playerState, FirstPersonHandsAndItemsRenderState state, float partialTicks,
@@ -96,9 +109,36 @@ public abstract class FirstPersonHandsMixin {
 			return;
 		}
 		HumanoidArm arm = playerState.avatarRenderState.mainArm;
-		Vector3f palm = mcsource$drawHands(poseStack, collector, lightCoords, attack, arm, false);
-		if (palm == null) {
+		Vector3f[] held = mcsource$drawHands(poseStack, collector, lightCoords, attack, arm, false);
+		if (held == null) {
 			return;
+		}
+		Vector3f palm = held[0];
+		HeldItems.Grip grip = HeldItems.grip(itemStack);
+		if (grip != null && held[1] != null) {
+			// Gripped in the fist: up the line the crowbar is held on, the
+			// item's face turned towards the eye so it never shows edge on.
+			Vector3f at = held[1];
+			Vector3f along = new Vector3f(held[2]).sub(at);
+			float reach = along.length();
+			if (reach > 1.0E-4F) {
+				along.div(reach);
+				Vector3f face = new Vector3f(at).negate();
+				face.fma(-face.dot(along), along);
+				if (face.lengthSquared() < 1.0E-8F) {
+					face.set(0.0F, 0.0F, 1.0F).fma(-along.z, along);
+				}
+				face.normalize();
+				Vector3f side = new Vector3f(along).cross(face);
+				Matrix4f frame = new Matrix4f(side.x, side.y, side.z, 0.0F, along.x, along.y, along.z, 0.0F, face.x, face.y, face.z, 0.0F,
+						at.x, at.y, at.z, 1.0F);
+				poseStack.pushPose();
+				poseStack.mulPose(frame);
+				HeldItems.submit(state.mainHandRenderState, grip, reach, poseStack, collector, lightCoords, 0);
+				poseStack.popPose();
+				ci.cancel();
+				return;
+			}
 		}
 		poseStack.pushPose();
 		poseStack.translate(palm.x, palm.y, palm.z);
@@ -107,22 +147,28 @@ public abstract class FirstPersonHandsMixin {
 		float itemSide = GameInstalls.setting("viewmodel_item_x", DEFAULT_ITEM_X) * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F);
 		poseStack.translate(itemSide * UNITS, GameInstalls.setting("viewmodel_item_z", DEFAULT_ITEM_Z) * UNITS,
 				-GameInstalls.setting("viewmodel_item_y", DEFAULT_ITEM_Y) * UNITS);
-		poseStack.scale(ITEM_SCALE, ITEM_SCALE, ITEM_SCALE);
+		float scale = itemStack.is(Items.CROSSBOW) ? CROSSBOW_SCALE : ITEM_SCALE;
+		poseStack.scale(scale, scale, scale);
 		state.mainHandRenderState.submit(poseStack, collector, lightCoords, OverlayTexture.NO_OVERLAY, 0);
 		poseStack.popPose();
 		ci.cancel();
 	}
 
 	/**
-	 * Draws the hands; returns where the palm is, in the pose stack's space as
-	 * it was when called, or null when there are no Half-Life 2 hands.
+	 * Draws the hands; returns where the palm is, then where an item with a
+	 * handle is gripped and the tip of the line it is held along (both null
+	 * when the hands have no fingers to find the fist by), in the pose
+	 * stack's space as it was when called, or null when there are no
+	 * Half-Life 2 hands.
 	 */
-	private static Vector3f mcsource$drawHands(PoseStack poseStack, SubmitNodeCollector collector, int light, float attackValue,
+	private static Vector3f[] mcsource$drawHands(PoseStack poseStack, SubmitNodeCollector collector, int light, float attackValue,
 			HumanoidArm arm, boolean empty) {
 		SourceModel hands = null;
+		String handsReference = null;
 		for (String reference : HANDS) {
 			hands = SourceModel.get(reference);
 			if (hands != null) {
+				handsReference = reference;
 				break;
 			}
 		}
@@ -218,10 +264,29 @@ public abstract class FirstPersonHandsMixin {
 		if (palm == null) {
 			palm = new Vector3f();
 		}
-		// Half-Life's axes to the model's, as the hands are drawn.
-		Vector3f point = new Vector3f(palm.y * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F), palm.z, palm.x).mul(UNITS);
-		poseStack.last().pose().transformPosition(point);
+		// Where a handle is gripped: as the view model holds its crowbar, or
+		// else from the fist's own bones.
+		Vector3f[] line = empty ? null : HeldItems.crowbar(handsReference, model, bones);
+		if (line == null && !empty) {
+			HeldItems.Fist fist = HeldItems.fist(model, bones, true);
+			if (fist != null) {
+				line = new Vector3f[] {fist.grip(), new Vector3f(fist.grip()).fma(DEFAULT_REACH, fist.along())};
+			}
+		}
+		Matrix4f toCaller = new Matrix4f(base).invert().mul(poseStack.last().pose());
+		Vector3f[] out = new Vector3f[3];
+		out[0] = mcsource$toView(palm, arm, toCaller);
+		if (line != null) {
+			out[1] = mcsource$toView(line[0], arm, toCaller);
+			out[2] = mcsource$toView(line[1], arm, toCaller);
+		}
 		poseStack.popPose();
-		return base.invert().transformPosition(point);
+		return out;
+	}
+
+	/** A point of the hands model (Half-Life's axes and units) in the caller's space, as the hands are drawn. */
+	private static Vector3f mcsource$toView(Vector3f point, HumanoidArm arm, Matrix4f toCaller) {
+		Vector3f out = new Vector3f(point.y * (arm == HumanoidArm.LEFT ? -1.0F : 1.0F), point.z, point.x).mul(UNITS);
+		return toCaller.transformPosition(out);
 	}
 }
