@@ -27,6 +27,7 @@ import net.minecraft.world.flag.FeatureFlagSet;
 import com.mcsource.client.mob.GameInstalls;
 import com.mcsource.model.source.BlockTextures;
 import com.mcsource.model.source.SkyTextures;
+import com.mcsource.model.source.SoundList;
 
 /**
  * An always-on resource pack of block textures made from the player's own
@@ -34,12 +35,14 @@ import com.mcsource.model.source.SkyTextures;
  * {@code config/mcsource/hl2_block_pack} the first time the game starts with
  * Half-Life 2 found, and again whenever the list in
  * {@code config/mcsource/block_textures.txt} (the player's changes to the
- * list) or the mod's own list changes.
+ * list) or the mod's own list changes. Half-Life 2's sounds go in the same
+ * pack (see {@link SoundList}), picked by {@code config/mcsource/sounds.txt}
+ * and the mod's own list.
  */
 public final class HalfLife2BlockPack implements RepositorySource {
 	private static final Logger LOGGER = LoggerFactory.getLogger("mcsource");
 	/** Bump when the way textures are built changes, so old packs are rebuilt. */
-	private static final String VERSION = "23";
+	private static final String VERSION = "24";
 	private static final String USER_LIST = """
 			# Your changes to which Half-Life 2 material each Minecraft block texture uses.
 			# A line here replaces the mod's own line for that texture, for example:
@@ -48,6 +51,17 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			# and the first one found is used. hl2_block_pack/used_materials.txt shows what was picked.
 			# To keep Minecraft's texture for a block, list a material that doesn't exist, such as:
 			#   stone = none
+			""";
+	private static final String USER_SOUNDS = """
+			# Your changes to which Half-Life 2 sounds Minecraft's sound events use.
+			# A line here replaces the mod's own line for those events, for example:
+			#   block.stone.step = player/footsteps/tile#
+			# Sounds are paths under sound/ in the game, without .wav; # matches a number, * matches anything.
+			# The first one found is used, and a pattern gives every file it matches as variants.
+			# Add volume:0.5 or pitch:1.2 to a line to change how loud or high it plays.
+			# hl2_block_pack/used_sounds.txt shows what was picked. To keep Minecraft's sound, list one
+			# that doesn't exist, such as:
+			#   entity.player.hurt = none
 			""";
 	private static boolean built;
 
@@ -90,10 +104,16 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		}
 		Map<String, String[]> mapping = BlockTextures.parse(BlockTextures.DEFAULTS);
 		mapping.putAll(BlockTextures.parse(list));
+		Path soundFile = root.resolve("sounds.txt");
+		if (!Files.isRegularFile(soundFile)) {
+			Files.writeString(soundFile, USER_SOUNDS, StandardCharsets.UTF_8);
+		}
+		String soundList = Files.readString(soundFile, StandardCharsets.UTF_8);
 		boolean scary = GameInstalls.flag("scary_sun", false);
 		String props = com.mcsource.client.prop.PropModels.userList(root);
 		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode() + ":" + scary + ":"
-				+ com.mcsource.client.prop.PropModels.DEFAULTS.hashCode() + ":" + props.hashCode();
+				+ com.mcsource.client.prop.PropModels.DEFAULTS.hashCode() + ":" + props.hashCode() + ":" + SoundList.DEFAULTS.hashCode() + ":"
+				+ soundList.hashCode();
 		Path stampFile = pack.resolve("built_from.txt");
 		if (Files.isRegularFile(stampFile) && Files.readString(stampFile).equals(stamp)) {
 			return;
@@ -139,12 +159,36 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		} catch (IOException | RuntimeException e) {
 			LOGGER.warn("Could not make the title screen background", e);
 		}
+		try {
+			report.append("sounds = ").append(sounds(soundList, fresh)).append('\n');
+		} catch (IOException | RuntimeException e) {
+			LOGGER.warn("Could not make the Half-Life 2 sounds", e);
+		}
 		Files.writeString(fresh.resolve("used_materials.txt"), report.toString());
 		Files.writeString(fresh.resolve("built_from.txt"), stamp);
 		delete(pack);
 		Files.move(fresh, pack);
 		LOGGER.info("Built {} Half-Life 2 block textures in {} ms (none found for {})", used.size() - missing.size(),
 				System.currentTimeMillis() - start, missing);
+	}
+
+	/** Writes the Half-Life 2 sounds into the pack; returns a summary for the report. */
+	private static String sounds(String userList, Path fresh) throws IOException {
+		Map<String, SoundList.Entry> mapping = SoundList.parse(SoundList.DEFAULTS);
+		mapping.putAll(SoundList.parse(userList));
+		Map<String, List<String>> used = SoundList.generate(GameInstalls.source(), mapping, fresh);
+		StringBuilder report = new StringBuilder();
+		int found = 0;
+		for (Map.Entry<String, List<String>> entry : used.entrySet()) {
+			if (entry.getValue() == null) {
+				report.append(entry.getKey()).append(" = (nothing found, Minecraft's is kept)\n");
+			} else {
+				found++;
+				report.append(entry.getKey()).append(" = ").append(String.join(" ", entry.getValue())).append('\n');
+			}
+		}
+		Files.writeString(fresh.resolve("used_sounds.txt"), report.toString());
+		return found + " of " + used.size() + " sound events (see used_sounds.txt)";
 	}
 
 	private static void delete(Path path) throws IOException {

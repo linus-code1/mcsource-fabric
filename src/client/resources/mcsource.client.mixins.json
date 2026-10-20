@@ -19,6 +19,7 @@
 		"PlayerBodyMixin",
 		"PropCullMixin",
 		"ShadowMixin",
+		"SoundBufferLibraryMixin",
 		"TitleScreenMixin"
 	],
 	"injectors": {
