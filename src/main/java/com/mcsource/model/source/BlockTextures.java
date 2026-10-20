@@ -164,6 +164,9 @@ public final class BlockTextures {
 			calcite = stone/*white* plaster/* concrete/*
 			dripstone_block = nature/rock* stone/*
 			moss_block = nature/*moss* *moss* nature/*grass*
+			moss_carpet = nature/*moss* *moss* nature/*grass*
+			# Vines are Half-Life 2's ivy where it has some, else a foliage card.
+			vine = models/props_foliage/*ivy* nature/*ivy* *ivy* *vine* models/props_foliage/*leaves* models/props_foliage/*leaf*
 			rooted_dirt = nature/dirtfloor006a nature/*dirt* *dirt*
 			iron_bars = metal/*grate* metal/*fence* *grate*
 			iron_door_top = metal/metaldoor0* metal/*door* metal/*
@@ -356,7 +359,7 @@ public final class BlockTextures {
 		for (String pattern : patterns) {
 			for (String material : candidates(pattern, materials)) {
 				// Leaves keep the cut-out of Half-Life 2's foliage cards.
-				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, name.endsWith("_leaves"));
+				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, name.endsWith("_leaves") || name.equals("vine"));
 				if (texture != null && suits(name, texture)) {
 					chosen = material;
 					image = square(texture);
@@ -519,7 +522,7 @@ public final class BlockTextures {
 		if (count < texture.pixels().length / 4) {
 			return false;
 		}
-		if (name.endsWith("_leaves") && count > texture.pixels().length * 97 / 100) {
+		if ((name.endsWith("_leaves") || name.equals("vine")) && count > texture.pixels().length * 97 / 100) {
 			// A leaf texture with no gaps is a solid wall, not a foliage card.
 			return false;
 		}
@@ -1682,6 +1685,9 @@ public final class BlockTextures {
 	private static int tint(String name) {
 		if (name.equals("grass_block_top")) {
 			return GRASS_TINT;
+		}
+		if (name.equals("vine")) {
+			return FOLIAGE_TINT;
 		}
 		if (name.endsWith("_leaves") && !name.startsWith("cherry") && !name.startsWith("azalea")) {
 			return switch (name) {

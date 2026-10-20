@@ -58,6 +58,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				emitStairs(emitter, level, pos, state, cullTest);
 				return;
 			}
+			if (state.getBlock() instanceof net.minecraft.world.level.block.VineBlock
+					|| state.getBlock() instanceof net.minecraft.world.level.block.MultifaceBlock) {
+				emitClinging(emitter, level, pos, state, random, cullTest);
+				return;
+			}
 			if (state.is(SmoothTerrain.SMOOTH) && !buried(level, pos)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, pos, state);
 				float[] grid = wide == null ? null : grid(wide, level, pos);
@@ -118,6 +123,64 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				spreadTexture(quad, pos);
 			}
 			applySun(quad, level, pos);
+			return true;
+		});
+		try {
+			super.emitQuads(emitter, level, pos, state, random, cullTest);
+		} finally {
+			emitter.popTransform();
+		}
+	}
+
+	/**
+	 * Vines, lichen and the like lying on the face of a smoothed block are
+	 * bent with it, so they stay on the face instead of standing off it or
+	 * sinking into it where the ground curves.
+	 */
+	private void emitClinging(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
+			Predicate<Direction> cullTest) {
+		float[][] grids = new float[6][];
+		boolean[] known = new boolean[6];
+		emitter.pushTransform(quad -> {
+			Direction side = null;
+			for (Direction d : Direction.values()) {
+				float edge = d.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1.0F : 0.0F;
+				boolean near = true;
+				for (int i = 0; i < 4 && near; i++) {
+					near = Math.abs(quad.posByIndex(i, d.getAxis().ordinal()) - edge) < 0.1F;
+				}
+				if (near) {
+					side = d;
+					break;
+				}
+			}
+			if (side == null) {
+				return true;
+			}
+			int at = side.ordinal();
+			if (!known[at]) {
+				known[at] = true;
+				BlockPos support = pos.relative(side);
+				BlockState held = level.getBlockState(support);
+				if (held.is(SmoothTerrain.SMOOTH) && !buried(level, support)) {
+					int[] wide = SmoothTerrain.wideNeighbourhood(level, support, held);
+					grids[at] = wide == null ? null : grid(wide, level, support);
+				}
+			}
+			float[] grid = grids[at];
+			if (grid == null) {
+				return true;
+			}
+			for (int i = 0; i < 4; i++) {
+				float x = quad.x(i);
+				float y = quad.y(i);
+				float z = quad.z(i);
+				// The same point in the supporting block's own coordinates.
+				float sx = Mth.clamp(x - side.getStepX(), 0.0F, 1.0F);
+				float sy = Mth.clamp(y - side.getStepY(), 0.0F, 1.0F);
+				float sz = Mth.clamp(z - side.getStepZ(), 0.0F, 1.0F);
+				quad.pos(i, x, y + smoothOffset(grid, sx, sy, sz), z);
+			}
 			return true;
 		});
 		try {
@@ -546,6 +609,18 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				return Mth.lerp(z, Mth.lerp(x, corners[0], corners[1]), Mth.lerp(x, corners[2], corners[3]));
 			}
 			return base + (grid == null ? 0.0F : smoothOffset(grid, x, 1.0F, z));
+		}
+	}
+
+	/**
+	 * The drawn ground's height under {@code pos} at points across the block
+	 * ({@code xs}, {@code zs} from 0 to 1), in blocks relative to the bottom of
+	 * {@code pos}: what an entity's shadow lies on.
+	 */
+	public static void groundHeights(BlockAndTintGetter level, BlockPos pos, float[] xs, float[] zs, float[] out) {
+		GroundSurface surface = new GroundSurface(level, pos, SmoothTerrain.groundCorners(level, pos));
+		for (int i = 0; i < out.length; i++) {
+			out[i] = surface.height(Mth.clamp(xs[i], 0.0F, 1.0F), Mth.clamp(zs[i], 0.0F, 1.0F));
 		}
 	}
 
@@ -1779,7 +1854,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	@Override
 	public Object createGeometryKey(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random) {
 		// Smoothed geometry depends on the neighbours, so it must not be shared.
-		if (state.is(SmoothTerrain.SMOOTH) || state.is(SmoothTerrain.FOLLOWS)) {
+		if (state.is(SmoothTerrain.SMOOTH) || state.is(SmoothTerrain.FOLLOWS) || state.getBlock() instanceof net.minecraft.world.level.block.VineBlock
+				|| state.getBlock() instanceof net.minecraft.world.level.block.MultifaceBlock) {
 			return null;
 		}
 		return super.createGeometryKey(level, pos, state, random);

@@ -17,6 +17,7 @@
 		"PackRepositoryMixin",
 		"PauseScreenMixin",
 		"PropCullMixin",
+		"ShadowMixin",
 		"TitleScreenMixin"
 	],
 	"injectors": {
