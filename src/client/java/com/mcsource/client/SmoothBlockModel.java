@@ -110,10 +110,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				}
 				// Mapped as cliffRock maps it, so the two kinds of cliff meet.
 				boolean alongX = Math.abs(quad.faceNormal().z()) >= Math.abs(quad.faceNormal().x());
-				int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
 				for (int i = 0; i < 4; i++) {
-					float u = (cell + Mth.clamp(alongX ? quad.x(i) : quad.z(i), 0.0F, 1.0F)) / 2.0F;
-					quad.uv(i, rock.getU(u), rock.getV(1.0F - Mth.clamp((quad.y(i) + 0.5F) / 2.0F, 0.0F, 1.0F)));
+					float across = alongX ? pos.getX() + Mth.clamp(quad.x(i), 0.0F, 1.0F) : pos.getZ() + Mth.clamp(quad.z(i), 0.0F, 1.0F);
+					quad.uv(i, rock.getU(mirrored(across / ROCK_SPREAD)), rock.getV(mirrored((pos.getY() + quad.y(i)) / ROCK_SPREAD)));
 				}
 				applySun(quad, level, pos);
 				return true;
@@ -944,6 +943,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		java.util.List<Blend> blends = blends(level, pos, state);
 		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = cliffSprite(state);
+		// Rock that is the block's own texture (stone, netherrack...): its sides
+		// are always drawn mapped as rock, by the world, so a cliff of it runs
+		// on unbroken instead of showing each block's own copy of the texture.
+		boolean selfRock = rock != null && rock == ownSprite(state);
 		GroundTop ground = groundTop(state, snowAbove);
 		// Grass hangs a little way down over the lip of a cliff, as Source
 		// blends it over the top of its rock faces, instead of stopping at a
@@ -1111,7 +1114,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					}
 					if (rockHere) {
 						alpha = rockAlpha(ox, oy, oz, on, ground != null);
-						allRock = alpha[0] > 0.996F && alpha[1] > 0.996F && alpha[2] > 0.996F && alpha[3] > 0.996F;
+						allRock = selfRock && !top || alpha[0] > 0.996F && alpha[1] > 0.996F && alpha[2] > 0.996F && alpha[3] > 0.996F;
 						if (allRock) {
 							// Wholly rock: draw the face itself as rock, with nothing laid
 							// over it, the same as a straight cliff.
@@ -1386,11 +1389,29 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 		}
 		boolean alongX = nz >= nx;
-		int cell = Math.floorMod(alongX ? pos.getX() : pos.getZ(), 2);
 		for (int i = 0; i < 4; i++) {
-			u[i] = rock.getU((cell + Mth.clamp(alongX ? px[i] : pz[i], 0.0F, 1.0F)) / 2.0F);
-			v[i] = rock.getV(1.0F - Mth.clamp((py[i] + 0.5F) / 2.0F, 0.0F, 1.0F));
+			float across = alongX ? pos.getX() + Mth.clamp(px[i], 0.0F, 1.0F) : pos.getZ() + Mth.clamp(pz[i], 0.0F, 1.0F);
+			u[i] = rock.getU(mirrored(across / ROCK_SPREAD));
+			v[i] = rock.getV(mirrored((pos.getY() + py[i]) / ROCK_SPREAD));
 		}
+	}
+
+	/**
+	 * Rock on cliffs spreads over this many blocks each way, by the world:
+	 * spread over one or two blocks, every block of a cliff showed the same
+	 * band of the texture and the cliff read as a grid of tiles.
+	 */
+	private static final float ROCK_SPREAD = 4.0F;
+
+	/**
+	 * A texture coordinate that runs on through the world without a seam:
+	 * the texture goes forward in one tile and back in the next, so it never
+	 * has to jump from one edge to the other inside a face.
+	 */
+	private static float mirrored(float t) {
+		int whole = Mth.floor(t);
+		float part = t - whole;
+		return (whole & 1) == 0 ? part : 1.0F - part;
 	}
 
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */

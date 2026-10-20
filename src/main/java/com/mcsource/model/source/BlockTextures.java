@@ -191,7 +191,62 @@ public final class BlockTextures {
 			terracotta = nature/rockwall004a nature/rockwall00* nature/*cliff* nature/*rock* *rock*
 			clay = nature/mudfloor* nature/*mud* nature/dirtfloor003a nature/*dirt* *mud*
 			packed_mud = nature/mudfloor* nature/dirtfloor0* nature/*dirt*
-			magma_block = nature/*lava* nature/rockfloor0* *rock*
+			magma = nature/*lava* nature/rockfloor0* *rock*
+			glass = glass/glasswindow0* glass/*window* glass/* *glass*
+			glass_pane_top = glass/glasswindow0* glass/*window* glass/* *glass*
+			tinted_glass = glass/*dirty* glass/*window* glass/*
+			ladder = metal/*ladder* *ladder* wood/*ladder*
+			iron_trapdoor = metal/*grate* metal/metalfloor0* metal/*
+			oak_trapdoor = wood/*door* wood/woodwall0* wood/*
+			spruce_trapdoor = wood/*door* wood/woodwall0* wood/*
+			birch_trapdoor = wood/*door* wood/woodwall0* wood/*
+			jungle_trapdoor = wood/*door* wood/woodwall0* wood/*
+			acacia_trapdoor = wood/*door* wood/woodwall0* wood/*
+			dark_oak_trapdoor = wood/*door* wood/woodwall0* wood/*
+			mangrove_trapdoor = wood/*door* wood/woodwall0* wood/*
+			birch_door_top = wood/*door* wood/woodwall0*
+			birch_door_bottom = wood/*door* wood/woodwall0*
+			jungle_door_top = wood/*door* wood/woodwall0*
+			jungle_door_bottom = wood/*door* wood/woodwall0*
+			acacia_door_top = wood/*door* wood/woodwall0*
+			acacia_door_bottom = wood/*door* wood/woodwall0*
+			dark_oak_door_top = wood/*door* wood/woodwall0*
+			dark_oak_door_bottom = wood/*door* wood/woodwall0*
+			mangrove_door_top = wood/*door* wood/woodwall0*
+			mangrove_door_bottom = wood/*door* wood/woodwall0*
+			blue_ice = nature/ice* */ice0* nature/*frozen*
+			frosted_ice_0 = nature/ice* */ice0* nature/*frozen*
+			frosted_ice_1 = nature/ice* */ice0* nature/*frozen*
+			frosted_ice_2 = nature/ice* */ice0* nature/*frozen*
+			frosted_ice_3 = nature/ice* */ice0* nature/*frozen*
+			blackstone_top = nature/rockwall_cave* stone/*dark* *rock*
+			polished_blackstone = concrete/concretefloor0* stone/*dark* stone/*
+			polished_blackstone_bricks = stone/stonewall0* brick/*
+			cracked_polished_blackstone_bricks = stone/*crack* stone/stonewall0*
+			gilded_blackstone = nature/rockwall_cave* stone/*dark* *rock*
+			polished_basalt_side = nature/rockwall0* *rock*
+			polished_basalt_top = nature/rockfloor0* *rock*
+			smooth_basalt = nature/rockfloor0* *rock*
+			quartz_block_bottom = tile/tilefloor0* plaster/plasterwall0* tile/*
+			quartz_bricks = tile/tilewall0* tile/* plaster/*
+			quartz_pillar_side = plaster/plasterwall0* tile/* plaster/*
+			quartz_pillar_top = tile/tilefloor0* plaster/plasterwall0* tile/*
+			red_sandstone_top = stone/*sand* *sandstone* nature/sandfloor0*
+			red_sandstone_bottom = stone/*sand* *sandstone* nature/sandfloor0*
+			cut_red_sandstone = stone/*sand* *sandstone* concrete/concretewall0*
+			cracked_deepslate_bricks = stone/*crack* stone/stonewall0*
+			cracked_deepslate_tiles = tile/*crack* stone/*crack* tile/tilefloor0*
+			cracked_nether_bricks = brick/*crack* brick/brickwall0*
+			crying_obsidian = nature/*obsidian* stone/*black* nature/rockwall_cave*
+			smooth_stone_slab_side = concrete/concretefloor001a concrete/concretefloor0* concrete/*
+			melon_side = models/props_junk/watermelon* *melon*
+			melon_top = models/props_junk/watermelon* *melon*
+			bone_block_side = plaster/plasterwall0* stone/*white*
+			bone_block_top = plaster/plasterwall0* stone/*white*
+			suspicious_sand_0 = nature/sandfloor009a nature/sandfloor0* nature/*sand*
+			suspicious_gravel_0 = nature/gravelfloor002a nature/gravelfloor00* nature/*gravel*
+			flower_pot = models/props_junk/terracotta* *pot* plaster/*
+			lantern = metal/*lamp* metal/*
 			white_concrete = concrete/concretewall001a concrete/concretewall0* concrete/*
 			light_gray_concrete = concrete/concretewall0* concrete/*
 			gray_concrete = concrete/concretefloor0* concrete/*
@@ -313,6 +368,7 @@ public final class BlockTextures {
 		for (String[] one : RECOLOURED) {
 			recoloured(made, one[0], one[1], Integer.parseInt(one[2], 16), folder, used);
 		}
+		cobweb(folder, used);
 		nylium(made, "crimson_nylium", folder, used);
 		nylium(made, "warped_nylium", folder, used);
 		mossy(made, "cobblestone", "mossy_cobblestone", folder, used);
@@ -359,7 +415,8 @@ public final class BlockTextures {
 		for (String pattern : patterns) {
 			for (String material : candidates(pattern, materials)) {
 				// Leaves keep the cut-out of Half-Life 2's foliage cards.
-				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, name.endsWith("_leaves") || name.equals("vine"));
+				RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, name.endsWith("_leaves") || name.equals("vine")
+						|| name.contains("glass") || name.equals("ladder") || name.endsWith("_trapdoor"));
 				if (texture != null && suits(name, texture)) {
 					chosen = material;
 					image = square(texture);
@@ -451,24 +508,46 @@ public final class BlockTextures {
 		if (normals == null) {
 			return;
 		}
-		int s = WATER_SIZE;
-		int[] strip = new int[s * s * WATER_FRAMES];
-		float lx = 0.35F;
-		float ly = 0.45F;
-		float lz = 0.82F;
 		float[] base = new float[3];
 		for (int c = 0; c < 3; c++) {
 			int shift = 16 - c * 8;
 			base[c] = Math.min(1.0F, (WATER_COLOUR >> shift & 255) / (float) (WATER_TINT >> shift & 255));
 		}
+		String meta = "{\"animation\": {\"frametime\": 3, \"interpolate\": true}}\n";
+		// Still water ripples drift gently; flowing water's ripples run along
+		// the flow. The flow texture is twice the size, as Minecraft draws only
+		// half of it on a face, so its ripples come out the same size.
+		// Both are twice the size: the still texture is laid over two blocks
+		// (see FluidUvMixin), and Minecraft draws half the flow texture on a face.
+		int size = WATER_SIZE * 2;
+		writePng(folder.resolve("water_still.png"), waterStrip(normals, base, size, false), size, size * WATER_FRAMES);
+		Files.writeString(folder.resolve("water_still.png.mcmeta"), meta);
+		writePng(folder.resolve("water_flow.png"), waterStrip(normals, base, size, true), size, size * WATER_FRAMES);
+		Files.writeString(folder.resolve("water_flow.png.mcmeta"), meta);
+	}
+
+	private static int[] waterStrip(Vtf normals, float[] base, int s, boolean flowing) {
+		int[] strip = new int[s * s * WATER_FRAMES];
+		float lx = 0.35F;
+		float ly = 0.45F;
+		float lz = 0.82F;
 		for (int f = 0; f < WATER_FRAMES; f++) {
 			float t = (float) f / WATER_FRAMES;
 			for (int y = 0; y < s; y++) {
 				for (int x = 0; x < s; x++) {
-					float u = (float) x / s;
-					float v = (float) y / s;
-					float[] a = normal(normals, u + t, v + t * 0.5F);
-					float[] b = normal(normals, u * 0.7F - t, v * 0.7F + t);
+					float u = 2.0F * x / s;
+					float v = 2.0F * y / s;
+					float[] a;
+					float[] b;
+					if (flowing) {
+						// Both layers run down the texture, the way the water flows,
+						// one twice as fast; each moves a whole tile a loop.
+						a = normal(normals, u, v - t * 2);
+						b = normal(normals, u * 0.5F + 0.3F, v * 0.5F - t);
+					} else {
+						a = normal(normals, u + t, v + t * 0.5F);
+						b = normal(normals, v + 0.37F, -u - t);
+					}
 					float nx = a[0] + b[0];
 					float ny = a[1] + b[1];
 					float nz = a[2] + b[2];
@@ -482,11 +561,7 @@ public final class BlockTextures {
 				}
 			}
 		}
-		String meta = "{\"animation\": {\"frametime\": 3, \"interpolate\": true}}\n";
-		for (String name : new String[] {"water_still", "water_flow"}) {
-			writePng(folder.resolve(name + ".png"), strip, s, s * WATER_FRAMES);
-			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
-		}
+		return strip;
 	}
 
 	/** The normal at a wrapped position on a normal map, each part from -1 to 1. */
@@ -631,52 +706,119 @@ public final class BlockTextures {
 	 * drifts and breaks up.
 	 */
 	private static void lava(int[] rock, Path folder) throws IOException {
-		int s = ANIMATION_SIZE;
-		// The rock's broad light and dark patches, not its fine detail: a coarse
-		// copy read back smoothly.
-		int coarse = 8;
-		int[] small = resample(rock, SIZE, coarse);
-		float mean = brightness(average(small));
+		// Molten rock in soft cells of crust over a glow, from noise that wraps
+		// at the texture's edges in several sizes, so it has no grid of repeats
+		// and no blocky patches. Still lava churns slowly; flowing lava's crust
+		// runs along the flow.
+		String meta = "{\"animation\": {\"frametime\": 4, \"interpolate\": true}}\n";
+		// Twice the size: the still texture is laid over two blocks (see
+		// FluidUvMixin), and Minecraft draws half the flow texture on a face.
+		int s = ANIMATION_SIZE * 2;
+		writePng(folder.resolve("lava_still.png"), lavaStrip(s, false), s, s * ANIMATION_FRAMES);
+		Files.writeString(folder.resolve("lava_still.png.mcmeta"), meta);
+		writePng(folder.resolve("lava_flow.png"), lavaStrip(s, true), s, s * ANIMATION_FRAMES);
+		Files.writeString(folder.resolve("lava_flow.png.mcmeta"), meta);
+	}
+
+	private static int[] lavaStrip(int s, boolean flowing) {
 		int[] strip = new int[s * s * ANIMATION_FRAMES];
 		for (int f = 0; f < ANIMATION_FRAMES; f++) {
-			double t = (double) f / ANIMATION_FRAMES;
+			float t = (float) f / ANIMATION_FRAMES;
 			for (int y = 0; y < s; y++) {
 				for (int x = 0; x < s; x++) {
-					// The crust drifts one way, the glow beneath another; both wrap.
-					float fx = (float) ((x + t * s) * coarse / s);
-					float fy = (float) ((y + Math.sin(t * 2 * Math.PI) * 2) * coarse / s);
-					float light = smoothBrightness(small, coarse, fx, fy);
-					double u = x * 2 * Math.PI / s;
-					double v = y * 2 * Math.PI / s;
-					double a = t * 2 * Math.PI;
-					float wave = (float) (0.5 + 0.25 * Math.sin(2 * u + v + a) + 0.15 * Math.sin(3 * v - u - 2 * a)
-							+ 0.1 * Math.sin(5 * u + 4 * v + a));
-					float crack = mean <= 0.0F ? 0.5F : (mean - light) / mean;
-					float heat = Math.max(0.0F, Math.min(1.0F, 0.45F + crack * 1.8F + (wave - 0.5F) * 0.9F));
+					float u = (float) x / s;
+					float v = (float) y / s;
+					// Plates of dark crust with glowing cracks between them, the
+					// plates drifting in small circles (still) or along the flow, so
+					// the loop is seamless; a soft glow varies across the plates.
+					float shift = flowing ? -t : 0.0F;
+					float[] cells = worley(u * 4, (v + shift) * 4, 4, flowing ? 0.0F : t, 5);
+					float crack = 1.0F - smooth01((cells[1] - cells[0]) / 0.09F);
+					float halo = 1.0F - smooth01((cells[1] - cells[0]) / 0.4F);
+					float glow = wrapNoise(u * 12, (v + shift) * 12, 12, 2) * 0.6F + wrapNoise(u * 24, (v + 2 * shift) * 24, 24, 3) * 0.4F;
+					float heat = Math.max(0.0F, Math.min(1.0F, 0.8F * crack + 0.3F * halo + 0.5F * glow - 0.08F));
 					int r;
 					int g;
 					int b;
-					if (heat < 0.35F) {
-						// Crust: dark red-brown, a little of the rock's grain.
-						float k = heat / 0.35F;
-						r = Math.round(60 + 120 * k + 40 * light);
-						g = Math.round(14 + 30 * k + 10 * light);
-						b = Math.round(6 + 4 * k);
+					if (heat < 0.4F) {
+						// Crust: dark red-brown.
+						float k = heat / 0.4F;
+						r = Math.round(55 + 135 * k);
+						g = Math.round(12 + 34 * k);
+						b = Math.round(6 + 6 * k);
 					} else {
-						float k = (heat - 0.35F) / 0.65F;
+						float k = (heat - 0.4F) / 0.6F;
 						r = 255;
-						g = Math.round(90 + 150 * k * k);
-						b = Math.round(10 + 110 * k * k * k);
+						g = Math.round(80 + 160 * k * k);
+						b = Math.round(8 + 100 * k * k * k);
 					}
 					strip[(f * s + y) * s + x] = 0xFF000000 | Math.min(255, r) << 16 | Math.min(255, g) << 8 | Math.min(255, b);
 				}
 			}
 		}
-		String meta = "{\"animation\": {\"frametime\": 4, \"interpolate\": true}}\n";
-		for (String name : new String[] {"lava_still", "lava_flow"}) {
-			writePng(folder.resolve(name + ".png"), strip, s, s * ANIMATION_FRAMES);
-			Files.writeString(folder.resolve(name + ".png.mcmeta"), meta);
+		return strip;
+	}
+
+	private static float smooth01(float t) {
+		t = Math.max(0.0F, Math.min(1.0F, t));
+		return t * t * (3.0F - 2.0F * t);
+	}
+
+	/**
+	 * Distances to the nearest and second nearest of a set of points, one in
+	 * each cell, repeating every {@code period} cells; each point circles a
+	 * little as {@code t} goes from 0 to 1 and is back where it started at 1.
+	 */
+	private static float[] worley(float x, float y, int period, float t, int seed) {
+		int cx = (int) Math.floor(x);
+		int cy = (int) Math.floor(y);
+		float f1 = Float.MAX_VALUE;
+		float f2 = Float.MAX_VALUE;
+		for (int dy = -2; dy <= 2; dy++) {
+			for (int dx = -2; dx <= 2; dx++) {
+				int i = cx + dx;
+				int j = cy + dy;
+				float px = 0.15F + 0.7F * cellHash(i, j, period, seed);
+				float py = 0.15F + 0.7F * cellHash(i, j, period, seed + 17);
+				double phase = 2 * Math.PI * (t + cellHash(i, j, period, seed + 31));
+				px += 0.06F * (float) Math.cos(phase);
+				py += 0.06F * (float) Math.sin(phase);
+				float ddx = i + px - x;
+				float ddy = j + py - y;
+				float d = (float) Math.sqrt(ddx * ddx + ddy * ddy);
+				if (d < f1) {
+					f2 = f1;
+					f1 = d;
+				} else if (d < f2) {
+					f2 = d;
+				}
+			}
 		}
+		return new float[] {f1, f2};
+	}
+
+	/** Smooth value noise from 0 to 1 that repeats every {@code period} cells each way. */
+	private static float wrapNoise(float x, float y, int period, int seed) {
+		int x0 = (int) Math.floor(x);
+		int y0 = (int) Math.floor(y);
+		float fx = x - x0;
+		float fy = y - y0;
+		fx = fx * fx * (3.0F - 2.0F * fx);
+		fy = fy * fy * (3.0F - 2.0F * fy);
+		float a = lerp(cellHash(x0, y0, period, seed), cellHash(x0 + 1, y0, period, seed), fx);
+		float b = lerp(cellHash(x0, y0 + 1, period, seed), cellHash(x0 + 1, y0 + 1, period, seed), fx);
+		return lerp(a, b, fy);
+	}
+
+	private static float lerp(float a, float b, float t) {
+		return a + (b - a) * t;
+	}
+
+	private static float cellHash(int x, int y, int period, int seed) {
+		int h = Math.floorMod(x, period) * 374761393 + Math.floorMod(y, period) * 668265263 + seed * 1442695041;
+		h = (h ^ (h >>> 13)) * 1274126177;
+		h ^= h >>> 16;
+		return (h & 0xFFFFFF) / (float) 0xFFFFFF;
 	}
 
 	/** Brightness of a small wrapping image at a point, blended between its pixels. */
@@ -1494,6 +1636,7 @@ public final class BlockTextures {
 		{"lapis_ore", "stone", "34508a"}, {"deepslate_lapis_ore", "deepslate", "2e467a"},
 		{"diamond_ore", "stone", "6ab8b0"}, {"deepslate_diamond_ore", "deepslate", "5aa49c"},
 		{"emerald_ore", "stone", "3c8a50"}, {"deepslate_emerald_ore", "deepslate", "347a46"},
+		{"nether_gold_ore", "netherrack", "d8a838"}, {"nether_quartz_ore", "netherrack", "e8dcd0"},
 	};
 
 	/**
@@ -1576,7 +1719,104 @@ public final class BlockTextures {
 			{"nether_bricks", "bricks", "3A1C20"}, {"red_nether_bricks", "bricks", "52090B"},
 			{"crimson_nylium", "grass_block_top", "852427"}, {"warped_nylium", "grass_block_top", "2B7265"},
 			{"nether_wart_block", "grass_block_top", "742020"}, {"warped_wart_block", "grass_block_top", "167E86"},
+			{"orange_wool", "white_wool", "F07613"}, {"magenta_wool", "white_wool", "BD44B3"},
+			{"light_blue_wool", "white_wool", "3AAFD9"}, {"yellow_wool", "white_wool", "F8C627"},
+			{"lime_wool", "white_wool", "70B919"}, {"pink_wool", "white_wool", "ED8DAC"},
+			{"gray_wool", "white_wool", "3E4447"}, {"light_gray_wool", "white_wool", "8E8E86"},
+			{"cyan_wool", "white_wool", "158991"}, {"purple_wool", "white_wool", "792AAC"},
+			{"blue_wool", "white_wool", "35399D"}, {"brown_wool", "white_wool", "724728"},
+			{"green_wool", "white_wool", "546D1B"}, {"red_wool", "white_wool", "A12722"},
+			{"black_wool", "white_wool", "141519"},
+			{"orange_concrete", "white_concrete", "E06100"}, {"magenta_concrete", "white_concrete", "A9309F"},
+			{"light_blue_concrete", "white_concrete", "2389C6"}, {"yellow_concrete", "white_concrete", "F0AF15"},
+			{"lime_concrete", "white_concrete", "5EA818"}, {"pink_concrete", "white_concrete", "D5658E"},
+			{"cyan_concrete", "white_concrete", "157788"}, {"purple_concrete", "white_concrete", "64209C"},
+			{"blue_concrete", "white_concrete", "2C2E8F"}, {"brown_concrete", "white_concrete", "603B1F"},
+			{"green_concrete", "white_concrete", "495B24"}, {"red_concrete", "white_concrete", "8E2020"},
+			{"black_concrete", "white_concrete", "1A1C21"},
+			{"diamond_block", "iron_block", "62DBD5"}, {"emerald_block", "iron_block", "2ACB57"},
+			{"lapis_block", "iron_block", "1F43A0"}, {"netherite_block", "iron_block", "433F40"},
+			{"raw_iron_block", "iron_block", "A6876B"}, {"raw_gold_block", "gold_block", "D79A2B"},
+			{"suspicious_sand_1", "sand", "D9CB99"}, {"suspicious_sand_2", "sand", "D9CB99"}, {"suspicious_sand_3", "sand", "D9CB99"},
 	};
+
+	/**
+	 * A cobweb drawn as fine pale threads: strands from the corners and sides
+	 * to an off-centre hub, with a spiral of thread round it, instead of
+	 * Minecraft's pixel-art web. Made, not taken from Half-Life 2, which has
+	 * no web texture.
+	 */
+	private static void cobweb(Path folder, Map<String, String> used) throws IOException {
+		int s = SIZE;
+		float[] alpha = new float[s * s];
+		float hx = s * 0.47F;
+		float hy = s * 0.53F;
+		java.util.Random random = new java.util.Random(7);
+		int strands = 11;
+		float[] angles = new float[strands];
+		for (int i = 0; i < strands; i++) {
+			angles[i] = (float) (i * 2 * Math.PI / strands + (random.nextFloat() - 0.5F) * 0.35F);
+			float ex = hx + (float) Math.cos(angles[i]) * s;
+			float ey = hy + (float) Math.sin(angles[i]) * s;
+			thread(alpha, s, hx, hy, ex, ey, 1.1F, 0.85F);
+		}
+		// The spiral, from strand to strand, sagging a little between them.
+		float radius = s * 0.05F;
+		for (int turn = 0; radius < s * 0.62F; turn++) {
+			for (int i = 0; i < strands; i++) {
+				float a0 = angles[i];
+				float a1 = angles[(i + 1) % strands] + (i + 1 == strands ? (float) (2 * Math.PI) : 0.0F);
+				float r0 = radius;
+				float r1 = radius + s * 0.045F / strands;
+				float x0 = hx + (float) Math.cos(a0) * r0;
+				float y0 = hy + (float) Math.sin(a0) * r0;
+				float x1 = hx + (float) Math.cos(a1) * r1;
+				float y1 = hy + (float) Math.sin(a1) * r1;
+				float mx = (x0 + x1) / 2 + (hx - (x0 + x1) / 2) * 0.06F;
+				float my = (y0 + y1) / 2 + (hy - (y0 + y1) / 2) * 0.06F;
+				float strength = 0.55F + 0.3F * random.nextFloat();
+				radius = r1;
+				if (random.nextFloat() < 0.08F) {
+					continue; // a broken thread here and there
+				}
+				thread(alpha, s, x0, y0, mx, my, 0.8F, strength);
+				thread(alpha, s, mx, my, x1, y1, 0.8F, strength);
+			}
+		}
+		int[] image = new int[s * s];
+		for (int i = 0; i < image.length; i++) {
+			int a = Math.round(Math.min(1.0F, alpha[i]) * 235.0F);
+			image[i] = a << 24 | 0xE4E6E8;
+		}
+		writePng(folder.resolve("cobweb.png"), image, s);
+		used.put("cobweb", "drawn");
+	}
+
+	/** One soft-edged thread from (x0, y0) to (x1, y1), clipped to the image. */
+	private static void thread(float[] alpha, int s, float x0, float y0, float x1, float y1, float width, float strength) {
+		float dx = x1 - x0;
+		float dy = y1 - y0;
+		float length = (float) Math.sqrt(dx * dx + dy * dy);
+		int steps = Math.max(1, Math.round(length * 2));
+		for (int k = 0; k <= steps; k++) {
+			float px = x0 + dx * k / steps;
+			float py = y0 + dy * k / steps;
+			int cx = Math.round(px);
+			int cy = Math.round(py);
+			for (int oy = -2; oy <= 2; oy++) {
+				for (int ox = -2; ox <= 2; ox++) {
+					int x = cx + ox;
+					int y = cy + oy;
+					if (x < 0 || y < 0 || x >= s || y >= s) {
+						continue;
+					}
+					float d = (float) Math.sqrt((x - px) * (x - px) + (y - py) * (y - py));
+					float a = Math.max(0.0F, 1.0F - d / width) * strength;
+					alpha[y * s + x] = Math.max(alpha[y * s + x], a);
+				}
+			}
+		}
+	}
 
 	/** One block's texture made from another's, recoloured; see {@link #RECOLOURED}. */
 	private static void recoloured(Map<String, int[]> made, String name, String from, int colour, Path folder, Map<String, String> used)
