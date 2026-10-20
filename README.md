@@ -117,6 +117,16 @@ world to try it in.
   Half-Life 2's menus; license in `assets/mcsource/font/dejavu_license.txt`).
   Buttons, sliders, lists and inventories are recoloured into Half-Life 2's
   dark grey scheme, with light labels, when the Half-Life 2 pack is built.
+- **Half-Life 2 menu sounds and ambience.** With Half-Life 2 installed, menu
+  buttons click, tick on rollover and click again when one menu leads to
+  another, as Half-Life 2's menus do; toasts use its hint sound. The title
+  screen and other menus loop a quiet Half-Life 2 ambience that fades out when
+  a world loads, and in the world a fitting loop takes the place of
+  Minecraft's music: wind outdoors (softer under cover), a low hum in caves
+  and the End, with Half-Life 2 loops for underwater and the Nether and its
+  cave hits for cave noises. Set `hl2_ambience=false` in
+  `config/mcsource.properties` to turn the loops off, or `minecraft_music=true`
+  to keep Minecraft's music too; `config/mcsource/sounds.txt` picks other files.
 - **Half-Life 1 style textures.** Block textures are smoothly filtered up close
   like the GoldSrc renderer's, and their colours are muted and warmed. This is
   done in the shader, for Minecraft's textures and Half-Life 2's alike.

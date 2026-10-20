@@ -28,6 +28,7 @@ public class McSourceClient implements ClientModInitializer {
 					return new SmoothBlockModel(model);
 				}));
 		SourceHud.register();
+		com.mcsource.client.sound.Ambience.register();
 		com.mcsource.client.light.HeldLight.register();
 		com.mcsource.client.light.Emitters.register();
 		// Smoothed ground collides as smoothed only where the server has the mod too.

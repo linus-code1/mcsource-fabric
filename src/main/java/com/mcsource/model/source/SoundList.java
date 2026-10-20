@@ -103,7 +103,29 @@ public final class SoundList {
 			block.stone_button.click_off = buttons/button15 buttons/button9 volume:0.5
 			block.wooden_button.click_on block.wooden_button.click_off block.cherry_wood_button.click_on block.cherry_wood_button.click_off block.bamboo_wood_button.click_on block.bamboo_wood_button.click_off block.nether_wood_button.click_on block.nether_wood_button.click_off = buttons/lightswitch2 buttons/button14 volume:0.5
 			block.lever.click = buttons/lever1 buttons/lever# volume:0.6
+
+			# ---- Menus: Half-Life 2's menu buttons click when pressed, click again when let go and tick
+			# when the pointer moves onto them. mcsource:ui.screen plays when one menu screen leads to another.
 			ui.button.click = ui/buttonclick
+			mcsource:ui.rollover = ui/buttonrollover volume:0.6
+			mcsource:ui.screen = ui/buttonclickrelease ui/buttonclick
+			ui.toast.in = ui/hint friends/message common/talk volume:0.7
+			ui.toast.out = ui/buttonclickrelease volume:0.4
+			ui.toast.challenge_complete = ui/achievement_earned misc/achievement_earned items/suitchargeok1 ui/hint
+			ui.stonecutter.select_recipe ui.loom.select_pattern = ui/buttonclick
+			ui.stonecutter.take_result ui.loom.take_result ui.cartography_table.take_result = ui/buttonclickrelease items/itempickup
+
+			# ---- Ambience. The mcsource:ambient.* loops are played quietly by the mod: menu on the title screen and the
+			# other menus before a world is loaded, outdoors (louder in the open), caves (underground, out of the sky's
+			# light) and end. They take the place of Minecraft's music (minecraft_music=true in mcsource.properties keeps it).
+			mcsource:ambient.menu = ambient/atmosphere/city_tone ambient/atmosphere/tone_alley ambient/atmosphere/ambience_base ambient/atmosphere/tone_quiet ambient/atmosphere/city_rumble_loop# ambient/atmosphere/*loop*
+			mcsource:ambient.outdoors = ambient/wind/wind_med# ambient/wind/wasteland_wind ambient/wind/wind_moan# ambient/wind/wind# ambient/atmosphere/outdoor#
+			mcsource:ambient.caves = ambient/atmosphere/underground_hall_loop# ambient/atmosphere/hole_amb# ambient/atmosphere/undercity_loop# ambient/atmosphere/sewer_air# ambient/atmosphere/corridor#
+			mcsource:ambient.end = ambient/atmosphere/tone_quiet ambient/atmosphere/ambience_base ambient/atmosphere/hole_amb#
+			ambient.cave = ambient/atmosphere/cave_hit# ambient/atmosphere/hole_hit# ambient/atmosphere/drip# volume:0.6
+			ambient.underwater.loop = ambient/water/underwater
+			ambient.nether_wastes.loop ambient.crimson_forest.loop ambient.warped_forest.loop ambient.soul_sand_valley.loop ambient.basalt_deltas.loop = ambient/atmosphere/hole_amb# ambient/atmosphere/undercity_loop# ambient/atmosphere/underground_hall_loop# volume:0.8
+			ambient.nether_wastes.mood ambient.crimson_forest.mood ambient.warped_forest.mood ambient.soul_sand_valley.mood ambient.basalt_deltas.mood = ambient/atmosphere/hole_hit# ambient/atmosphere/cave_hit# volume:0.6
 
 			# ---- Weather and explosions
 			entity.lightning_bolt.thunder = ambient/weather/thunder# ambient/atmosphere/thunder#
@@ -128,7 +150,11 @@ public final class SoundList {
 			Map.entry("entity.player.attack.crit", "subtitles.entity.player.attack.crit"),
 			Map.entry("entity.player.attack.knockback", "subtitles.entity.player.attack.knockback"),
 			Map.entry("entity.lightning_bolt.thunder", "subtitles.entity.lightning_bolt.thunder"),
-			Map.entry("entity.generic.explode", "subtitles.entity.generic.explode"));
+			Map.entry("entity.generic.explode", "subtitles.entity.generic.explode"),
+			Map.entry("ambient.cave", "subtitles.ambient.sound"),
+			Map.entry("ui.stonecutter.take_result", "subtitles.ui.stonecutter.take_result"),
+			Map.entry("ui.loom.take_result", "subtitles.ui.loom.take_result"),
+			Map.entry("ui.cartography_table.take_result", "subtitles.ui.cartography_table.take_result"));
 
 	/** One line of the list: the patterns to try and how to play what's found. */
 	public record Entry(String[] patterns, float volume, float pitch, String subtitle) {

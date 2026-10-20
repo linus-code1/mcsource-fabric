@@ -3,6 +3,7 @@
 	"package": "com.mcsource.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"AbstractWidgetMixin",
 		"AvatarRendererMixin",
 		"CameraMixin",
 		"ClientLevelMixin",
@@ -15,6 +16,7 @@
 		"GuiGraphicsExtractorMixin",
 		"LightCoordsMixin",
 		"LivingEntityRendererMixin",
+		"MusicManagerMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",
 		"PlayerBodyMixin",

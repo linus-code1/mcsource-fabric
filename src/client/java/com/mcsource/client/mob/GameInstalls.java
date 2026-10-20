@@ -230,7 +230,9 @@ public final class GameInstalls {
 				{"viewmodel_offset_y", "Moves the hands forward, in Source units."},
 				{"viewmodel_offset_z", "Moves the hands up, in Source units."},
 				{"scary_sun", "true gives the sun a scary face (restart to apply)."},
-				{"hl2_trees", "false keeps Minecraft's block trees in new chunks instead of Half-Life 2 tree models."}}) {
+				{"hl2_trees", "false keeps Minecraft's block trees in new chunks instead of Half-Life 2 tree models."},
+				{"hl2_ambience", "false turns off the Half-Life 2 ambience loops on the menus and in the world."},
+				{"minecraft_music", "true keeps Minecraft's music playing alongside the Half-Life 2 ambience."}}) {
 			if (!properties.containsKey(entry[0])) {
 				properties.setProperty(entry[0], "");
 				changed = true;
