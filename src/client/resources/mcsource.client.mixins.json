@@ -7,6 +7,7 @@
 		"CameraMixin",
 		"ClientLevelMixin",
 		"EntityLightMixin",
+		"FlatLighterMixin",
 		"ChestRendererMixin",
 		"FirstPersonHandsMixin",
 		"GameRendererMixin",

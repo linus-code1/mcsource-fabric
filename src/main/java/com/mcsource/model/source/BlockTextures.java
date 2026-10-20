@@ -159,7 +159,6 @@ public final class BlockTextures {
 			mud_bricks = brick/brickwall0* brick/*
 			hay_block_side = *hay* *straw* *thatch* nature/*dry*grass* nature/*grass*dry* nature/*grass*
 			hay_block_top = *hay* *straw* *thatch* nature/*dry*grass* nature/*grass*dry* nature/*grass*
-			white_terracotta = plaster/plasterwall0* plaster/*
 			white_wool = *fabric* *cloth* plaster/*
 			stone_bricks_wall = stone/stonewall0*
 			calcite = stone/*white* plaster/* concrete/*
@@ -184,7 +183,12 @@ public final class BlockTextures {
 			basalt_top = nature/rockfloor0* *rock*
 			end_stone = nature/sandfloor0* nature/rock*
 			obsidian = nature/*obsidian* stone/*black* nature/rockwall_cave*
-			terracotta = plaster/plasterwall0* plaster/* *plaster*
+			# Badlands are cliffs of rock: terracotta is Half-Life 2's rock, and each
+			# coloured terracotta is that rock tinted to the block's own colour.
+			terracotta = nature/rockwall004a nature/rockwall00* nature/*cliff* nature/*rock* *rock*
+			clay = nature/mudfloor* nature/*mud* nature/dirtfloor003a nature/*dirt* *mud*
+			packed_mud = nature/mudfloor* nature/dirtfloor0* nature/*dirt*
+			magma_block = nature/*lava* nature/rockfloor0* *rock*
 			white_concrete = concrete/concretewall001a concrete/concretewall0* concrete/*
 			light_gray_concrete = concrete/concretewall0* concrete/*
 			gray_concrete = concrete/concretefloor0* concrete/*
@@ -303,6 +307,11 @@ public final class BlockTextures {
 		for (String[] ore : ORES) {
 			ore(made, ore[0], ore[1], Integer.parseInt(ore[2], 16), folder, used);
 		}
+		for (String[] one : RECOLOURED) {
+			recoloured(made, one[0], one[1], Integer.parseInt(one[2], 16), folder, used);
+		}
+		nylium(made, "crimson_nylium", folder, used);
+		nylium(made, "warped_nylium", folder, used);
 		mossy(made, "cobblestone", "mossy_cobblestone", folder, used);
 		mossy(made, "stone_bricks", "mossy_stone_bricks", folder, used);
 		try {
@@ -1545,6 +1554,62 @@ public final class BlockTextures {
 	 * Makes a mossy texture from a plain one: the grass floor grows into its
 	 * cracks and in soft patches, keeping the stone's own light and shade.
 	 */
+	/**
+	 * Blocks made from another block's Half-Life 2 texture, recoloured to the
+	 * Minecraft block's own colour: name, made from, colour.
+	 */
+	private static final String[][] RECOLOURED = {
+			{"white_terracotta", "terracotta", "C9A693"}, {"orange_terracotta", "terracotta", "A15325"},
+			{"magenta_terracotta", "terracotta", "95576C"}, {"light_blue_terracotta", "terracotta", "706C8A"},
+			{"yellow_terracotta", "terracotta", "BA8523"}, {"lime_terracotta", "terracotta", "677534"},
+			{"pink_terracotta", "terracotta", "A14E4E"}, {"gray_terracotta", "terracotta", "4A3A33"},
+			{"light_gray_terracotta", "terracotta", "876A61"}, {"cyan_terracotta", "terracotta", "575B5B"},
+			{"purple_terracotta", "terracotta", "764656"}, {"blue_terracotta", "terracotta", "4A3B5B"},
+			{"brown_terracotta", "terracotta", "5A3C29"}, {"green_terracotta", "terracotta", "4C532A"},
+			{"red_terracotta", "terracotta", "8F3D2E"}, {"black_terracotta", "terracotta", "33231C"},
+			// The plain block last, tinted too: Half-Life 2's grey rock read as stone, not clay.
+			{"terracotta", "terracotta", "985E43"},
+			{"soul_sand", "sand", "5A463A"}, {"soul_soil", "dirt", "4E3C30"},
+			{"nether_bricks", "bricks", "3A1C20"}, {"red_nether_bricks", "bricks", "52090B"},
+			{"crimson_nylium", "grass_block_top", "852427"}, {"warped_nylium", "grass_block_top", "2B7265"},
+			{"nether_wart_block", "grass_block_top", "742020"}, {"warped_wart_block", "grass_block_top", "167E86"},
+	};
+
+	/** One block's texture made from another's, recoloured; see {@link #RECOLOURED}. */
+	private static void recoloured(Map<String, int[]> made, String name, String from, int colour, Path folder, Map<String, String> used)
+			throws IOException {
+		int[] source = made.get(from);
+		if (source == null) {
+			return;
+		}
+		if (from.equals("grass_block_top")) {
+			source = source.clone();
+			retint(source, GRASS_TINT);
+		}
+		int[] out = recolourTo(source, colour);
+		writePng(folder.resolve(name + ".png"), out, SIZE);
+		used.put(name, "recoloured " + from);
+	}
+
+	/** A nylium side: the netherrack with a band of the nylium's top along its upper edge. */
+	private static void nylium(Map<String, int[]> made, String name, Path folder, Map<String, String> used) throws IOException {
+		int[] rock = made.get("netherrack");
+		int[] top = made.get("grass_block_top");
+		if (rock == null || top == null) {
+			return;
+		}
+		String colour = null;
+		for (String[] one : RECOLOURED) {
+			if (one[0].equals(name)) {
+				colour = one[2];
+			}
+		}
+		int[] tinted = top.clone();
+		retint(tinted, GRASS_TINT);
+		writePng(folder.resolve(name + "_side.png"), band(rock, recolourTo(tinted, Integer.parseInt(colour, 16))), SIZE);
+		used.put(name + "_side", "netherrack with " + name);
+	}
+
 	private static void mossy(Map<String, int[]> made, String from, String to, Path folder, Map<String, String> used) throws IOException {
 		int[] stone = made.get(from);
 		int[] grass = made.get("grass_block_top");

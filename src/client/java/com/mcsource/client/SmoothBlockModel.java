@@ -24,6 +24,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import org.joml.Vector3fc;
 
+import com.mcsource.client.light.OwnLight;
+import com.mcsource.client.light.SourceLight;
 import com.mcsource.terrain.SmoothMath;
 import com.mcsource.terrain.SmoothTerrain;
 
@@ -34,6 +36,8 @@ import com.mcsource.terrain.SmoothTerrain;
  * with the ground under them.
  */
 public final class SmoothBlockModel extends WrapperBlockStateModel {
+	/** How far off the surface lamp light is measured, so the ground itself never stands in the way. */
+	private static final float LAMP_PROBE = 0.3F;
 	/** How far a thin snow sheet sits above the ground. */
 	private static final float SNOW_LIFT = 0.035F;
 
@@ -57,12 +61,19 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			if (state.is(SmoothTerrain.SMOOTH) && !buried(level, pos)) {
 				int[] wide = SmoothTerrain.wideNeighbourhood(level, pos, state);
 				float[] grid = wide == null ? null : grid(wide, level, pos);
-				if (grid == null && wide != null && blends(level, pos, state) != null) {
-					// Flat, but beside another ground texture to blend with.
+				if (grid == null && wide != null && (blends(level, pos, state) != null || openAbove(level, pos))) {
+					// Flat ground goes the same way as bent ground, so it is lit
+					// the same way: lit block by block, flat ground next to bent
+					// ground showed as squares of different brightness.
 					grid = new float[128];
 				}
 				if (grid != null) {
-					emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
+					OwnLight.begin();
+					try {
+						emitBent(emitter, level, pos, state, random, cullTest, wide, grid);
+					} finally {
+						OwnLight.end();
+					}
 					return;
 				}
 			} else if (state.is(SmoothTerrain.FOLLOWS)) {
@@ -114,6 +125,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		} finally {
 			emitter.popTransform();
 		}
+	}
+
+	/** Whether the ground's top is out in the open, not under a prop or other block. */
+	private static boolean openAbove(BlockAndTintGetter level, BlockPos pos) {
+		BlockState above = level.getBlockState(pos.above());
+		return above.isAir() || above.is(SmoothTerrain.FOLLOWS) || above.getCollisionShape(level, pos.above()).isEmpty();
 	}
 
 	/** How dark the ground is right under the middle of a prop. */
@@ -430,8 +447,23 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						emitter.pos(i, x, bentY, z);
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
 						// Plants and snow take the sun as if facing up, like the ground.
+						float skyHere = SourceLight.skyLevel(lightHere);
+						float blockHere = SourceLight.blockLevel(lightHere);
+						if (lying) {
+							// A sheet lying over several blocks is lit smoothly across
+							// them, as the ground is, not one flat level a block.
+							float[] smooth = SmoothLight.at(level, pos.getX() + Mth.clamp(x, 0.0F, 1.0F), pos.getY() + Mth.clamp(bentY, 0.0F, 1.0F),
+									pos.getZ() + Mth.clamp(z, 0.0F, 1.0F));
+							float lamps = SourceLight.lampsAt(level, pos.getX() + x, pos.getY() + bentY + LAMP_PROBE, pos.getZ() + z);
+							if (lamps >= 0.0F) {
+								smooth[0] = lamps * 15.0F;
+							}
+							blockHere = smooth[0];
+							skyHere = smooth[1];
+							emitter.lightmap(i, SmoothLight.pack(smooth));
+						}
 						int sun = SunLight.multiplier(level, pos.getX() + x, pos.getY() + bentY, pos.getZ() + z, 0.0F, 1.0F, 0.0F,
-								LightCoordsUtil.sky(lightHere), LightCoordsUtil.block(lightHere));
+								skyHere, blockHere);
 						emitter.color(i, ARGB.multiply(blendColor(pc, w0, w1, w2, w3), sun));
 						emitter.normal(i, 0.0F, 1.0F, 0.0F);
 					}
@@ -447,7 +479,16 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					// a snow sheet bent over a slope turned into a patchwork of white
 					// and half-dark grey triangles.
 					emitter.shadeDirectionOverride(Direction.UP);
-					emitter.emit();
+					if (lying) {
+						OwnLight.begin();
+						try {
+							emitter.emit();
+						} finally {
+							OwnLight.end();
+						}
+					} else {
+						emitter.emit();
+					}
 				}
 			}
 		});
@@ -593,10 +634,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		if (sky == 0) {
 			return;
 		}
-		int block = LightCoordsUtil.block(light);
 		for (int i = 0; i < 4; i++) {
+			// Light blended between blocks: one level for the whole face showed
+			// each block as a square of its own brightness.
+			float[] smooth = SmoothLight.at(level, pos.getX() + Mth.clamp(quad.x(i), 0.0F, 1.0F), pos.getY() + Mth.clamp(quad.y(i), 0.0F, 1.0F),
+					pos.getZ() + Mth.clamp(quad.z(i), 0.0F, 1.0F));
 			int sun = SunLight.multiplier(level, pos.getX() + quad.x(i), pos.getY() + quad.y(i), pos.getZ() + quad.z(i),
-					normal.x(), normal.y(), normal.z(), sky, block);
+					normal.x(), normal.y(), normal.z(), smooth[1], smooth[0]);
 			quad.color(i, ARGB.multiply(quad.color(i), sun));
 		}
 	}
@@ -795,9 +839,22 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		MutableMesh captured = CAPTURED.get();
 		captured.clear();
 		QuadEmitter capture = captured.emitter();
+		float[] topBounds = {0.0F, 0.0F, 0.0F, 0.0F};
 		emitter.pushTransform(quad -> {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				return false;
+			}
+			if (quad.faceNormal().y() > 0.5F) {
+				topBounds[0] = Float.MAX_VALUE;
+				topBounds[1] = -Float.MAX_VALUE;
+				topBounds[2] = Float.MAX_VALUE;
+				topBounds[3] = -Float.MAX_VALUE;
+				for (int i = 0; i < 4; i++) {
+					topBounds[0] = Math.min(topBounds[0], quad.u(i));
+					topBounds[1] = Math.max(topBounds[1], quad.u(i));
+					topBounds[2] = Math.min(topBounds[2], quad.v(i));
+					topBounds[3] = Math.max(topBounds[3], quad.v(i));
+				}
 			}
 			capture.copyFrom(quad);
 			liftLowTop(capture, state);
@@ -813,6 +870,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		java.util.List<Blend> blends = blends(level, pos, state);
 		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = cliffSprite(state);
 		GroundTop ground = groundTop(state, snowAbove);
+		// Grass hangs a little way down over the lip of a cliff, as Source
+		// blends it over the top of its rock faces, instead of stopping at a
+		// hard edge where the top turns down.
+		boolean lipHere = ground != null && rock != null && openAbove(level, pos);
 		float[] ox = new float[4];
 		float[] oy = new float[4];
 		float[] oz = new float[4];
@@ -891,11 +952,16 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 						// Light, shade and sun blended from the corners, so they change
 						// smoothly across the face instead of in steps.
+						// Light from every open block round about, blended between
+						// blocks, so it runs on across block edges instead of in squares.
 						float[] one = new float[1];
-						trilinear(blockLight, 1, lx, ly, lz, one);
-						float block = one[0];
-						trilinear(skyLight, 1, lx, ly, lz, one);
-						float sky = one[0];
+						float[] smooth = SmoothLight.at(level, pos.getX() + lx, pos.getY() + ly, pos.getZ() + lz);
+						// Lamps by the exact point, so their light fades smoothly
+						// across the ground instead of block by block.
+						float lamps = SourceLight.lampsAt(level, pos.getX() + x + n[0] * LAMP_PROBE, pos.getY() + bentY + n[1] * LAMP_PROBE,
+								pos.getZ() + z + n[2] * LAMP_PROBE);
+						float block = lamps >= 0.0F ? lamps * 15.0F : smooth[0];
+						float sky = smooth[1];
 						trilinear(shade, 1, lx, ly, lz, one);
 						int grey = Math.round(255.0F * one[0]);
 						int original = blend(pl, w0, w1, w2, w3);
@@ -916,7 +982,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					splitAlongFlatterDiagonal(emitter);
 					boolean blendHere = top && blends != null;
 					float[] alpha = null;
-					if (blendHere || rockHere) {
+					{
 						for (int i = 0; i < 4; i++) {
 							ox[i] = emitter.x(i);
 							oy[i] = emitter.y(i);
@@ -930,19 +996,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					}
 					boolean allRock = false;
 					if (sideGround) {
-						if (!blendHere && !rockHere) {
+						alpha = rock == null ? new float[4] : rockAlpha(ox, oy, oz, on);
+						if (lipHere) {
 							for (int i = 0; i < 4; i++) {
-								ox[i] = emitter.x(i);
-								oy[i] = emitter.y(i);
-								oz[i] = emitter.z(i);
-								oc[i] = emitter.color(i);
-								ol[i] = emitter.lightmap(i);
-								on[i * 3] = emitter.normalX(i);
-								on[i * 3 + 1] = emitter.normalY(i);
-								on[i * 3 + 2] = emitter.normalZ(i);
+								alpha[i] = Math.min(alpha[i], 1.0F - lip(grid, pos, ox[i], oy[i], oz[i]));
 							}
 						}
-						alpha = rock == null ? new float[4] : rockAlpha(ox, oy, oz, on);
 						float mean = (alpha[0] + alpha[1] + alpha[2] + alpha[3]) / 4.0F;
 						float[] u = new float[4];
 						float[] v = new float[4];
@@ -991,6 +1050,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						}
 					}
 					emitter.emit();
+					if (top && !allRock && topBounds[1] > topBounds[0]) {
+						breakTiling(emitter, topBounds, pos, ox, oy, oz, oc, ol, on, quad.tintIndex());
+					}
 					if (blendHere && !allRock) {
 						for (Blend blend : blends) {
 							blend.emit(emitter, ox, oy, oz, oc, ol, on);
@@ -1064,6 +1126,96 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/**
+	 * How much of the ground's top hangs over a side point just below the top
+	 * of the block, from 1 at the lip fading to 0 a ragged distance down.
+	 */
+	private static float lip(float[] grid, BlockPos pos, float x, float y, float z) {
+		float lx = Mth.clamp(x, 0.0F, 1.0F);
+		float lz = Mth.clamp(z, 0.0F, 1.0F);
+		float surface = 1.0F + smoothOffset(grid, lx, 1.0F, lz);
+		float depth = surface - y;
+		float wx = pos.getX() + lx;
+		float wz = pos.getZ() + lz;
+		float reach = 0.15F + 0.45F * (noise(wx / 1.3F + wz / 2.1F, pos.getY() * 0.7F, 11) * 0.7F + noise(wx * 1.9F, wz * 1.9F, 12) * 0.3F);
+		float t = Mth.clamp(depth / reach, 0.0F, 1.0F);
+		return 1.0F - t * t * (3.0F - 2.0F * t);
+	}
+
+	/** The second layer's texture repeats over this many blocks each way. */
+	private static final int TILING_SPREAD = 5;
+	/** Debugging: leaves out the layer that breaks up the ground texture's repeat. */
+	private static final boolean NO_TILING = Boolean.getBoolean("mcsource.noTiling");
+
+	/**
+	 * Lays a second copy of a top's texture over one piece of it, turned a
+	 * quarter round and spread over {@link #TILING_SPREAD} blocks, faded in
+	 * and out in broad soft patches, so the ground's texture no longer reads as
+	 * the same square laid over and over. It fades out where the ground turns
+	 * steep, going by the smooth normals, which neighbouring blocks agree on.
+	 */
+	private static void breakTiling(QuadEmitter emitter, float[] bounds, BlockPos pos, float[] px, float[] py, float[] pz, int[] colour,
+			int[] light, float[] normal, int tint) {
+		if (NO_TILING) {
+			return;
+		}
+		float[] alpha = new float[4];
+		boolean any = false;
+		for (int i = 0; i < 4; i++) {
+			float wx = pos.getX() + Mth.clamp(px[i], 0.0F, 1.0F);
+			float wz = pos.getZ() + Mth.clamp(pz[i], 0.0F, 1.0F);
+			float n = noise(wx / 6.0F, wz / 6.0F, 7) * 0.7F + noise(wx / 2.5F, wz / 2.5F, 8) * 0.3F;
+			float t = Mth.clamp((n - 0.35F) / 0.3F, 0.0F, 1.0F);
+			float steep = 1.0F - Mth.clamp(normal[i * 3 + 1], 0.0F, 1.0F);
+			float k = Mth.clamp((steep - 0.2F) / 0.25F, 0.0F, 1.0F);
+			alpha[i] = 0.85F * t * t * (3.0F - 2.0F * t) * (1.0F - k * k * (3.0F - 2.0F * k));
+			any |= alpha[i] > 0.004F;
+		}
+		if (!any) {
+			return;
+		}
+		emitter.clear();
+		for (int i = 0; i < 4; i++) {
+			float lift = ROCK_LIFT * 0.5F;
+			emitter.pos(i, px[i] + normal[i * 3] * lift, py[i] + normal[i * 3 + 1] * lift, pz[i] + normal[i * 3 + 2] * lift);
+			float cx = Math.floorMod(pos.getX(), TILING_SPREAD) + Mth.clamp(px[i], 0.0F, 1.0F);
+			float cz = Math.floorMod(pos.getZ(), TILING_SPREAD) + Mth.clamp(pz[i], 0.0F, 1.0F);
+			float u = cz / TILING_SPREAD;
+			float v = 1.0F - cx / TILING_SPREAD;
+			emitter.uv(i, bounds[0] + u * (bounds[1] - bounds[0]), bounds[2] + v * (bounds[3] - bounds[2]));
+			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+			emitter.lightmap(i, light[i]);
+			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+		}
+		emitter.nominalFace(null);
+		emitter.cullFace(null);
+		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+		emitter.ambientOcclusion(TriState.FALSE);
+		emitter.shadeMode(ShadeMode.ENHANCED);
+		emitter.tintIndex(tint);
+		emitter.emit();
+	}
+
+	/** Smooth value noise from 0 to 1. */
+	private static float noise(float x, float z, int seed) {
+		int x0 = Mth.floor(x);
+		int z0 = Mth.floor(z);
+		float fx = x - x0;
+		float fz = z - z0;
+		fx = fx * fx * (3.0F - 2.0F * fx);
+		fz = fz * fz * (3.0F - 2.0F * fz);
+		float a = Mth.lerp(fx, hash(x0, z0, seed), hash(x0 + 1, z0, seed));
+		float b = Mth.lerp(fx, hash(x0, z0 + 1, seed), hash(x0 + 1, z0 + 1, seed));
+		return Mth.lerp(fz, a, b);
+	}
+
+	private static float hash(int x, int z, int seed) {
+		int h = x * 374761393 + z * 668265263 + seed * 1442695041;
+		h = (h ^ (h >>> 13)) * 1274126177;
+		h ^= h >>> 16;
+		return (h & 0xFFFFFF) / (float) 0xFFFFFF;
+	}
+
+	/**
 	 * The rock that shows through on steep faces of soft ground (grass, dirt,
 	 * sand), as Source blends rock into its displacements where they turn
 	 * into cliffs; null for ground that is rock already.
@@ -1074,7 +1226,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			rock = "minecraft:block/sandstone";
 		} else if (state.is(Blocks.RED_SAND) || state.is(Blocks.RED_SANDSTONE)) {
 			rock = "minecraft:block/red_sandstone";
-		} else if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)
+		} else if (state.is(Blocks.CRIMSON_NYLIUM) || state.is(Blocks.WARPED_NYLIUM)) {
+			rock = "minecraft:block/netherrack";
+		} else if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.PODZOL)
+				|| state.is(Blocks.MYCELIUM) || state.is(Blocks.COARSE_DIRT) || state.is(Blocks.ROOTED_DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)
 				|| state.is(Blocks.GRAVEL) || state.is(Blocks.CLAY) || state.is(Blocks.STONE) || state.is(Blocks.ANDESITE)
 				|| state.is(Blocks.DIORITE) || state.is(Blocks.GRANITE) || state.is(Blocks.TUFF) || state.is(Blocks.CALCITE)) {
 			// One rock for every cliff of ordinary ground. Minecraft's ground is
@@ -1083,10 +1238,28 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			// texture as a dark or light blotch.
 			rock = "minecraft:block/stone";
 		} else {
-			return null;
+			// Any other ground (netherrack, terracotta, end stone...) is its own
+			// rock: its steep faces take its own texture laid on from the side,
+			// so the texture laid from above never stretches down them in streaks.
+			return ownSprite(state);
 		}
 		return net.minecraft.client.Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)
 				.getSprite(net.minecraft.resources.Identifier.parse(rock));
+	}
+
+	/** A block's own texture, or null when it has none of its own name. */
+	private static net.minecraft.client.renderer.texture.TextureAtlasSprite ownSprite(BlockState state) {
+		net.minecraft.client.renderer.texture.TextureAtlas atlas = net.minecraft.client.Minecraft.getInstance().getAtlasManager()
+				.getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS);
+		net.minecraft.resources.Identifier id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock());
+		for (String suffix : new String[] {""}) {
+			net.minecraft.client.renderer.texture.TextureAtlasSprite sprite = atlas
+					.getSprite(id.withPath("block/" + id.getPath() + suffix));
+			if (!sprite.contents().name().equals(net.minecraft.client.renderer.texture.MissingTextureAtlasSprite.getLocation())) {
+				return sprite;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -1174,6 +1347,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			top = "block/mycelium_top";
 		} else if (state.is(Blocks.DIRT_PATH)) {
 			top = "block/dirt_path_top";
+		} else if (state.is(Blocks.CRIMSON_NYLIUM)) {
+			top = "block/crimson_nylium";
+		} else if (state.is(Blocks.WARPED_NYLIUM)) {
+			top = "block/warped_nylium";
 		} else if (state.is(Blocks.SANDSTONE)) {
 			top = "block/sandstone_top";
 		} else if (state.is(Blocks.RED_SANDSTONE)) {
