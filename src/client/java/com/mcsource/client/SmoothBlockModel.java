@@ -97,6 +97,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		boolean terrain = state.is(SmoothTerrain.SMOOTH);
 		boolean snowAbove = terrain && level.getBlockState(pos.above()).is(Blocks.SNOW);
 		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = terrain ? cliffSprite(state) : null;
+		java.util.List<float[][]> straightRock = new java.util.ArrayList<>(2);
 		emitter.pushTransform(quad -> {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				// Hidden under the snow sheet; see emitBent.
@@ -109,12 +110,33 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					return false;
 				}
 				// Mapped as cliffRock maps it, so the two kinds of cliff meet.
-				boolean alongX = Math.abs(quad.faceNormal().z()) >= Math.abs(quad.faceNormal().x());
+				float[] px = new float[4];
+				float[] py = new float[4];
+				float[] pz = new float[4];
+				float[] n = new float[12];
 				for (int i = 0; i < 4; i++) {
-					float across = alongX ? pos.getX() + Mth.clamp(quad.x(i), 0.0F, 1.0F) : pos.getZ() + Mth.clamp(quad.z(i), 0.0F, 1.0F);
-					quad.uv(i, rock.getU(mirrored(across / ROCK_SPREAD)), rock.getV(mirrored((pos.getY() + quad.y(i)) / ROCK_SPREAD)));
+					px[i] = quad.x(i);
+					py[i] = quad.y(i);
+					pz[i] = quad.z(i);
+					n[i * 3] = quad.faceNormal().x();
+					n[i * 3 + 1] = quad.faceNormal().y();
+					n[i * 3 + 2] = quad.faceNormal().z();
+				}
+				float[] u = new float[4];
+				float[] v = new float[4];
+				rockUv(rock, pos, px, py, pz, n, u, v, 0);
+				for (int i = 0; i < 4; i++) {
+					quad.uv(i, u[i], v[i]);
 				}
 				applySun(quad, level, pos);
+				int[] colour = new int[4];
+				for (int i = 0; i < 4; i++) {
+					colour[i] = quad.color(i);
+				}
+				// The second rock layer goes on after the model, as nothing may be
+				// emitted from inside a transform.
+				straightRock.add(new float[][] {px, py, pz, n, {Float.intBitsToFloat(colour[0]), Float.intBitsToFloat(colour[1]),
+						Float.intBitsToFloat(colour[2]), Float.intBitsToFloat(colour[3])}});
 				return true;
 			}
 			if (terrain) {
@@ -128,6 +150,14 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 		} finally {
 			emitter.popTransform();
+		}
+		for (float[][] face : straightRock) {
+			int[] colour = new int[4];
+			for (int i = 0; i < 4; i++) {
+				colour[i] = Float.floatToRawIntBits(face[4][i]);
+			}
+			float[] full = {1.0F, 1.0F, 1.0F, 1.0F};
+			rockVariation(emitter, rock, pos, face[0], face[1], face[2], colour, new int[4], face[3], full);
 		}
 	}
 
@@ -1086,12 +1116,13 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						if (rock != null && mean >= 0.5F) {
 							// Mostly rock: the face is rock, with the ground's top faded
 							// over it where it is less steep.
-							rockUv(rock, pos, ox, oy, oz, on, u, v);
+							rockUv(rock, pos, ox, oy, oz, on, u, v, 0);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
 							}
 							emitter.tintIndex(-1);
 							emitter.emit();
+							rockVariation(emitter, rock, pos, ox, oy, oz, oc, ol, on, alpha);
 							float[] rest = new float[4];
 							for (int i = 0; i < 4; i++) {
 								rest[i] = 1.0F - alpha[i];
@@ -1120,7 +1151,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 							// over it, the same as a straight cliff.
 							float[] u = new float[4];
 							float[] v = new float[4];
-							rockUv(rock, pos, ox, oy, oz, on, u, v);
+							rockUv(rock, pos, ox, oy, oz, on, u, v, 0);
 							for (int i = 0; i < 4; i++) {
 								emitter.uv(i, u[i], v[i]);
 							}
@@ -1128,6 +1159,9 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						}
 					}
 					emitter.emit();
+					if (allRock) {
+						rockVariation(emitter, rock, pos, ox, oy, oz, oc, ol, on, new float[] {1.0F, 1.0F, 1.0F, 1.0F});
+					}
 					if (top && !allRock && topBounds[1] > topBounds[0]) {
 						breakTiling(emitter, topBounds, pos, ox, oy, oz, oc, ol, on, quad.tintIndex());
 					}
@@ -1361,14 +1395,43 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/**
-	 * Rock texture coordinates for the corners of a piece: projected from
-	 * the side the slope faces most, one tile over two blocks: across, by the
-	 * block's place in the world, and up, over the two blocks' height a bent
-	 * block can reach (half a block below its bottom to half a block above
-	 * its top), so it never stretches.
+	 * Rock texture coordinates for the corners of a piece, projected from the
+	 * side it faces: layer 0 is the cliff's own rock, layer 1 the second layer
+	 * laid over it (see rockVariation).
 	 */
 	private static void rockUv(net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos, float[] px, float[] py,
-			float[] pz, float[] normal, float[] u, float[] v) {
+			float[] pz, float[] normal, float[] u, float[] v, int layer) {
+		boolean alongX = facesAlongX(px, py, pz, normal);
+		int spread = layer == 0 ? ROCK_SPREAD : ROCK_SPREAD_2;
+		// Counted from the block's place in its tile, so a tile's edges fall on
+		// block edges and the texture, which tiles, runs on without a seam.
+		int blockAcross = alongX ? pos.getX() : pos.getZ();
+		float baseAcross = Math.floorMod(blockAcross + layer * 2, spread);
+		float baseUp = Math.floorMod(pos.getY() + layer, spread);
+		float lo = Float.MAX_VALUE;
+		float hi = -Float.MAX_VALUE;
+		for (int i = 0; i < 4; i++) {
+			float across = alongX ? Mth.clamp(px[i], 0.0F, 1.0F) : Mth.clamp(pz[i], 0.0F, 1.0F);
+			u[i] = (baseAcross + across) / spread;
+			v[i] = (baseUp + py[i]) / spread;
+			lo = Math.min(lo, v[i]);
+			hi = Math.max(hi, v[i]);
+		}
+		// A bent block reaches half a block above and below itself: a piece
+		// that lies wholly in the next tile up or down takes that tile, which
+		// looks the same; one that crosses a tile edge is held inside it.
+		float shift = lo >= 1.0F ? -1.0F : hi <= 0.0F ? 1.0F : 0.0F;
+		for (int i = 0; i < 4; i++) {
+			float uu = layer == 0 ? u[i] : 1.0F - u[i];
+			float vv = Mth.clamp(v[i] + shift, 0.0F, 1.0F);
+			// The second layer is turned a quarter round, so its grain runs another way.
+			u[i] = rock.getU(layer == 0 ? uu : vv);
+			v[i] = rock.getV(layer == 0 ? vv : uu);
+		}
+	}
+
+	/** Whether a piece of cliff faces along z, so its rock runs along x. */
+	private static boolean facesAlongX(float[] px, float[] py, float[] pz, float[] normal) {
 		// Projected along the way the piece itself faces, so the texture runs
 		// across it; going by the smoothed normals, a piece at the corner of a
 		// cliff could be projected edge-on and smear into streaks.
@@ -1388,31 +1451,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				nz += Math.abs(normal[i * 3 + 2]);
 			}
 		}
-		boolean alongX = nz >= nx;
-		for (int i = 0; i < 4; i++) {
-			float across = alongX ? pos.getX() + Mth.clamp(px[i], 0.0F, 1.0F) : pos.getZ() + Mth.clamp(pz[i], 0.0F, 1.0F);
-			u[i] = rock.getU(mirrored(across / ROCK_SPREAD));
-			v[i] = rock.getV(mirrored((pos.getY() + py[i]) / ROCK_SPREAD));
-		}
+		return nz >= nx;
 	}
 
 	/**
-	 * Rock on cliffs spreads over this many blocks each way, by the world:
-	 * spread over one or two blocks, every block of a cliff showed the same
-	 * band of the texture and the cliff read as a grid of tiles.
+	 * Rock on cliffs spreads over this many blocks each way, by the world,
+	 * and a second layer over {@link #ROCK_SPREAD_2}; see rockVariation.
 	 */
-	private static final float ROCK_SPREAD = 4.0F;
-
-	/**
-	 * A texture coordinate that runs on through the world without a seam:
-	 * the texture goes forward in one tile and back in the next, so it never
-	 * has to jump from one edge to the other inside a face.
-	 */
-	private static float mirrored(float t) {
-		int whole = Mth.floor(t);
-		float part = t - whole;
-		return (whole & 1) == 0 ? part : 1.0F - part;
-	}
+	private static final int ROCK_SPREAD = 4;
+	private static final int ROCK_SPREAD_2 = 3;
 
 	/** Steepness (1 minus the normal's height) where rock starts to show, and where it covers the ground fully. */
 	private static final float ROCK_FROM = 0.25F;
@@ -1537,11 +1584,59 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		float[] u = new float[4];
 		float[] v = new float[4];
-		rockUv(rock, pos, px, py, pz, normal, u, v);
+		rockUv(rock, pos, px, py, pz, normal, u, v, 0);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			// Lift the overlay a little off the face along its normal.
 			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
+			emitter.uv(i, u[i], v[i]);
+			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
+			emitter.lightmap(i, light[i]);
+			emitter.normal(i, normal[i * 3], normal[i * 3 + 1], normal[i * 3 + 2]);
+		}
+		emitter.nominalFace(null);
+		emitter.cullFace(null);
+		emitter.chunkLayer(ChunkSectionLayer.TRANSLUCENT);
+		emitter.ambientOcclusion(TriState.FALSE);
+		emitter.shadeMode(ShadeMode.ENHANCED);
+		emitter.tintIndex(-1);
+		emitter.emit();
+		rockVariation(emitter, rock, pos, px, py, pz, colour, light, normal, alpha);
+	}
+
+	/**
+	 * The second layer of cliff rock: the same rock spread over
+	 * {@link #ROCK_SPREAD_2} blocks instead of {@link #ROCK_SPREAD}, turned
+	 * round, and faded in and out in broad soft patches, so a cliff no longer
+	 * shows the same stretch of rock again every few blocks: the two layers
+	 * only line up again every twelve blocks, and the patches hide even that.
+	 */
+	private static void rockVariation(QuadEmitter emitter, net.minecraft.client.renderer.texture.TextureAtlasSprite rock, BlockPos pos,
+			float[] px, float[] py, float[] pz, int[] colour, int[] light, float[] normal, float[] base) {
+		if (NO_TILING) {
+			return;
+		}
+		boolean alongX = facesAlongX(px, py, pz, normal);
+		float[] alpha = new float[4];
+		boolean any = false;
+		for (int i = 0; i < 4; i++) {
+			float across = alongX ? pos.getX() + px[i] : pos.getZ() + pz[i];
+			float up = pos.getY() + py[i];
+			float n = noise(across / 5.0F, up / 4.0F, 21) * 0.65F + noise(across / 2.0F + 3.7F, up / 1.7F, 22) * 0.35F;
+			float t = Mth.clamp((n - 0.3F) / 0.4F, 0.0F, 1.0F);
+			alpha[i] = base[i] * t * t * (3.0F - 2.0F * t);
+			any |= alpha[i] > 0.004F;
+		}
+		if (!any) {
+			return;
+		}
+		float[] u = new float[4];
+		float[] v = new float[4];
+		rockUv(rock, pos, px, py, pz, normal, u, v, 1);
+		float lift = ROCK_LIFT * 1.5F;
+		emitter.clear();
+		for (int i = 0; i < 4; i++) {
+			emitter.pos(i, px[i] + normal[i * 3] * lift, py[i] + normal[i * 3 + 1] * lift, pz[i] + normal[i * 3 + 2] * lift);
 			emitter.uv(i, u[i], v[i]);
 			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(colour[i]), ARGB.green(colour[i]), ARGB.blue(colour[i])));
 			emitter.lightmap(i, light[i]);
