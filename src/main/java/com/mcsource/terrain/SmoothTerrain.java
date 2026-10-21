@@ -36,9 +36,13 @@ public final class SmoothTerrain {
 	 * Air, plants, snow layers, water and other replaceable blocks, but not
 	 * lava. Water counts as open so the ground under lakes and the sea is
 	 * smoothed like the ground under air, all but the top layer of water.
+	 * Snow counts as open however deep it lies: deep snow is not replaceable,
+	 * and counted as a built block it held the ground under it flat and
+	 * blocky while the snow on it bent with the ground round it, so the two
+	 * pulled apart into gaps.
 	 */
 	public static boolean isOpen(BlockState state) {
-		return state.canBeReplaced() && (state.getFluidState().isEmpty() || state.getFluidState().is(FluidTags.WATER));
+		return state.is(net.minecraft.world.level.block.Blocks.SNOW) || state.canBeReplaced() && (state.getFluidState().isEmpty() || state.getFluidState().is(FluidTags.WATER));
 	}
 
 	private static int classify(BlockState state) {

@@ -501,6 +501,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			Predicate<Direction> cullTest, int ground, boolean thinSnow) {
 		int lightHere = LightCoordsUtil.getLightCoords(level, pos);
 		GroundSurface surface = new GroundSurface(level, pos, ground);
+		float[] edges = thinSnow ? sheetEdges(level, pos) : null;
 		MutableMesh captured = CAPTURED.get();
 		captured.clear();
 		QuadEmitter capture = captured.emitter();
@@ -527,7 +528,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			// Flat quads lying on the ground (snow) are cut up to follow its curve;
 			// standing ones (plants) only need their corners moved.
 			boolean lying = quad.faceNormal().y() > 0.5F;
-			int pieces = lying ? PIECES : 1;
+			int pieces = lying && !surface.flat() ? PIECES : 1;
 			for (int i = 0; i < 4; i++) {
 				px[i] = quad.x(i);
 				py[i] = quad.y(i);
@@ -550,7 +551,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 						float y = py[0] * w0 + py[1] * w1 + py[2] * w2 + py[3] * w3;
 						float z = pz[0] * w0 + pz[1] * w1 + pz[2] * w2 + pz[3] * w3;
 						float groundY = surface.height(Mth.clamp(x, 0.0F, 1.0F), Mth.clamp(z, 0.0F, 1.0F));
-						float bentY = thinSnow ? groundY + SNOW_LIFT : y + groundY;
+						float bentY = thinSnow ? groundY + SNOW_LIFT * sheetLift(edges, x, z) : y + groundY;
 						emitter.pos(i, x, bentY, z);
 						emitter.uv(i, pu[0] * w0 + pu[1] * w1 + pu[2] * w2 + pu[3] * w3, pv[0] * w0 + pv[1] * w1 + pv[2] * w2 + pv[3] * w3);
 						// Plants and snow take the sun as if facing up, like the ground.
@@ -603,6 +604,37 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	}
 
 	/**
+	 * How far up a snow sheet's four corners sit, from 0 to 1 of
+	 * {@link #SNOW_LIFT}: at a corner shared with ground that has no snow on
+	 * it the sheet comes right down onto the ground, so its edge meets the
+	 * bare top beside it. Lifted there, a thin crack showed the sky under the
+	 * sheet, as the ground's top under it is not drawn.
+	 */
+	private static float[] sheetEdges(BlockAndTintGetter level, BlockPos pos) {
+		float[] corners = new float[4];
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int c = 0; c < 4; c++) {
+			int cx = c == 1 || c == 3 ? 1 : 0;
+			int cz = c >= 2 ? 1 : 0;
+			boolean all = true;
+			for (int dz = cz - 1; dz <= cz && all; dz++) {
+				for (int dx = cx - 1; dx <= cx && all; dx++) {
+					all = level.getBlockState(cursor.setWithOffset(pos, dx, 0, dz)).is(Blocks.SNOW);
+				}
+			}
+			corners[c] = all ? 1.0F : 0.0F;
+		}
+		return corners;
+	}
+
+	/** {@link #sheetEdges} at a point of the sheet: corners (0,0) (1,0) (0,1) (1,1). */
+	private static float sheetLift(float[] corners, float x, float z) {
+		float lx = Mth.clamp(x, 0.0F, 1.0F);
+		float lz = Mth.clamp(z, 0.0F, 1.0F);
+		return Mth.lerp(lz, Mth.lerp(lx, corners[0], corners[1]), Mth.lerp(lx, corners[2], corners[3]));
+	}
+
+	/**
 	 * The top of the ground under a plant or snow layer, exactly as the ground
 	 * itself is drawn, in blocks relative to the plant's own block.
 	 */
@@ -646,6 +678,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 					corners[i] = SmoothMath.corner(packed, i) / 8.0F - 1.0F;
 				}
 			}
+		}
+
+		/** Whether the ground here is level, so a sheet on it needs no cutting up. */
+		boolean flat() {
+			if (corners != null) {
+				return corners[0] == corners[1] && corners[0] == corners[2] && corners[0] == corners[3];
+			}
+			return grid == null || flatFace(grid, new float[] {0.0F, 0.0F, 1.0F, 1.0F}, new float[] {1.0F, 1.0F, 1.0F, 1.0F},
+					new float[] {0.0F, 1.0F, 1.0F, 0.0F});
 		}
 
 		float height(float x, float z) {
@@ -777,6 +818,27 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 
 	/** Each side of a bent face is cut into this many pieces, so the surface can curve. */
 	private static final int PIECES = 3;
+
+	/** Whether the smoothing moves no point of a face: its corners, edges and middle all stay put. */
+	private static boolean flatFace(float[] grid, float[] px, float[] py, float[] pz) {
+		for (int a = 0; a <= 2; a++) {
+			for (int b = 0; b <= 2; b++) {
+				float s = a / 2.0F;
+				float t = b / 2.0F;
+				float w0 = (1 - s) * (1 - t);
+				float w1 = (1 - s) * t;
+				float w2 = s * t;
+				float w3 = s * (1 - t);
+				float x = Mth.clamp(px[0] * w0 + px[1] * w1 + px[2] * w2 + px[3] * w3, 0.0F, 1.0F);
+				float y = Mth.clamp(py[0] * w0 + py[1] * w1 + py[2] * w2 + py[3] * w3, 0.0F, 1.0F);
+				float z = Mth.clamp(pz[0] * w0 + pz[1] * w1 + pz[2] * w2 + pz[3] * w3, 0.0F, 1.0F);
+				if (Math.abs(smoothOffset(grid, x, y, z)) > 1.0E-4F) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
 	private static final ThreadLocal<MutableMesh> CAPTURED = ThreadLocal.withInitial(() -> Renderer.get().mutableMesh());
 
 	/** Index into a 4x4x4 grid of corners from -1 to 2 on each axis. */
@@ -1049,13 +1111,17 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 			// One rock layer per face: a grass side's tinted overlay quad gets none.
 			boolean rockHere = rock != null && (top || quad.tintIndex() < 0);
-			for (int a = 0; a < PIECES; a++) {
-				for (int b = 0; b < PIECES; b++) {
+			// A face the smoothing leaves flat needs no cutting up: drawn whole
+			// it looks the same, at a ninth of the pieces, and flat ground is
+			// most of the world.
+			int pieces = flatFace(grid, px, py, pz) ? 1 : PIECES;
+			for (int a = 0; a < pieces; a++) {
+				for (int b = 0; b < pieces; b++) {
 					emitter.copyFrom(quad);
 					for (int i = 0; i < 4; i++) {
 						// Corners in order (0,0) (0,1) (1,1) (1,0), as vertices 0 to 3 run.
-						float s = (a + (i >= 2 ? 1 : 0)) / (float) PIECES;
-						float t = (b + (i == 1 || i == 2 ? 1 : 0)) / (float) PIECES;
+						float s = (a + (i >= 2 ? 1 : 0)) / (float) pieces;
+						float t = (b + (i == 1 || i == 2 ? 1 : 0)) / (float) pieces;
 						float w0 = (1 - s) * (1 - t);
 						float w1 = (1 - s) * t;
 						float w2 = s * t;
@@ -1372,6 +1438,11 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			rock = "minecraft:block/red_sandstone";
 		} else if (state.is(Blocks.CRIMSON_NYLIUM) || state.is(Blocks.WARPED_NYLIUM)) {
 			rock = "minecraft:block/netherrack";
+		} else if (isOre(state)) {
+			// Ores in a cliff take the rock round them: each one's own picture
+			// (the rock recoloured) showed as a pale square in the cliff face.
+			rock = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath().startsWith("deepslate_")
+					? "minecraft:block/deepslate" : "minecraft:block/stone";
 		} else if (state.is(net.minecraft.tags.BlockTags.DIRT) || state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.PODZOL)
 				|| state.is(Blocks.MYCELIUM) || state.is(Blocks.COARSE_DIRT) || state.is(Blocks.ROOTED_DIRT) || state.is(Blocks.DIRT_PATH) || state.is(Blocks.FARMLAND)
 				|| state.is(Blocks.GRAVEL) || state.is(Blocks.CLAY) || state.is(Blocks.STONE) || state.is(Blocks.ANDESITE)
@@ -1389,6 +1460,12 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		return net.minecraft.client.Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(net.minecraft.data.AtlasIds.BLOCKS)
 				.getSprite(net.minecraft.resources.Identifier.parse(rock));
+	}
+
+	/** Stone and deepslate ores (not the Nether's, which sit in netherrack). */
+	private static boolean isOre(BlockState state) {
+		String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
+		return path.endsWith("_ore") && !path.startsWith("nether_");
 	}
 
 	/** A block's own texture, or null when it has none of its own name. */
@@ -1499,8 +1576,15 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	/** The same for grassy ground (grass, podzol, mycelium, nylium, snowy tops). */
 	private static final float GRASS_ROCK_FROM = 0.45F;
 	private static final float GRASS_ROCK_FULL = 0.8F;
-	/** How far an overlay sits off the face beneath it, in blocks. */
-	private static final float ROCK_LIFT = 0.005F;
+	/**
+	 * How far an overlay sits off the face beneath it, in blocks. Only just
+	 * off: the layers share the face's corners and its split, so their depths
+	 * agree, and the depth test (less or equal) lets the outer one win even
+	 * far away. Lifted further, a few dozen blocks off the lift fell below
+	 * the depth buffer's precision and the layers flashed through each other.
+	 * The lift only keeps them sorted in the right order.
+	 */
+	private static final float ROCK_LIFT = 0.0005F;
 
 	/**
 	 * Lays rock over one piece of a steep face, faded in by how steep the
@@ -1526,7 +1610,10 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	private static GroundTop groundTop(BlockState state, boolean snowAbove) {
 		String top;
 		int tint = -1;
-		if (snowAbove && (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.PODZOL) || state.is(Blocks.MYCELIUM))) {
+		if (snowAbove && state.is(SmoothTerrain.SMOOTH)) {
+			// Any ground under snow is snow-covered: its sides on a slope are
+			// snow fading into rock where steep, like grass, instead of bare
+			// rock between the snow.
 			top = "block/snow";
 		} else if (state.is(Blocks.GRASS_BLOCK)) {
 			top = "block/grass_block_top";

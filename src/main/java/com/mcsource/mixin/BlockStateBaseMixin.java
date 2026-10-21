@@ -60,7 +60,8 @@ public abstract class BlockStateBaseMixin {
 	 */
 	@Inject(method = "hasLargeCollisionShape()Z", at = @At("HEAD"), cancellable = true)
 	private void mcsource$smoothReachesOut(CallbackInfoReturnable<Boolean> cir) {
-		if (com.mcsource.terrain.ServerSupport.smoothCollision() && ((BlockState) (Object) this).is(SmoothTerrain.SMOOTH)) {
+		if (com.mcsource.terrain.ServerSupport.smoothCollision() && (((BlockState) (Object) this).is(SmoothTerrain.SMOOTH)
+				|| ((BlockState) (Object) this).is(net.minecraft.world.level.block.Blocks.SNOW))) {
 			cir.setReturnValue(true);
 		}
 	}
@@ -81,9 +82,37 @@ public abstract class BlockStateBaseMixin {
 
 	private void mcsource$applySmoothShape(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
 		BlockState self = (BlockState) (Object) this;
+		if (self.is(net.minecraft.world.level.block.Blocks.SNOW)) {
+			mcsource$snowShape(level, pos, self, cir);
+			return;
+		}
 		int packed = SmoothTerrain.corners(level, pos, self);
 		if (packed != SmoothMath.FULL) {
 			cir.setReturnValue(SmoothShapes.shape(packed));
 		}
+	}
+
+	/**
+	 * Snow on smoothed ground lies on it as it is drawn: its top follows the
+	 * ground's corners, raised by the snow's depth, instead of standing as a
+	 * flat box from the bottom of its block.
+	 */
+	private void mcsource$snowShape(BlockGetter level, BlockPos pos, BlockState self, CallbackInfoReturnable<VoxelShape> cir) {
+		if (level == net.minecraft.world.level.EmptyBlockGetter.INSTANCE || level instanceof net.minecraft.server.level.WorldGenRegion) {
+			// The shape cache and world generation see no real neighbours.
+			return;
+		}
+		int ground = SmoothTerrain.groundCorners(level, pos);
+		if (ground == SmoothMath.FULL) {
+			return;
+		}
+		// Vanilla snow's collision is one layer lower than the snow drawn.
+		int depth = self.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS) - 1;
+		int packed = 0;
+		for (int i = 0; i < 4; i++) {
+			int top = Math.max(0, Math.min(15, SmoothMath.corner(ground, i) - 8 + depth));
+			packed |= top << (i * 4);
+		}
+		cir.setReturnValue(SmoothShapes.shape(packed));
 	}
 }
