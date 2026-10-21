@@ -29,6 +29,7 @@
 		"PlayerBodyMixin",
 		"PlayerTabOverlayMixin",
 		"PropCullMixin",
+		"RenderPipelineMixin",
 		"ShadowMixin",
 		"SoundBufferLibraryMixin",
 		"TitleScreenMixin"
