@@ -98,6 +98,8 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		boolean snowAbove = terrain && level.getBlockState(pos.above()).is(Blocks.SNOW);
 		net.minecraft.client.renderer.texture.TextureAtlasSprite rock = terrain ? cliffSprite(state) : null;
 		java.util.List<float[][]> straightRock = new java.util.ArrayList<>(2);
+		boolean built = BuiltTexture.applies(state);
+		java.util.List<BuiltTexture.Face> builtFaces = built ? BuiltTexture.list() : null;
 		emitter.pushTransform(quad -> {
 			if (snowAbove && quad.faceNormal().y() > 0.5F) {
 				// Hidden under the snow sheet; see emitBent.
@@ -143,13 +145,21 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 				liftLowTop(quad, state);
 				spreadTexture(quad, pos);
 			}
+			BuiltTexture.Face face = built ? BuiltTexture.spread(quad, pos) : null;
 			applySun(quad, level, pos);
+			if (face != null) {
+				BuiltTexture.finish(face, quad);
+				builtFaces.add(face);
+			}
 			return true;
 		});
 		try {
 			super.emitQuads(emitter, level, pos, state, random, cullTest);
 		} finally {
 			emitter.popTransform();
+		}
+		if (builtFaces != null && !builtFaces.isEmpty()) {
+			BuiltTexture.blend(emitter, level, pos, state, builtFaces);
 		}
 		for (float[][] face : straightRock) {
 			int[] colour = new int[4];
