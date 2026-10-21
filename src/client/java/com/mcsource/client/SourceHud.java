@@ -208,7 +208,12 @@ public final class SourceHud {
 
 	/** A dark translucent box with rounded corners, like Source's HUD panels. */
 	private static void panel(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int color) {
-		int radius = Math.max(2, Math.min(height, width) / 6);
+		panel(graphics, x, y, width, height, color, Math.max(2, Math.min(height, width) / 6));
+	}
+
+	/** A Half-Life 2 panel: a filled box with rounded corners of {@code radius} GUI pixels. */
+	public static void panel(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int color, int radius) {
+		radius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
 		for (int row = 0; row < radius; row++) {
 			// Inset of this row of the corner, from the circle through the corner.
 			float d = radius - row - 0.5F;
