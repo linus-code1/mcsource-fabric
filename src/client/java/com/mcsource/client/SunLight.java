@@ -90,9 +90,38 @@ public final class SunLight {
 	 */
 	public static int multiplier(BlockAndTintGetter level, float x, float y, float z, float nx, float ny, float nz, float sky,
 			float block) {
+		int soul = soulTint(level, x, y, z, nx, ny, nz, block);
 		if (sky <= 0.0F) {
+			return soul;
+		}
+		return ARGB.multiply(daylight(level, x, y, z, nx, ny, nz, sky, block), soul);
+	}
+
+	/** Soul fire's light is blue-green, not the warm orange of other lamps. */
+	private static final float[] SOUL = {0.32F, 0.78F, 1.0F};
+
+	/**
+	 * Colour multiplier for lamp light from soul fire: the lightmap colours
+	 * every lamp warm, so where soul fire gives most of the lamp light the
+	 * warm part is taken out again, by as much as the lamps light the point.
+	 */
+	private static int soulTint(BlockAndTintGetter level, float x, float y, float z, float nx, float ny, float nz, float block) {
+		if (block <= 0.05F) {
 			return -1;
 		}
+		float probe = 0.3F;
+		float soul = com.mcsource.client.light.SourceLight.soulAt(level, x + nx * probe, y + ny * probe, z + nz * probe);
+		if (soul <= 0.0F) {
+			return -1;
+		}
+		float lit = Mth.clamp(block / 15.0F, 0.0F, 1.0F);
+		float amount = soul * Mth.clamp(lit * 2.5F, 0.0F, 1.0F);
+		return ARGB.color(255, Math.round(255.0F * Mth.lerp(amount, 1.0F, SOUL[0])), Math.round(255.0F * Mth.lerp(amount, 1.0F, SOUL[1])),
+				Math.round(255.0F * Mth.lerp(amount, 1.0F, SOUL[2])));
+	}
+
+	private static int daylight(BlockAndTintGetter level, float x, float y, float z, float nx, float ny, float nz, float sky,
+			float block) {
 		// Wrapped lighting: surfaces turned partly away from the sun still catch
 		// some of it, the way bounced light softens Source's lightmaps.
 		float facing = (nx * SUN_X + ny * SUN_Y + nz * SUN_Z + WRAP) / (1.0F + WRAP);

@@ -19,7 +19,7 @@ import net.minecraft.world.item.Items;
  */
 public final class HeldLight {
 	/** Where the light is (the middle of the block at the player's hands) and how bright, or null when there is none. */
-	private record Source(int x, int y, int z, int level) {
+	private record Source(int x, int y, int z, int level, boolean soul) {
 	}
 
 	private static volatile Source current;
@@ -36,10 +36,19 @@ public final class HeldLight {
 		Player player = minecraft.player;
 		Source next = null;
 		if (level != null && player != null && !player.isSpectator()) {
-			int bright = Math.max(emission(player.getMainHandItem()), emission(player.getOffhandItem()));
+			int main = emission(player.getMainHandItem());
+			int off = emission(player.getOffhandItem());
+			int bright = Math.max(main, off);
 			if (bright > 0 && !player.isUnderWater()) {
+				boolean soul = soul(main >= off ? player.getMainHandItem() : player.getOffhandItem());
 				BlockPos at = BlockPos.containing(player.getX(), player.getY() + player.getEyeHeight() * 0.7, player.getZ());
-				next = new Source(at.getX(), at.getY(), at.getZ(), bright);
+				// On smoothed ground the hands can sit inside a block that is drawn
+				// lower than it is; light from inside it was cast in long false
+				// shadows across the ground. The light is moved up into the open.
+				for (int up = 0; up < 2 && level.getBlockState(at).canOcclude(); up++) {
+					at = at.above();
+				}
+				next = new Source(at.getX(), at.getY(), at.getZ(), bright, soul);
 			}
 		}
 		Source last = current;
@@ -79,10 +88,17 @@ public final class HeldLight {
 		return 0;
 	}
 
-	/** The held light as x, y, z and brightness (1 to 15), or null when nothing bright is held. */
+	private static boolean soul(ItemStack stack) {
+		return stack.getItem() instanceof BlockItem block && Emitters.isSoul(block.getBlock().defaultBlockState());
+	}
+
+	/**
+	 * The held light as x, y, z, brightness (1 to 15) and 1 for soul fire
+	 * (else 0), or null when nothing bright is held.
+	 */
 	public static int[] source() {
 		Source source = current;
-		return source == null ? null : new int[] {source.x(), source.y(), source.z(), source.level()};
+		return source == null ? null : new int[] {source.x(), source.y(), source.z(), source.level(), source.soul() ? 1 : 0};
 	}
 
 	/**

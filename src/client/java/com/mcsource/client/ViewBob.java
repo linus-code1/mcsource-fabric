@@ -9,22 +9,22 @@ import net.minecraft.util.Util;
 import net.minecraft.world.entity.Entity;
 
 /**
- * A walking view bob in the manner of Half-Life 2, in place of Minecraft's
- * figure-of-eight swing with its roll and nod: the view dips and rises
- * gently once for every footstep, sways a little to the side once for every
- * two, and hardly rolls at all. It grows smoothly with speed, from a faint
- * bob when sneaking to a fuller one when sprinting, and fades out in the
- * air and when standing still. The same bob carries the first-person hands,
- * so they move with the view.
+ * A walking bob in the manner of Half-Life 2, in place of Minecraft's. In
+ * Half-Life 2 the view itself does not bob at all; only the weapon in hand
+ * does, tracing a loose figure of eight: it dips once for every footstep and
+ * swings to the side once for every two. So this moves only the first-person
+ * hands. It grows smoothly with speed, from a faint bob when sneaking to a
+ * fuller one when sprinting, and fades out in the air and when standing
+ * still.
  */
 public final class ViewBob {
-	/** Rise and fall of the view at a sprint, peak to peak, in blocks. */
-	private static final float RISE = 0.045F;
-	/** Side to side sway at a sprint, each way, in blocks. */
-	private static final float SWAY = 0.018F;
-	/** Roll and nod at a sprint, in degrees. */
-	private static final float ROLL = 0.35F;
-	private static final float NOD = 0.3F;
+	/** Rise and fall of the hands at a sprint, peak to peak, in blocks. */
+	private static final float RISE = 0.05F;
+	/** Side to side swing of the hands at a sprint, each way, in blocks. */
+	private static final float SWAY = 0.03F;
+	/** Roll and nod of the hands at a sprint, in degrees. */
+	private static final float ROLL = 1.2F;
+	private static final float NOD = 0.8F;
 	/** Sprinting speed in blocks a tick, where the bob is full. */
 	private static final float SPRINT = 0.28F;
 	/** Minecraft's own bob value (smoothed walking speed) tops out here. */
@@ -39,7 +39,7 @@ public final class ViewBob {
 	}
 
 	/**
-	 * Applies the bob to the view (or hands) pose.
+	 * Applies the bob to the first-person hands' pose.
 	 *
 	 * @param walked the walked distance Minecraft bobs by, which advances one
 	 *        unit for each footstep
@@ -63,7 +63,7 @@ public final class ViewBob {
 			return;
 		}
 
-		// One side-to-side cycle every two steps; the view is lowest as each foot lands.
+		// One side-to-side cycle every two steps; the hands are lowest as each foot lands.
 		float phase = walked * Mth.PI;
 		float side = Mth.sin(phase);
 		float rise = 0.5F * Mth.cos(2.0F * phase);

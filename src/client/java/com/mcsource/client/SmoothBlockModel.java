@@ -473,7 +473,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 			Vector3fc normal = emitter.faceNormal();
 			for (int c = 0; c < 4; c++) {
-				int colour = sky == 0 ? -1 : SunLight.multiplier(level, pos.getX() + emitter.x(c), pos.getY() + emitter.y(c),
+				int colour = SunLight.multiplier(level, pos.getX() + emitter.x(c), pos.getY() + emitter.y(c),
 						pos.getZ() + emitter.z(c), normal.x(), normal.y(), normal.z(), sky, block);
 				emitter.color(c, colour);
 			}
@@ -790,8 +790,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		Vector3fc normal = quad.faceNormal();
 		Direction face = quad.lightFace();
 		int light = LightCoordsUtil.getLightCoords(level, quad.cullFace() == null && !touchesSide(quad, face) ? pos : pos.relative(face));
-		int sky = LightCoordsUtil.sky(light);
-		if (sky == 0) {
+		if (LightCoordsUtil.sky(light) == 0 && LightCoordsUtil.block(light) == 0) {
 			return;
 		}
 		for (int i = 0; i < 4; i++) {
@@ -1385,7 +1384,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		}
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
-			float lift = ROCK_LIFT * 0.5F;
+			float lift = TILING_LIFT;
 			emitter.pos(i, px[i] + normal[i * 3] * lift, py[i] + normal[i * 3 + 1] * lift, pz[i] + normal[i * 3 + 2] * lift);
 			float cx = Math.floorMod(pos.getX(), TILING_SPREAD) + Mth.clamp(px[i], 0.0F, 1.0F);
 			float cz = Math.floorMod(pos.getZ(), TILING_SPREAD) + Mth.clamp(pz[i], 0.0F, 1.0F);
@@ -1577,14 +1576,19 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 	private static final float GRASS_ROCK_FROM = 0.45F;
 	private static final float GRASS_ROCK_FULL = 0.8F;
 	/**
-	 * How far an overlay sits off the face beneath it, in blocks. Only just
-	 * off: the layers share the face's corners and its split, so their depths
-	 * agree, and the depth test (less or equal) lets the outer one win even
-	 * far away. Lifted further, a few dozen blocks off the lift fell below
-	 * the depth buffer's precision and the layers flashed through each other.
-	 * The lift only keeps them sorted in the right order.
+	 * How far each kind of overlay sits off the face beneath it, in blocks.
+	 * Every layer gets a height of its own, a step of {@link #LAYER} apart:
+	 * layers at the same height (or closer than the depth buffer can tell
+	 * apart) flashed through each other as the player moved, as the order
+	 * they were drawn in changed. A step of this size still tells them apart
+	 * near the edge of the view, and is too small to see as a gap.
 	 */
-	private static final float ROCK_LIFT = 0.0005F;
+	private static final float LAYER = 0.006F;
+	private static final float TILING_LIFT = LAYER;
+	private static final float GROUND_LIFT = LAYER * 2.0F;
+	private static final float ROCK_LIFT = LAYER * 3.0F;
+	private static final float VARIATION_LIFT = LAYER * 4.0F;
+	private static final float BLEND_LIFT = LAYER * 5.0F;
 
 	/**
 	 * Lays rock over one piece of a steep face, faded in by how steep the
@@ -1685,7 +1689,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		groundUv(ground, px, py, pz, u, v);
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
-			emitter.pos(i, px[i] + normal[i * 3] * ROCK_LIFT, py[i] + normal[i * 3 + 1] * ROCK_LIFT, pz[i] + normal[i * 3 + 2] * ROCK_LIFT);
+			emitter.pos(i, px[i] + normal[i * 3] * GROUND_LIFT, py[i] + normal[i * 3 + 1] * GROUND_LIFT, pz[i] + normal[i * 3 + 2] * GROUND_LIFT);
 			emitter.uv(i, u[i], v[i]);
 			int c = ground.colour(colour[i]);
 			emitter.color(i, ARGB.color(Math.round(alpha[i] * 255.0F), ARGB.red(c), ARGB.green(c), ARGB.blue(c)));
@@ -1761,7 +1765,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 		float[] u = new float[4];
 		float[] v = new float[4];
 		rockUv(rock, pos, px, py, pz, normal, u, v, 1);
-		float lift = ROCK_LIFT * 1.5F;
+		float lift = VARIATION_LIFT;
 		emitter.clear();
 		for (int i = 0; i < 4; i++) {
 			emitter.pos(i, px[i] + normal[i * 3] * lift, py[i] + normal[i * 3 + 1] * lift, pz[i] + normal[i * 3 + 2] * lift);
@@ -1811,7 +1815,7 @@ public final class SmoothBlockModel extends WrapperBlockStateModel {
 			}
 			emitter.clear();
 			for (int i = 0; i < 4; i++) {
-				emitter.pos(i, px[i], py[i] + ROCK_LIFT, pz[i]);
+				emitter.pos(i, px[i], py[i] + BLEND_LIFT, pz[i]);
 				float[] uv = uvAt(px[i], pz[i]);
 				emitter.uv(i, uv[0], uv[1]);
 				int c = ARGB.multiply(colour[i], tint);

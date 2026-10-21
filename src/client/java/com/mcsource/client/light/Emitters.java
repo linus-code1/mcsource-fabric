@@ -19,7 +19,8 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 public final class Emitters {
 	/**
 	 * Section position to its lamps, each packed as x | y << 4 | z << 8 |
-	 * emission << 12 (positions inside the section). Arrays are never changed
+	 * emission << 12 | soul << 16 (positions inside the section; soul is 1
+	 * for the blue flames of soul fire, soul torches and soul lanterns). Arrays are never changed
 	 * once stored, so chunk-building threads can read them freely.
 	 */
 	private static final ConcurrentHashMap<Long, int[]> SECTIONS = new ConcurrentHashMap<>();
@@ -60,12 +61,13 @@ public final class Emitters {
 		for (int y = 0; y < 16; y++) {
 			for (int z = 0; z < 16; z++) {
 				for (int x = 0; x < 16; x++) {
-					int emission = section.getBlockState(x, y, z).getLightEmission();
+					BlockState state = section.getBlockState(x, y, z);
+					int emission = state.getLightEmission();
 					if (emission > 0) {
 						if (count == found.length) {
 							found = java.util.Arrays.copyOf(found, count * 2);
 						}
-						found[count++] = x | y << 4 | z << 8 | emission << 12;
+						found[count++] = x | y << 4 | z << 8 | emission << 12 | (isSoul(state) ? 1 << 16 : 0);
 					}
 				}
 			}
@@ -100,9 +102,16 @@ public final class Emitters {
 		SourceLight.forget();
 	}
 
-	/** Receives one lamp: the middle of its block, and how much light it gives (1 to 15). */
+	/** Whether a lamp burns with blue soul fire. */
+	public static boolean isSoul(BlockState state) {
+		return state.is(net.minecraft.world.level.block.Blocks.SOUL_TORCH) || state.is(net.minecraft.world.level.block.Blocks.SOUL_WALL_TORCH)
+				|| state.is(net.minecraft.world.level.block.Blocks.SOUL_LANTERN) || state.is(net.minecraft.world.level.block.Blocks.SOUL_FIRE)
+				|| state.is(net.minecraft.world.level.block.Blocks.SOUL_CAMPFIRE);
+	}
+
+	/** Receives one lamp: the middle of its block, how much light it gives (1 to 15), and whether it is soul fire. */
 	public interface Visitor {
-		void lamp(int x, int y, int z, int emission);
+		void lamp(int x, int y, int z, int emission, boolean soul);
 	}
 
 	/** Every lamp within {@code reach} blocks (as a cube) of a block. */
@@ -125,7 +134,7 @@ public final class Emitters {
 						int ly = (sy << 4) + (lamp >> 4 & 15);
 						int lz = (sz << 4) + (lamp >> 8 & 15);
 						if (Math.abs(lx - x) <= reach && Math.abs(ly - y) <= reach && Math.abs(lz - z) <= reach) {
-							visitor.lamp(lx, ly, lz, lamp >> 12 & 15);
+							visitor.lamp(lx, ly, lz, lamp >> 12 & 15, (lamp >> 16 & 1) != 0);
 						}
 					}
 				}

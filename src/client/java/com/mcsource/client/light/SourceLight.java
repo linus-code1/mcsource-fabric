@@ -306,7 +306,7 @@ public final class SourceLight {
 		float[] sum = {0.0F};
 		int[] seen = {0};
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		Emitters.around(pos.getX(), pos.getY(), pos.getZ(), 15, (x, y, z, emission) -> {
+		Emitters.around(pos.getX(), pos.getY(), pos.getZ(), 15, (x, y, z, emission, soul) -> {
 			if (seen[0]++ >= MAX_LAMPS) {
 				return;
 			}
@@ -331,6 +331,22 @@ public final class SourceLight {
 		if (OFF) {
 			return -1.0F;
 		}
+		return Float.intBitsToFloat((int) point(level, px, py, pz));
+	}
+
+	/**
+	 * How much of the lamp light at a point (as for {@link #lampsAt}) comes
+	 * from blue soul fire, 0 to 1.
+	 */
+	public static float soulAt(BlockAndLightGetter level, float px, float py, float pz) {
+		if (OFF) {
+			return 0.0F;
+		}
+		return Float.intBitsToFloat((int) (point(level, px, py, pz) >>> 32));
+	}
+
+	/** Lamp light at a point and its soul share, as two float bit patterns (low, high). */
+	private static long point(BlockAndLightGetter level, float px, float py, float pz) {
 		PointCache cache = POINT_CACHE.get();
 		if (cache.level != level || cache.generation != generation) {
 			cache.level = level;
@@ -339,11 +355,11 @@ public final class SourceLight {
 		}
 		long key = ((long) Math.round(px * 16.0F) & 0x3FFFFFL) << 42 | ((long) Math.round(py * 16.0F) & 0xFFFFFL) << 22
 				| (long) Math.round(pz * 16.0F) & 0x3FFFFFL;
-		float known = cache.values.get(key);
-		if (known >= 0.0F) {
+		long known = cache.values.get(key);
+		if (known != Long.MIN_VALUE) {
 			return known;
 		}
-		float value = lampsAtUncached(level, px, py, pz);
+		long value = lampsAtUncached(level, px, py, pz);
 		cache.values.put(key, value);
 		return value;
 	}
@@ -351,32 +367,44 @@ public final class SourceLight {
 	private static final class PointCache {
 		Object level;
 		int generation;
-		final it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap values = new it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap();
+		final Long2LongOpenHashMap values = new Long2LongOpenHashMap();
 
 		PointCache() {
-			values.defaultReturnValue(-1.0F);
+			values.defaultReturnValue(Long.MIN_VALUE);
 		}
 	}
 
 	private static final ThreadLocal<PointCache> POINT_CACHE = ThreadLocal.withInitial(PointCache::new);
 
-	private static float lampsAtUncached(BlockAndLightGetter level, float px, float py, float pz) {
-		float[] sum = {0.0F};
+	private static long lampsAtUncached(BlockAndLightGetter level, float px, float py, float pz) {
+		float[] sum = {0.0F, 0.0F};
 		int[] seen = {0};
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		Emitters.around(Mth.floor(px), Mth.floor(py), Mth.floor(pz), 15, (x, y, z, emission) -> {
+		Emitters.around(Mth.floor(px), Mth.floor(py), Mth.floor(pz), 15, (x, y, z, emission, soul) -> {
 			if (seen[0]++ >= MAX_LAMPS) {
 				return;
 			}
-			sum[0] += lamp(level, cursor, px, py, pz, x, y, z, emission);
+			float one = lamp(level, cursor, px, py, pz, x, y, z, emission);
+			sum[0] += one;
+			if (soul) {
+				sum[1] += one;
+			}
 		});
 		int[] held = HeldLight.source();
 		if (held != null) {
-			sum[0] += lamp(level, cursor, px, py, pz, held[0], held[1], held[2], held[3]);
+			float one = lamp(level, cursor, px, py, pz, held[0], held[1], held[2], held[3]);
+			sum[0] += one;
+			if (held[4] != 0) {
+				sum[1] += one;
+			}
 		}
 		float flooded = flood(level, cursor, px, py, pz) / 15.0F;
 		float bounced = LAMP_BOUNCE * flooded * flooded;
-		return Mth.clamp(sum[0] + bounced * Math.max(0.0F, 1.0F - sum[0]), 0.0F, 1.0F);
+		float lamps = Mth.clamp(sum[0] + bounced * Math.max(0.0F, 1.0F - sum[0]), 0.0F, 1.0F);
+		// Flooded light that bounced round from a soul lamp is not told apart:
+		// it takes the share of the lamps seen directly.
+		float soul = sum[0] > 1.0E-4F ? Mth.clamp(sum[1] / sum[0], 0.0F, 1.0F) : 0.0F;
+		return (Float.floatToRawIntBits(lamps) & 0xFFFFFFFFL) | (long) Float.floatToRawIntBits(soul) << 32;
 	}
 
 	/** Minecraft's block light blended between the open blocks round a point. */
@@ -441,6 +469,13 @@ public final class SourceLight {
 			cursor.set(x, y, z);
 			BlockState state = level.getBlockState(cursor);
 			if (state.canOcclude() && !state.is(BlockTags.LEAVES)) {
+				// Smoothed ground is drawn up to half a block lower than its
+				// block: light skimming over the top half of it is not stopped,
+				// or the ground cast long false shadows across itself.
+				float fy = oy + ry * t - y;
+				if (state.is(com.mcsource.terrain.SmoothTerrain.SMOOTH) && fy >= 0.5F) {
+					continue;
+				}
 				return true;
 			}
 		}
