@@ -462,6 +462,17 @@ public final class SourceLight {
 		return strength;
 	}
 
+	/** Whether a block can be read: always, except outside the sections copied for a chunk build. */
+	private static boolean readable(BlockAndLightGetter level, int x, int y, int z) {
+		if (!(level instanceof com.mcsource.client.mixin.RenderSectionRegionAccessor region)) {
+			return true;
+		}
+		int sx = (x >> 4) - region.mcsource$minSectionX();
+		int sy = (y >> 4) - region.mcsource$minSectionY();
+		int sz = (z >> 4) - region.mcsource$minSectionZ();
+		return sx >= 0 && sx < 3 && sy >= 0 && sy < 3 && sz >= 0 && sz < 3;
+	}
+
 	/** Whether a wall stands between a point and a lamp. */
 	private static boolean blocked(BlockAndLightGetter level, BlockPos.MutableBlockPos cursor, float ox, float oy, float oz, float rx, float ry,
 			float rz, float distance, int lx, int ly, int lz) {
@@ -474,6 +485,12 @@ public final class SourceLight {
 			int z = Mth.floor(oz + rz * t);
 			if ((x == sx && y == sy && z == sz) || (x == lx && y == ly && z == lz)) {
 				continue;
+			}
+			// While chunks are built only the blocks round the one being built
+			// can be read; walls further along the ray than that are not
+			// looked for (the light there is faint anyway).
+			if (!readable(level, x, y, z)) {
+				break;
 			}
 			cursor.set(x, y, z);
 			BlockState state = level.getBlockState(cursor);

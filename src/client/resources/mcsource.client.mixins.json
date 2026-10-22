@@ -28,6 +28,7 @@
 		"MusicManagerMixin",
 		"PackRepositoryMixin",
 		"PauseScreenMixin",
+		"RenderSectionRegionAccessor",
 		"PlayerBodyMixin",
 		"PlayerTabOverlayMixin",
 		"PropCullMixin",
