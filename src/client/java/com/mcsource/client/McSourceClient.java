@@ -54,6 +54,8 @@ public class McSourceClient implements ClientModInitializer {
 		finder.start();
 		// Smoothed ground has no block outline, as in Source; its stepped
 		// collision columns would otherwise show as little stairs.
+		net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
+				.register(com.mcsource.client.map.MapRenderer::tick);
 		LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, outline) -> {
 			Minecraft minecraft = Minecraft.getInstance();
 			return minecraft.level == null || !minecraft.level.getBlockState(outline.pos()).is(SmoothTerrain.SMOOTH)

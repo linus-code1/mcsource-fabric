@@ -135,9 +135,12 @@ public final class MapRenderer {
 		return generator(clientLevel) != null;
 	}
 
-	/** Draws the map into the pass the solid blocks are drawn in. */
-	public static void draw(RenderPass pass) {
-		Minecraft minecraft = Minecraft.getInstance();
+	/**
+	 * Starts reading the map when a map world is entered, and puts it on the
+	 * graphics card once read. Runs each client tick, outside any render pass,
+	 * since textures can't be written while one is open.
+	 */
+	public static void tick(Minecraft minecraft) {
 		ClientLevel current = minecraft.level;
 		if (current != level) {
 			clear();
@@ -145,6 +148,7 @@ public final class MapRenderer {
 			Hl2MapGenerator map = generator(current);
 			if (map != null) {
 				mapName = map.map();
+				tell(minecraft, "Reading map " + mapName + "\u2026");
 				building = CompletableFuture.supplyAsync(() -> {
 					MapVoxels voxels = map.voxels();
 					if (voxels == null) {
@@ -163,12 +167,35 @@ public final class MapRenderer {
 			building = null;
 			try {
 				MapScene scene = done.join();
-				if (scene != null) {
+				if (scene == null) {
+					tell(minecraft, "Could not read map " + mapName + ": its file is missing");
+				} else {
 					upload(scene);
+					tell(minecraft, "Drawing map " + mapName + ": " + scene.faces + " faces, " + scene.props + " props");
 				}
-			} catch (RuntimeException e) {
+			} catch (Throwable e) {
+				clear();
+				level = current;
 				LOGGER.error("Could not read map {} to draw", mapName, e);
+				Throwable cause = e.getCause() != null ? e.getCause() : e;
+				tell(minecraft, "Could not draw map " + mapName + ": " + cause);
 			}
+		}
+	}
+
+	private static void tell(Minecraft minecraft, String message) {
+		if (minecraft.player != null) {
+			minecraft.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(message));
+		} else {
+			LOGGER.info(message);
+		}
+	}
+
+	/** Draws the map into the pass the solid blocks are drawn in. */
+	public static void draw(RenderPass pass) {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (minecraft.level != level) {
+			return;
 		}
 		if (BATCHES.isEmpty() || lightmapView == null) {
 			return;

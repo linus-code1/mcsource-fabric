@@ -48,7 +48,7 @@ public final class LodRenderer {
 			.build();
 
 	/** The mesh is rebuilt when the player has moved this far, in blocks. */
-	private static final int SNAP = 64;
+	static final int SNAP = 64;
 	/** At most this often for chunks loading and unloading, in milliseconds. */
 	private static final long REBUILD_DELAY = 1500;
 
@@ -107,8 +107,13 @@ public final class LodRenderer {
 		Vector3f offset = new Vector3f((float) (originX - camera.x), (float) -camera.y, (float) (originZ - camera.z));
 		// Night and storms darken distant land as they do the sky light on the blocks.
 		float daylight = Math.max(0.1F, 1.0F - level.getSkyDarken() / 12.5F);
+		// The texture matrix's first entry carries how far out the real chunks
+		// are drawn all round: distant terrain is cut away inside that circle,
+		// following the camera exactly, so it neither covers the world nor
+		// leaves a gap where the chunks end.
+		Matrix4f cut = new Matrix4f().m00(innerRadius(minecraft.options.getEffectiveRenderDistance()));
 		GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().writeTransform(RenderSystem.getModelViewMatrixCopy(),
-				new Vector4f(daylight, daylight, daylight * 1.04F, 1.0F), offset, new Matrix4f());
+				new Vector4f(daylight, daylight, daylight * 1.04F, 1.0F), offset, cut);
 		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
 		GpuBuffer indexBuffer = indices.getBuffer(quads * 6);
 		pass.pushDebugGroup(() -> "Distant terrain");
@@ -118,6 +123,15 @@ public final class LodRenderer {
 		pass.setIndexBuffer(indexBuffer, indices.type());
 		pass.drawIndexed(quads * 6, 1, 0, 0, 0);
 		pass.popDebugGroup();
+	}
+
+	/**
+	 * How far from the camera, across the ground, the real chunks are surely
+	 * drawn: a chunk and a half inside the render distance, so the two
+	 * overlap a little rather than leave sky showing between them.
+	 */
+	static float innerRadius(int renderDistanceChunks) {
+		return Math.max(0.0F, (renderDistanceChunks - 1.5F) * 16.0F);
 	}
 
 	/** Uploads a finished mesh, if one is ready. */

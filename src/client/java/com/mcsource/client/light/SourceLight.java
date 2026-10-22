@@ -41,9 +41,17 @@ public final class SourceLight {
 	private static final float LEAF_PASS = 0.55F;
 	private static final float WATER_PASS = 0.8F;
 	/** How fast lamp light falls off: 1 / (1 + FALLOFF * distance squared). */
-	private static final float FALLOFF = 0.03F;
+	private static final float FALLOFF = 0.045F;
+	/**
+	 * How much further than its Minecraft light level a lamp's light carries,
+	 * fading to nothing, so pools of light trail off instead of ending in a
+	 * hard ring.
+	 */
+	private static final float TAIL = 7.0F;
+	/** The furthest any lamp's light reaches. */
+	private static final int LAMP_REACH = 15 + (int) TAIL;
 	/** Share of Minecraft's flooded lamp light kept as light bounced round corners. */
-	private static final float LAMP_BOUNCE = 0.3F;
+	private static final float LAMP_BOUNCE = 0.4F;
 	private static final int MAX_LAMPS = 24;
 
 	private static final ThreadLocal<Cache> REGION_CACHE = ThreadLocal.withInitial(Cache::new);
@@ -306,7 +314,7 @@ public final class SourceLight {
 		float[] sum = {0.0F};
 		int[] seen = {0};
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		Emitters.around(pos.getX(), pos.getY(), pos.getZ(), 15, (x, y, z, emission, soul) -> {
+		Emitters.around(pos.getX(), pos.getY(), pos.getZ(), LAMP_REACH, (x, y, z, emission, soul) -> {
 			if (seen[0]++ >= MAX_LAMPS) {
 				return;
 			}
@@ -380,7 +388,7 @@ public final class SourceLight {
 		float[] sum = {0.0F, 0.0F};
 		int[] seen = {0};
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		Emitters.around(Mth.floor(px), Mth.floor(py), Mth.floor(pz), 15, (x, y, z, emission, soul) -> {
+		Emitters.around(Mth.floor(px), Mth.floor(py), Mth.floor(pz), LAMP_REACH, (x, y, z, emission, soul) -> {
 			if (seen[0]++ >= MAX_LAMPS) {
 				return;
 			}
@@ -441,12 +449,13 @@ public final class SourceLight {
 		float dy = y + 0.5F - oy;
 		float dz = z + 0.5F - oz;
 		float distance = Mth.sqrt(dx * dx + dy * dy + dz * dz);
-		float reach = emission + 1.0F;
+		float reach = emission + TAIL;
 		if (distance >= reach) {
 			return 0.0F;
 		}
+		// A smooth window: flat near the lamp, easing to zero at the reach.
 		float edge = 1.0F - distance * distance / (reach * reach);
-		float strength = emission / 15.0F * edge * edge / (1.0F + FALLOFF * distance * distance);
+		float strength = (0.35F + 0.65F * emission / 15.0F) * edge * edge / (1.0F + FALLOFF * 15.0F / Math.max(emission, 1) * distance * distance);
 		if (distance > 1.0F && blocked(level, cursor, ox, oy, oz, dx / distance, dy / distance, dz / distance, distance, x, y, z)) {
 			return 0.0F;
 		}

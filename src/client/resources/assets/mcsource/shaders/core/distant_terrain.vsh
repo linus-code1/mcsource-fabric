@@ -15,6 +15,7 @@ layout(location = 1) in vec4 Color;
 layout(location = 0) out float sphericalVertexDistance;
 layout(location = 1) out float cylindricalVertexDistance;
 layout(location = 2) out vec4 vertexColor;
+layout(location = 3) out vec2 groundOffset;
 
 void main() {
     vec3 pos = Position + ModelOffset;
@@ -23,4 +24,5 @@ void main() {
     sphericalVertexDistance = fog_spherical_distance(pos);
     cylindricalVertexDistance = fog_cylindrical_distance(pos);
     vertexColor = Color;
+    groundOffset = pos.xz;
 }

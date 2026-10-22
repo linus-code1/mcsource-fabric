@@ -44,6 +44,7 @@ const float SKY_FILL_STRENGTH = 0.7;
 // Overall daylight level, scaled so open ground in full sun lands just under
 // white after the soft clip.
 const float DAYLIGHT = 0.9;
+const vec3 MOONLIGHT = vec3(0.045, 0.06, 0.1);
 
 
 // Keeps colours linear up to the knee and rolls brighter light off smoothly
@@ -75,10 +76,15 @@ void main() {
     // Daylight in proportion to how much sky is seen (and bounced in).
     vec3 daylight = (SKY_FILL_COLOR * SKY_FILL_STRENGTH + SUN_COLOR * SUN_STRENGTH) * DAYLIGHT * skyLevel;
     color += lightmapInfo.SkyLightColor * daylight * lightmapInfo.SkyFactor;
+    // Moonlight: a faint cool fill under open sky at night, so the outdoors
+    // keeps its shapes between the lamps.
+    color += MOONLIGHT * skyLevel * clamp(1.0 - lightmapInfo.SkyFactor, 0.0, 1.0);
 
     // Lamps: whiter near the flame. The dimension's block light tint still
     // nudges the colour (the Nether stays redder).
-    float lamp = blockLevel;
+    // Lifted a little at the low end, so the faint edge of a lamp's light
+    // still reads instead of dropping straight to black.
+    float lamp = pow(blockLevel, 0.8);
     vec3 tint = lightmapInfo.BlockLightTint / max(max(max(lightmapInfo.BlockLightTint.r, lightmapInfo.BlockLightTint.g), lightmapInfo.BlockLightTint.b), 0.001);
     vec3 lampColor = mix(LAMP_EDGE, LAMP_HOT, lamp) * mix(vec3(1.0), tint, 0.35);
     color += lampColor * lamp * LAMP_INTENSITY * lightmapInfo.BlockFactor;

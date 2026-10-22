@@ -58,6 +58,9 @@ final class LodMesh {
 	private final int sea;
 	private Field field;
 
+	/** Cells over loaded chunks nearer the origin than this are covered by the real chunks and left out. */
+	private float cut;
+
 	private LodMesh(int originX, int originZ, int changes, @Nullable ServerLevel server) {
 		this.originX = originX;
 		this.originZ = originZ;
@@ -84,6 +87,8 @@ final class LodMesh {
 		if (mesh.server == null) {
 			mesh.field = Field.build(originX, originZ, mesh.sea);
 		}
+		// The camera may be up to a snap away from the origin before the mesh is rebuilt.
+		mesh.cut = LodRenderer.innerRadius(renderDistanceBlocks / 16) - LodRenderer.SNAP * 1.5F;
 		int[] radii = radii(renderDistanceBlocks);
 		int inner = 0;
 		for (int level = 0; level < STEPS.length; level++) {
@@ -139,7 +144,10 @@ final class LodMesh {
 				int x1 = x0 + step;
 				int z1 = z0 + step;
 				boolean insideInner = x0 >= originX - inner && x1 <= originX + inner && z0 >= originZ - inner && z1 <= originZ + inner;
-				drawn[i + j * n] = !insideInner && !loaded(x0, z0, step);
+				// Cells over loaded chunks are left out only well inside the
+				// circle the real chunks are drawn in; nearer its edge they are
+				// drawn and cut away exactly at the circle as they are drawn.
+				drawn[i + j * n] = !insideInner && !(loaded(x0, z0, step) && farthest(x0, z0, x1, z1) < cut);
 			}
 		}
 		for (int j = 0; j < n; j++) {
@@ -179,6 +187,13 @@ final class LodMesh {
 				}
 			}
 		}
+	}
+
+	/** The greatest distance across the ground from the mesh's origin to a cell's corners. */
+	private float farthest(int x0, int z0, int x1, int z1) {
+		float dx = Math.max(Math.abs(x0 - originX), Math.abs(x1 - originX));
+		float dz = Math.max(Math.abs(z0 - originZ), Math.abs(z1 - originZ));
+		return (float) Math.sqrt(dx * dx + dz * dz);
 	}
 
 	/** Whether the real blocks cover a cell: its chunk is loaded, or all of them for a big cell. */
