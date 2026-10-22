@@ -24,6 +24,7 @@ public final class Bsp {
 	public static final int CONTENTS_GRATE = 0x8;
 	public static final int CONTENTS_WATER = 0x20;
 	public static final int CONTENTS_SLIME = 0x10;
+	public static final int CONTENTS_PLAYERCLIP = 0x10000;
 
 	private static final int LUMP_ENTITIES = 0;
 	private static final int LUMP_PLANES = 1;
@@ -96,7 +97,13 @@ public final class Bsp {
 		readEntities();
 	}
 
-	private ByteBuffer lump(int index) {
+	/** The whole file. */
+	ByteBuffer whole() {
+		return data.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+	}
+
+	/** One lump of the file, by its number. */
+	ByteBuffer lump(int index) {
 		int offset = data.getInt(8 + index * 16);
 		int length = data.getInt(8 + index * 16 + 4);
 		ByteBuffer slice = data.slice(offset, length).order(ByteOrder.LITTLE_ENDIAN);
@@ -226,7 +233,7 @@ public final class Bsp {
 			float sz = infos.getFloat(o + 8);
 			int vertStart = infos.getInt(o + 12);
 			int power = infos.getInt(o + 20);
-			int face = Short.toUnsignedInt(infos.getShort(o + 40));
+			int face = Short.toUnsignedInt(infos.getShort(o + 36));
 			int f = face * 56;
 			if (f + 56 > faces.limit() || power < 1 || power > 4) {
 				continue;

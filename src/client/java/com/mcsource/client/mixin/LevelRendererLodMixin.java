@@ -20,5 +20,6 @@ public abstract class LevelRendererLodMixin {
 	private void mcsource$distantTerrain(ChunkSectionsToRender chunks, FeatureRenderDispatcher.PreparedFrame frame, RenderPass pass,
 			CallbackInfo ci) {
 		LodRenderer.draw(pass);
+		com.mcsource.client.map.MapRenderer.draw(pass);
 	}
 }

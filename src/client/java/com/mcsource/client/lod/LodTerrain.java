@@ -88,7 +88,7 @@ public final class LodTerrain {
 	/** Whether distant terrain is drawn in this level: open sky, no ceiling, not the End. */
 	public static boolean active(@Nullable ClientLevel clientLevel) {
 		return clientLevel != null && clientLevel.dimensionType().hasSkyLight() && !clientLevel.dimensionType().hasCeiling()
-				&& clientLevel.dimension() != Level.END;
+				&& clientLevel.dimension() != Level.END && !com.mcsource.client.map.MapRenderer.isMapWorld(clientLevel);
 	}
 
 	public static boolean active() {

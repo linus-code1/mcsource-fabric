@@ -7,6 +7,11 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -19,6 +24,12 @@ import com.mcsource.McSource;
 public final class Hl2Worlds {
 	/** Marks a player who has been put at the map's start once, so later joins leave them where they were. */
 	private static final String STARTED_TAG = "mcsource_map_start";
+	private static final ResourceKey<Block> MAP_SOLID_KEY = ResourceKey.create(Registries.BLOCK, McSource.id("map_solid"));
+	/** The unseen solid a map world is built of; the map itself is drawn over it. */
+	public static final Block MAP_SOLID = Registry.register(BuiltInRegistries.BLOCK, MAP_SOLID_KEY, new MapSolidBlock(
+			BlockBehaviour.Properties.of().setId(MAP_SOLID_KEY).strength(-1.0F, 3600000.0F).noLootTable().noOcclusion().noTerrainParticles()
+					.isSuffocating((state, level, pos) -> false).isRedstoneConductor((state, level, pos) -> false)
+					.pushReaction(PushReaction.IMMOVEABLE)));
 
 	private Hl2Worlds() {
 	}
@@ -41,7 +52,7 @@ public final class Hl2Worlds {
 			}
 			player.addTag(STARTED_TAG);
 			BlockPos spawn = map.spawn();
-			player.teleportTo(overworld, spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, Set.of(), map.spawnYaw(), 0.0F, true);
+			player.teleportTo(overworld, map.spawnX(), map.spawnFeet(), map.spawnZ(), Set.of(), map.spawnYaw(), 0.0F, true);
 		});
 	}
 }

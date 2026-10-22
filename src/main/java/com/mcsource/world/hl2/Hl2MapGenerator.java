@@ -124,6 +124,22 @@ public class Hl2MapGenerator extends ChunkGenerator {
 		return new BlockPos(voxels.spawnX, MapVoxels.BASE_Y + voxels.spawnY, voxels.spawnZ);
 	}
 
+	/** Where a player's feet go at the start, exactly, in world blocks. */
+	public double spawnX() {
+		MapVoxels voxels = voxels();
+		return voxels == null ? 0.5 : voxels.spawnExactX;
+	}
+
+	public double spawnFeet() {
+		MapVoxels voxels = voxels();
+		return voxels == null ? 65.0 : MapVoxels.BASE_Y + voxels.spawnExactY;
+	}
+
+	public double spawnZ() {
+		MapVoxels voxels = voxels();
+		return voxels == null ? 0.5 : voxels.spawnExactZ;
+	}
+
 	public float spawnYaw() {
 		MapVoxels voxels = voxels();
 		return voxels == null ? 0.0F : voxels.spawnYaw;
