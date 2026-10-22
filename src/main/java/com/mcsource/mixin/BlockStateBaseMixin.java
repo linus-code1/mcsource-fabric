@@ -1,0 +1,118 @@
+package com.mcsource.mixin;
+
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
+
+import com.mcsource.terrain.SmoothMath;
+import com.mcsource.terrain.SmoothShapes;
+import com.mcsource.terrain.SmoothTerrain;
+
+/**
+ * Gives smoothed terrain the same shape for collision, the block outline and
+ * ray picking on both the client and the server.
+ */
+@Mixin(BlockBehaviour.BlockStateBase.class)
+public abstract class BlockStateBaseMixin {
+	@Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
+			at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothCollision(BlockGetter level, BlockPos pos, CollisionContext context, CallbackInfoReturnable<VoxelShape> cir) {
+		if (!mcsource$keepsOwnCollision()) {
+			mcsource$applySmoothShape(level, pos, cir);
+		}
+	}
+
+	@Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
+			at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothCachedCollision(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
+		if (!mcsource$keepsOwnCollision()) {
+			mcsource$applySmoothShape(level, pos, cir);
+		}
+	}
+
+	/**
+	 * Powder snow is drawn smoothed with the ground round it, but keeps its
+	 * own collision, so players still sink into it.
+	 */
+	private boolean mcsource$keepsOwnCollision() {
+		// On a server without the mod, everything collides as plain blocks; see ServerSupport.
+		return !com.mcsource.terrain.ServerSupport.smoothCollision()
+				|| ((BlockState) (Object) this).is(net.minecraft.world.level.block.Blocks.POWDER_SNOW);
+	}
+
+	@Inject(method = "getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
+			at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothOutline(BlockGetter level, BlockPos pos, CollisionContext context, CallbackInfoReturnable<VoxelShape> cir) {
+		mcsource$applySmoothShape(level, pos, cir);
+	}
+
+	/**
+	 * Raised ground reaches up to half a block into the space above it, so
+	 * collision checks must look at smoothed blocks next to an entity too.
+	 */
+	@Inject(method = "hasLargeCollisionShape()Z", at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothReachesOut(CallbackInfoReturnable<Boolean> cir) {
+		if (com.mcsource.terrain.ServerSupport.smoothCollision() && (((BlockState) (Object) this).is(SmoothTerrain.SMOOTH)
+				|| ((BlockState) (Object) this).is(net.minecraft.world.level.block.Blocks.SNOW))) {
+			cir.setReturnValue(true);
+		}
+	}
+
+	/**
+	 * Players are pushed out of any suffocating block their feet overlap. On a
+	 * slope the uphill block always overlaps a little, which shoved players
+	 * downhill, so surface terrain with a smoothed top doesn't count.
+	 */
+	@Inject(method = "isSuffocating(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z",
+			at = @At("HEAD"), cancellable = true)
+	private void mcsource$smoothNotSuffocating(BlockGetter level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+		if (com.mcsource.terrain.ServerSupport.smoothCollision()
+				&& SmoothTerrain.corners(level, pos, (BlockState) (Object) this) != SmoothMath.FULL) {
+			cir.setReturnValue(false);
+		}
+	}
+
+	private void mcsource$applySmoothShape(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
+		BlockState self = (BlockState) (Object) this;
+		if (self.is(net.minecraft.world.level.block.Blocks.SNOW)) {
+			mcsource$snowShape(level, pos, self, cir);
+			return;
+		}
+		int packed = SmoothTerrain.corners(level, pos, self);
+		if (packed != SmoothMath.FULL) {
+			cir.setReturnValue(SmoothShapes.shape(packed));
+		}
+	}
+
+	/**
+	 * Snow on smoothed ground lies on it as it is drawn: its top follows the
+	 * ground's corners, raised by the snow's depth, instead of standing as a
+	 * flat box from the bottom of its block.
+	 */
+	private void mcsource$snowShape(BlockGetter level, BlockPos pos, BlockState self, CallbackInfoReturnable<VoxelShape> cir) {
+		if (level == net.minecraft.world.level.EmptyBlockGetter.INSTANCE || level instanceof net.minecraft.server.level.WorldGenRegion) {
+			// The shape cache and world generation see no real neighbours.
+			return;
+		}
+		int ground = SmoothTerrain.groundCorners(level, pos);
+		if (ground == SmoothMath.FULL) {
+			return;
+		}
+		// Vanilla snow's collision is one layer lower than the snow drawn.
+		int depth = self.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS) - 1;
+		int packed = 0;
+		for (int i = 0; i < 4; i++) {
+			int top = Math.max(0, Math.min(15, SmoothMath.corner(ground, i) - 8 + depth));
+			packed |= top << (i * 4);
+		}
+		cir.setReturnValue(SmoothShapes.shape(packed));
+	}
+}

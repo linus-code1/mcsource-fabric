@@ -1,0 +1,83 @@
+{
+	"values": [
+		"minecraft:grass_block",
+		"minecraft:dirt",
+		"minecraft:coarse_dirt",
+		"minecraft:farmland",
+		"minecraft:dirt_path",
+		"minecraft:podzol",
+		"minecraft:mycelium",
+		"minecraft:rooted_dirt",
+		"minecraft:mud",
+		"minecraft:clay",
+		"minecraft:moss_block",
+		"minecraft:sand",
+		"minecraft:red_sand",
+		"minecraft:gravel",
+		"minecraft:sandstone",
+		"minecraft:red_sandstone",
+		"minecraft:terracotta",
+		"minecraft:white_terracotta",
+		"minecraft:orange_terracotta",
+		"minecraft:magenta_terracotta",
+		"minecraft:light_blue_terracotta",
+		"minecraft:yellow_terracotta",
+		"minecraft:lime_terracotta",
+		"minecraft:pink_terracotta",
+		"minecraft:gray_terracotta",
+		"minecraft:light_gray_terracotta",
+		"minecraft:cyan_terracotta",
+		"minecraft:purple_terracotta",
+		"minecraft:blue_terracotta",
+		"minecraft:brown_terracotta",
+		"minecraft:green_terracotta",
+		"minecraft:red_terracotta",
+		"minecraft:black_terracotta",
+		"minecraft:crimson_nylium",
+		"minecraft:warped_nylium",
+		"minecraft:snow_block",
+		"minecraft:powder_snow",
+		"minecraft:stone",
+		"minecraft:granite",
+		"minecraft:diorite",
+		"minecraft:andesite",
+		"minecraft:deepslate",
+		"minecraft:tuff",
+		"minecraft:calcite",
+		"minecraft:netherrack",
+		"minecraft:soul_soil",
+		"minecraft:end_stone",
+		{
+			"id": "#minecraft:coal_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:iron_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:copper_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:gold_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:redstone_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:lapis_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:diamond_ores",
+			"required": false
+		},
+		{
+			"id": "#minecraft:emerald_ores",
+			"required": false
+		}
+	]
+}

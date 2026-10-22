@@ -1,0 +1,143 @@
+package com.mcsource.mixin;
+
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
+
+import com.mcsource.movement.SourceMovement;
+
+/**
+ * Gives the player Source-style movement on land and in the air. Only the
+ * player's own client runs it; Minecraft lets that client decide where its
+ * player moves, so the server needs nothing extra.
+ */
+@Mixin(LivingEntity.class)
+public abstract class LivingEntityMixin {
+	@Shadow
+	protected boolean jumping;
+
+	@Shadow
+	protected abstract double getEffectiveGravity();
+
+	@Shadow
+	public abstract boolean onClimbable();
+
+	@Shadow
+	protected abstract float getJumpPower();
+
+	private boolean mcsource$usesSourceMovement() {
+		LivingEntity self = (LivingEntity) (Object) this;
+		// Off on a server without the mod, which checks movement by its own
+		// rules and pulls back a player who moves faster than they allow.
+		return com.mcsource.terrain.ServerSupport.smoothCollision() && self instanceof Player player && player.isLocalPlayer() && !player.getAbilities().flying && !player.isPassenger()
+				&& !self.shouldDiscardFriction() && !onClimbable() && !self.hasEffect(MobEffects.LEVITATION)
+				&& self.level().hasChunkAt(self.blockPosition());
+	}
+
+	@Inject(method = "travelInAir(Lnet/minecraft/world/phys/Vec3;)V", at = @At("HEAD"), cancellable = true)
+	private void mcsource$sourceTravel(Vec3 input, CallbackInfo ci) {
+		if (!mcsource$usesSourceMovement()) {
+			return;
+		}
+		LivingEntity self = (LivingEntity) (Object) this;
+		Vec3 motion = self.getDeltaMovement();
+
+		// Wished direction from the movement keys, turned by where the player looks.
+		double wishX = 0.0;
+		double wishZ = 0.0;
+		double inputLength = Math.hypot(input.x, input.z);
+		if (inputLength > 1.0E-4) {
+			float sin = Mth.sin(self.getYRot() * Mth.DEG_TO_RAD);
+			float cos = Mth.cos(self.getYRot() * Mth.DEG_TO_RAD);
+			wishX = (input.x * cos - input.z * sin) / inputLength;
+			wishZ = (input.z * cos + input.x * sin) / inputLength;
+		}
+		// Keys give 0.98 at full press; sneaking and using items scale it down.
+		double press = Math.min(inputLength / 0.98, 1.0);
+		double speedScale = self.getAttributeValue(Attributes.MOVEMENT_SPEED) / 0.1;
+		double topSpeed = self.isSprinting() ? SourceMovement.SPRINT_SPEED / 1.3 : SourceMovement.RUN_SPEED;
+		double wishSpeed = press * topSpeed * speedScale;
+
+		boolean grounded = self.onGround() && !(jumping && motion.y > 0.0);
+		double surface = 1.0;
+		if (grounded) {
+			BlockPos below = self.getBlockPosBelowThatAffectsMyMovement();
+			float slip = self.level().getBlockState(below).getBlock().getFriction();
+			// Normal blocks have 0.6; ice 0.98 grips about twenty times less.
+			surface = Mth.clamp((1.0 - slip) / 0.4, 0.02, 1.0);
+		}
+
+		// Run the Source step several times per tick at Source-like rates and
+		// move by the distance covered over all of them.
+		double gravity = SourceMovement.GRAVITY * getEffectiveGravity() / 0.08;
+		double dt = 0.05 / SourceMovement.SUBSTEPS;
+		double[] velocity = {motion.x * 20.0, motion.z * 20.0};
+		double vertical = motion.y * 20.0;
+		double dx = 0.0;
+		double dy = 0.0;
+		double dz = 0.0;
+		for (int i = 0; i < SourceMovement.SUBSTEPS; i++) {
+			SourceMovement.step(velocity, wishX, wishZ, wishSpeed, grounded, surface, dt);
+			// Half the gravity before moving and half after, as Source does.
+			double before = vertical;
+			vertical = Math.max(vertical - gravity * dt, -SourceMovement.MAX_FALL_SPEED);
+			dx += velocity[0] * dt;
+			dy += (before + vertical) * 0.5 * dt;
+			dz += velocity[1] * dt;
+		}
+		// Set the end velocity first: moving zeroes the parts that hit something.
+		self.setDeltaMovement(velocity[0] / 20.0, vertical / 20.0, velocity[1] / 20.0);
+		// Move in short pieces. Smoothed ground collides as columns an eighth of
+		// a block wide; Minecraft steps up onto only one ledge per move and stops
+		// the rest of the motion dead, so a long move up a slope would stall.
+		int pieces = Math.max(1, Mth.ceil(Math.sqrt(dx * dx + dz * dz) / SourceMovement.MAX_MOVE_PIECE));
+		Vec3 piece = new Vec3(dx / pieces, dy / pieces, dz / pieces);
+		for (int i = 0; i < pieces; i++) {
+			self.move(MoverType.SELF, piece);
+		}
+
+		// Stay on the ground when walking down slopes and steps, as Source
+		// does, instead of falling a little off every step.
+		if (grounded && !self.onGround() && !jumping && self.getDeltaMovement().y <= 0.0) {
+			Vec3 snap = new Vec3(0.0, -SourceMovement.STEP_DOWN, 0.0);
+			com.mcsource.world.hl2.MapCollision map = com.mcsource.world.hl2.MapCollision.of(self.level());
+			if (!self.level().noCollision(self, self.getBoundingBox().move(snap)) || map != null && map.blocked(self.getBoundingBox().move(snap))) {
+				self.move(MoverType.SELF, snap);
+				Vec3 after = self.getDeltaMovement();
+				self.setDeltaMovement(after.x, 0.0, after.z);
+			}
+		}
+		ci.cancel();
+	}
+
+	/** Source jump: a fixed upward speed, scaled by jump boost. */
+	@Inject(method = "jumpFromGround()V", at = @At("TAIL"))
+	private void mcsource$sourceJump(CallbackInfo ci) {
+		if (!mcsource$usesSourceMovement()) {
+			return;
+		}
+		LivingEntity self = (LivingEntity) (Object) this;
+		double gravity = SourceMovement.GRAVITY * getEffectiveGravity() / 0.08;
+		double boost = getJumpPower() / LivingEntity.BASE_JUMP_POWER;
+		Vec3 motion = self.getDeltaMovement();
+		self.setDeltaMovement(motion.x, SourceMovement.jumpSpeed(gravity) * boost / 20.0, motion.z);
+	}
+
+	/** No free speed boost for jumping while sprinting; speed comes from strafing instead. */
+	@Redirect(method = "jumpFromGround()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;isSprinting()Z"))
+	private boolean mcsource$noSprintJumpBoost(LivingEntity self) {
+		return self.isSprinting() && !mcsource$usesSourceMovement();
+	}
+}

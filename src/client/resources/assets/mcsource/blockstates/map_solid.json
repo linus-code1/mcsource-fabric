@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "layers=1": {
+      "model": "minecraft:block/air"
+    },
+    "layers=2": {
+      "model": "minecraft:block/air"
+    },
+    "layers=3": {
+      "model": "minecraft:block/air"
+    },
+    "layers=4": {
+      "model": "minecraft:block/air"
+    },
+    "layers=5": {
+      "model": "minecraft:block/air"
+    },
+    "layers=6": {
+      "model": "minecraft:block/air"
+    },
+    "layers=7": {
+      "model": "minecraft:block/air"
+    },
+    "layers=8": {
+      "model": "minecraft:block/air"
+    }
+  }
+}

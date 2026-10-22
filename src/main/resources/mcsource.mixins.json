@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "com.mcsource.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"BlockStateBaseMixin",
+		"EntityMapCollisionMixin",
+		"LivingEntityMixin",
+		"TreeFeatureMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

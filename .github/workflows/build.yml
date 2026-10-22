@@ -1,0 +1,42 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x ./gradlew
+      - run: ./gradlew build --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcsource-mod
+          # Only the mod itself: the sources jar has no classes and crashes
+          # the game if it ends up in the mods folder.
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+      - name: Server smoke test on the test world
+        run: |
+          mkdir -p run
+          echo "eula=true" > run/eula.txt
+          printf 'level-type=mcsource\\:test_hills\nonline-mode=false\n' > run/server.properties
+          ./gradlew runServer --console=plain > server.log 2>&1 &
+          for i in $(seq 1 120); do
+            if grep -q 'Done (' server.log; then break; fi
+            if ! kill -0 $! 2>/dev/null; then break; fi
+            sleep 5
+          done
+          kill $! 2>/dev/null || true
+          tail -n 60 server.log
+          grep -q 'MC:Source loaded' server.log
+          grep -q 'Done (' server.log

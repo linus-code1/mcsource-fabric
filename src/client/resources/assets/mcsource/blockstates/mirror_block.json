@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "mcsource:block/mirror_block"
+    }
+  }
+}

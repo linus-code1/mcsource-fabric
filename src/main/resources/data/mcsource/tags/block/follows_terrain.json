@@ -1,0 +1,27 @@
+{
+	"values": [
+		"#minecraft:small_flowers",
+		"#minecraft:saplings",
+		"minecraft:short_grass",
+		"minecraft:tall_grass",
+		"minecraft:fern",
+		"minecraft:large_fern",
+		"minecraft:dead_bush",
+		"minecraft:bush",
+		"minecraft:firefly_bush",
+		"minecraft:short_dry_grass",
+		"minecraft:tall_dry_grass",
+		"minecraft:leaf_litter",
+		"minecraft:wildflowers",
+		"minecraft:pink_petals",
+		"minecraft:snow",
+		"#minecraft:crops",
+		"minecraft:seagrass",
+		"minecraft:tall_seagrass",
+		"minecraft:sweet_berry_bush",
+		"minecraft:brown_mushroom",
+		"minecraft:red_mushroom",
+		"minecraft:moss_carpet",
+		"minecraft:pale_moss_carpet"
+	]
+}
