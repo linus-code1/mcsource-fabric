@@ -26,6 +26,7 @@ public class McSource implements ModInitializer {
 		Karts.register();
 		Trees.register();
 		com.mcsource.terrain.ServerSupport.register();
+		com.mcsource.world.hl2.Hl2Worlds.register();
 		LOGGER.info("MC:Source loaded");
 	}
 }
