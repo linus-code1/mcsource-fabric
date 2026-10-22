@@ -20,7 +20,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mcsource-mod
-          path: build/libs/
+          # Only the mod itself: the sources jar has no classes and crashes
+          # the game if it ends up in the mods folder.
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
       - name: Server smoke test on the test world
         run: |
           mkdir -p run
