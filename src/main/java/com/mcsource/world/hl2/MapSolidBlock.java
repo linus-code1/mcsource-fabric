@@ -43,11 +43,22 @@ public class MapSolidBlock extends Block {
 
 	@Override
 	protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return Shapes.empty();
+		// Aimed at, so blocks can be placed against the map; its outline isn't drawn.
+		return SHAPES[state.getValue(LAYERS)];
 	}
 
 	@Override
 	protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+		// Things moving in a map world collide with the map's own solid
+		// instead (see MapCollision); the blocks stay solid for path finding,
+		// projectiles and anything else that asks.
+		if (context instanceof net.minecraft.world.phys.shapes.EntityCollisionContext entityContext) {
+			net.minecraft.world.entity.Entity entity = entityContext.getEntity();
+			if (entity != null && !(entity instanceof net.minecraft.world.entity.projectile.Projectile)
+					&& MapCollision.of(entity.level()) != null) {
+				return Shapes.empty();
+			}
+		}
 		return SHAPES[state.getValue(LAYERS)];
 	}
 

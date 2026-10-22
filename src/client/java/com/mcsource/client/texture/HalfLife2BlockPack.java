@@ -65,6 +65,11 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			""";
 	private static boolean built;
 
+	/** Builds the pack again on the next resource reload, as after the texture game is changed. */
+	public static void rebuild() {
+		built = false;
+	}
+
 	@Override
 	public void loadPacks(Consumer<Pack> output) {
 		Path root = FabricLoader.getInstance().getConfigDir().resolve("mcsource");
@@ -102,7 +107,9 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			list = USER_LIST;
 			Files.writeString(listFile, list, StandardCharsets.UTF_8);
 		}
-		Map<String, String[]> mapping = BlockTextures.parse(BlockTextures.DEFAULTS);
+		String game = GameInstalls.textureGame();
+		String defaults = BlockTextures.defaultsFor(game);
+		Map<String, String[]> mapping = BlockTextures.parse(defaults);
 		mapping.putAll(BlockTextures.parse(list));
 		Path soundFile = root.resolve("sounds.txt");
 		if (!Files.isRegularFile(soundFile)) {
@@ -111,7 +118,7 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		String soundList = Files.readString(soundFile, StandardCharsets.UTF_8);
 		boolean scary = GameInstalls.flag("scary_sun", false);
 		String props = com.mcsource.client.prop.PropModels.userList(root);
-		String stamp = VERSION + ":" + BlockTextures.DEFAULTS.hashCode() + ":" + list.hashCode() + ":" + scary + ":"
+		String stamp = VERSION + ":" + game + ":" + defaults.hashCode() + ":" + list.hashCode() + ":" + scary + ":"
 				+ com.mcsource.client.prop.PropModels.DEFAULTS.hashCode() + ":" + props.hashCode() + ":" + SoundList.DEFAULTS.hashCode() + ":"
 				+ soundList.hashCode();
 		Path stampFile = pack.resolve("built_from.txt");
@@ -121,7 +128,7 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		long start = System.currentTimeMillis();
 		Path fresh = root.resolve("hl2_block_pack.new");
 		delete(fresh);
-		Map<String, String> used = BlockTextures.generate(GameInstalls.source(), mapping, fresh);
+		Map<String, String> used = BlockTextures.generate(GameInstalls.textureFiles(), mapping, fresh);
 		List<String> missing = new ArrayList<>();
 		StringBuilder report = new StringBuilder();
 		for (Map.Entry<String, String> entry : used.entrySet()) {
@@ -132,7 +139,7 @@ public final class HalfLife2BlockPack implements RepositorySource {
 				report.append(entry.getKey()).append(" = ").append(entry.getValue()).append('\n');
 			}
 		}
-		if (missing.size() == used.size()) {
+		if (missing.size() == used.size() && game.equals("auto")) {
 			// No Half-Life 2 materials found: keep whatever was built before.
 			LOGGER.info("No Half-Life 2 materials found for block textures; keeping Minecraft's");
 			delete(fresh);

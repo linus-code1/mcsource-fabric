@@ -36,7 +36,8 @@
 		"ShadowMixin",
 		"SoundBufferLibraryMixin",
 		"SpriteContentsAccessor",
-		"TitleScreenMixin"
+		"TitleScreenMixin",
+		"VideoSettingsScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

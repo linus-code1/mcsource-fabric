@@ -94,14 +94,20 @@ public final class GameInstalls {
 					// No such library.
 				}
 			}
+			List<Game> found = new ArrayList<>();
+			Set<Path> seen = new java.util.HashSet<>();
 			for (Path root : roots) {
 				for (Path folder : gameFolders(root)) {
-					mounts.add(loose(folder));
+					if (!seen.add(folder.toAbsolutePath().normalize())) {
+						continue;
+					}
+					List<GameFiles> folderMounts = new ArrayList<>();
+					folderMounts.add(loose(folder));
 					try (DirectoryStream<Path> vpks = Files.newDirectoryStream(folder, "*_dir.vpk")) {
 						for (Path vpk : vpks) {
 							try {
 								Vpk archive = new Vpk(vpk);
-								mounts.add(archive);
+								folderMounts.add(archive);
 								names.add(vpk + " (" + archive.size() + " files)");
 							} catch (IOException | RuntimeException e) {
 								LOGGER.warn("Could not open {}", vpk, e);
@@ -110,12 +116,108 @@ public final class GameInstalls {
 					} catch (IOException e) {
 						// Not a folder.
 					}
+					mounts.addAll(folderMounts);
+					String id = folder.getFileName().toString().toLowerCase(Locale.ROOT);
+					if (folderMounts.size() > 1 && found.stream().noneMatch(game -> game.id().equals(id))) {
+						found.add(new Game(id, gameName(folder, id), all(folderMounts)));
+					}
 				}
 			}
 			LOGGER.info("Source game files searched: {}", names);
+			games = List.copyOf(found);
 			source = all(mounts);
 		}
 		return source;
+	}
+
+	/** One installed Source game's own content folder, such as hl2 or hl1. */
+	public record Game(String id, String name, GameFiles files) {
+	}
+
+	private static List<Game> games = List.of();
+
+	/** The Source games found installed, Half-Life 2 first. */
+	public static synchronized List<Game> games() {
+		source();
+		return games;
+	}
+
+	/** The game block textures are made from: its id, or "auto" for all games found (Half-Life 2 first). */
+	public static String textureGame() {
+		String value = settingText("texture_game").toLowerCase(Locale.ROOT);
+		return value.isEmpty() ? "auto" : value;
+	}
+
+	/** The files block textures are made from: the chosen game's own, or every game's when none is chosen or it isn't found. */
+	public static GameFiles textureFiles() {
+		String chosen = textureGame();
+		for (Game game : games()) {
+			if (game.id().equals(chosen)) {
+				// The game's own folder, then the player's loose files.
+				return all(List.of(game.files(), loose(ownFolder())));
+			}
+		}
+		return source();
+	}
+
+	/** The game's name from its gameinfo.txt, or a name for the folders everyone knows. */
+	private static String gameName(Path folder, String id) {
+		switch (id) {
+			case "hl2":
+				return "Half-Life 2";
+			case "hl1":
+				return "Half-Life: Source";
+			case "episodic":
+				return "Half-Life 2: Episode One";
+			case "ep2":
+				return "Half-Life 2: Episode Two";
+			case "lostcoast":
+				return "Half-Life 2: Lost Coast";
+			case "cstrike":
+				return "Counter-Strike: Source";
+			case "dod":
+				return "Day of Defeat: Source";
+			case "portal":
+				return "Portal";
+			default:
+				break;
+		}
+		try {
+			String info = Files.readString(folder.resolve("gameinfo.txt"), java.nio.charset.StandardCharsets.ISO_8859_1);
+			java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)\\bgame\\s+\"([^\"]+)\"").matcher(info);
+			if (m.find()) {
+				return m.group(1);
+			}
+		} catch (IOException | RuntimeException e) {
+			// Use the folder's name.
+		}
+		return id;
+	}
+
+	/** A text setting from {@code config/mcsource.properties}, trimmed; empty if unset. */
+	public static String settingText(String key) {
+		synchronized (SETTINGS_LOCK) {
+			if (cachedSettings == null) {
+				cachedSettings = settings();
+			}
+			return cachedSettings.getProperty(key, "").trim();
+		}
+	}
+
+	/** Saves a setting in {@code config/mcsource.properties}. */
+	public static void saveSetting(String key, String value) {
+		synchronized (SETTINGS_LOCK) {
+			Properties properties = settings();
+			properties.setProperty(key, value);
+			Path file = FabricLoader.getInstance().getConfigDir().resolve("mcsource.properties");
+			try (Writer writer = Files.newBufferedWriter(file)) {
+				properties.store(writer, "MC:Source settings. Leave paths empty to look in Steam's usual folder. Models are read from"
+						+ " these games, or from loose files in config/mcsource laid out as in the game.");
+			} catch (IOException e) {
+				LOGGER.warn("Could not write {}", file, e);
+			}
+			cachedSettings = properties;
+		}
 	}
 
 	private static Path ownFolder() {
@@ -225,6 +327,7 @@ public final class GameInstalls {
 				{"halflife_path", "Folder of your Half-Life install (the one holding the 'valve' folder)."},
 				{"halflife2_path", "Folder of your Half-Life 2 install (the one holding the 'hl2' folder)."},
 				{"source_paths", "Other Source game folders, separated by commas."},
+				{"texture_game", "Game block textures are made from: auto, or a game's folder name such as hl2 or hl1 (also in Video Settings)."},
 				{"viewmodel_fov", "Field of view of the first-person hands, as in Source (54 in Half-Life 2; higher shows more)."},
 				{"viewmodel_offset_x", "Moves the hands right (negative: left), in Source units."},
 				{"viewmodel_offset_y", "Moves the hands forward, in Source units."},

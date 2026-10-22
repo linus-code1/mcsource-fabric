@@ -34,7 +34,9 @@ public final class MapVoxels {
 	private static final int SOLID_CONTENTS = Bsp.CONTENTS_SOLID | Bsp.CONTENTS_WINDOW | Bsp.CONTENTS_GRATE | Bsp.CONTENTS_PLAYERCLIP;
 	/** Brush entities that stay where they are and stop you; doors and the like are left open. */
 	private static final Set<String> KEPT_ENTITIES = Set.of("func_brush", "func_wall", "func_detail", "func_lod", "func_wall_toggle",
-			"func_breakable", "func_breakable_surf", "func_monitor", "func_reflective_glass");
+			"func_breakable", "func_breakable_surf", "func_monitor", "func_reflective_glass",
+			// Trains, lifts and platforms stand where they start, so you can stand on them.
+			"func_tracktrain", "func_train", "func_plat", "func_platrot", "func_conveyor", "func_pushable", "func_physbox", "func_movelinear");
 	private static final byte WATER = 1;
 	private static final byte LIGHT = 2;
 
@@ -114,6 +116,19 @@ public final class MapVoxels {
 
 	private static int floor(float value) {
 		return (int) Math.floor(value);
+	}
+
+	private MapCollision collision;
+	private boolean collisionBuilt;
+
+	/** The map's exact solid, built the first time it is asked for; null if it couldn't be. */
+	public synchronized MapCollision collision() {
+		if (!collisionBuilt) {
+			collisionBuilt = true;
+			collision = MapCollision.build(this);
+		}
+		MapCollision.setActive(collision);
+		return collision;
 	}
 
 	/** The block at a place in the world, given relative to the map's corner; null for air. */

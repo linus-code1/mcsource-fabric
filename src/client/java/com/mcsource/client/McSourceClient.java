@@ -56,10 +56,19 @@ public class McSourceClient implements ClientModInitializer {
 		// collision columns would otherwise show as little stairs.
 		net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK
 				.register(com.mcsource.client.map.MapRenderer::tick);
+		com.mcsource.world.hl2.MapCollision.clientCheck = level -> level instanceof net.minecraft.client.multiplayer.ClientLevel client
+				&& com.mcsource.client.map.MapRenderer.isMapWorld(client);
 		LevelRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, outline) -> {
 			Minecraft minecraft = Minecraft.getInstance();
-			return minecraft.level == null || !minecraft.level.getBlockState(outline.pos()).is(SmoothTerrain.SMOOTH)
-					|| outline.shape() == Shapes.block();
+			if (minecraft.level == null) {
+				return true;
+			}
+			var state = minecraft.level.getBlockState(outline.pos());
+			// The unseen blocks under a map have no outline either.
+			if (state.is(com.mcsource.world.hl2.Hl2Worlds.MAP_SOLID)) {
+				return false;
+			}
+			return !state.is(SmoothTerrain.SMOOTH) || outline.shape() == Shapes.block();
 		});
 	}
 

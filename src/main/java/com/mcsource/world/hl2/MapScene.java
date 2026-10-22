@@ -988,10 +988,31 @@ public final class MapScene {
 			}
 			data = samples;
 			at = first * 28;
+			// A leaf holds several samples, each placed by fractions of the
+			// leaf's box; the nearest one to the point is used.
+			if (count > 1 && leaf * 32 + 20 <= leafs.limit() && first * 28 + count * 28 <= samples.limit()) {
+				float best = Float.MAX_VALUE;
+				for (int i = 0; i < count; i++) {
+					int s = (first + i) * 28 + 24;
+					float d = 0;
+					for (int k = 0; k < 3; k++) {
+						float lo = leafs.getShort(leaf * 32 + 8 + k * 2);
+						float hi = leafs.getShort(leaf * 32 + 14 + k * 2);
+						float c = lo + (hi - lo) * Byte.toUnsignedInt(samples.get(s + k)) / 255.0F;
+						d += (c - point[k]) * (c - point[k]);
+					}
+					if (d < best) {
+						best = d;
+						at = (first + i) * 28;
+					}
+				}
+			}
 		}
 		for (int i = 0; i < 6; i++) {
 			int s = at + i * 4;
-			cube[i] = new float[] {sample(data, s, 0), sample(data, s, 1), sample(data, s, 2)};
+			// The leaves' light samples are kept 255 times smaller than the
+			// faces' (read as the faces' are, every prop came out black).
+			cube[i] = new float[] {sample(data, s, 0) * 255.0F, sample(data, s, 1) * 255.0F, sample(data, s, 2) * 255.0F};
 		}
 		return cube;
 	}

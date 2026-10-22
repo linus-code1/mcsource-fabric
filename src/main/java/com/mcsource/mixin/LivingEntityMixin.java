@@ -112,7 +112,8 @@ public abstract class LivingEntityMixin {
 		// does, instead of falling a little off every step.
 		if (grounded && !self.onGround() && !jumping && self.getDeltaMovement().y <= 0.0) {
 			Vec3 snap = new Vec3(0.0, -SourceMovement.STEP_DOWN, 0.0);
-			if (!self.level().noCollision(self, self.getBoundingBox().move(snap))) {
+			com.mcsource.world.hl2.MapCollision map = com.mcsource.world.hl2.MapCollision.of(self.level());
+			if (!self.level().noCollision(self, self.getBoundingBox().move(snap)) || map != null && map.blocked(self.getBoundingBox().move(snap))) {
 				self.move(MoverType.SELF, snap);
 				Vec3 after = self.getDeltaMovement();
 				self.setDeltaMovement(after.x, 0.0, after.z);

@@ -298,6 +298,62 @@ public final class BlockTextures {
 				+ "\"faces\": {\"" + a + "\": " + face + ", \"" + b + "\": " + face + "}}";
 	}
 
+	/**
+	 * The built-in list for Half-Life: Source, whose textures are the first
+	 * game's, kept under {@code halflife/}. It has no plants, snow or ice;
+	 * those keep Minecraft's.
+	 */
+	public static final String HALF_LIFE_SOURCE = """
+			# The mod's list of Half-Life: Source materials for Minecraft block textures.
+			water = halflife/water4b halflife/scrollwater1 liquids/*
+			grass_block_top = halflife/out_grnd1 halflife/c2a5mound halflife/out_grnd2
+			dirt = halflife/out_dirt1 halflife/out_grnd2
+			coarse_dirt = halflife/out_grnd2 halflife/out_dirt1
+			rooted_dirt = halflife/out_dirt1
+			podzol_top = halflife/out_grnd1 halflife/out_dirt1
+			mud = halflife/out_mud1 halflife/c2a4_mud
+			farmland = halflife/out_dirt1
+			farmland_moist = halflife/out_mud1 halflife/out_dirt1
+			stone = halflife/out_rk3 halflife/tnnl_rck1
+			andesite = halflife/tnnl_rck1 halflife/out_rk3
+			diorite = halflife/out_rk3
+			granite = halflife/tnnl_rck1
+			tuff = halflife/out_rk3
+			deepslate = halflife/tnnl_rck1
+			deepslate_top = halflife/tnnl_rck1
+			cobbled_deepslate = halflife/tnnl_rck1
+			bedrock = halflife/tnnl_rck1
+			cobblestone = halflife/out_pav3 halflife/out_pave1 halflife/out_rk3
+			smooth_stone = halflife/crete2_flr01 halflife/crete2_flr*
+			stone_bricks = halflife/crete3_wall01 halflife/crete*_wall*
+			cracked_stone_bricks = halflife/crete3_wall02 halflife/crete*_wall*
+			chiseled_stone_bricks = halflife/crete2_wall01 halflife/crete*_wall*
+			bricks = halflife/out_wall1a halflife/out_wall*
+			gravel = halflife/out_gravel halflife/out_grvl2 halflife/c3a1a_gravel
+			sand = halflife/out_snd1 halflife/c2a5_sand
+			red_sand = halflife/out_snd2 halflife/c2a5b_sand
+			sandstone = halflife/out_snd2b halflife/c2a5w_sand
+			sandstone_top = halflife/out_snd2c halflife/c2a5w_sand
+			sandstone_bottom = halflife/out_snd2c halflife/c2a5w_sand
+			oak_planks = halflife/out_wd halflife/trrm_wood
+			spruce_planks = halflife/trrm_wood2 halflife/trrm_wood
+			birch_planks = halflife/trrm_wood halflife/out_wd
+			jungle_planks = halflife/trrm_wood2 halflife/out_wd
+			acacia_planks = halflife/out_wd
+			dark_oak_planks = halflife/trrm_wood2
+			oak_leaves = halflife/out_shrb1
+			birch_leaves = halflife/out_shrb1
+			spruce_leaves = halflife/out_shrb1
+			jungle_leaves = halflife/out_shrb1
+			acacia_leaves = halflife/out_shrb1
+			dark_oak_leaves = halflife/out_shrb1
+			""";
+
+	/** The built-in list for a game, by its content folder (such as hl2 or hl1). */
+	public static String defaultsFor(String game) {
+		return game != null && game.startsWith("hl1") ? HALF_LIFE_SOURCE : DEFAULTS;
+	}
+
 	/** Reads a list in the {@link #DEFAULTS} format. */
 	public static Map<String, String[]> parse(String text) {
 		Map<String, String[]> out = new LinkedHashMap<>();

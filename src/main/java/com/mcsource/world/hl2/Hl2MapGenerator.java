@@ -108,11 +108,18 @@ public class Hl2MapGenerator extends ChunkGenerator {
 			MapVoxels voxels = new MapVoxels(new Bsp(bytes), source);
 			LOGGER.info("Built map {} in blocks: {} x {} x {}, in {} ms", map, voxels.sizeX, voxels.sizeY, voxels.sizeZ,
 					(System.nanoTime() - start) / 1_000_000);
+			voxels.collision();
 			return voxels;
 		} catch (Exception e) {
 			LOGGER.error("Could not build map {}", map, e);
 			return NONE;
 		}
+	}
+
+	/** The map's exact solid, or null when the map can't be read. */
+	public MapCollision collision() {
+		MapVoxels voxels = voxels();
+		return voxels == null ? null : voxels.collision();
 	}
 
 	/** Where a player starts: the map's player start, standing on its floor. */
