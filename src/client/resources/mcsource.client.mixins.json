@@ -10,6 +10,8 @@
 		"EntityLightMixin",
 		"FlatLighterMixin",
 		"FluidUvMixin",
+		"FogRendererMixin",
+		"LevelRendererLodMixin",
 		"ChatComponentAccessor",
 		"ChatComponentMixin",
 		"ChatScreenMixin",
@@ -32,6 +34,7 @@
 		"RenderPipelineMixin",
 		"ShadowMixin",
 		"SoundBufferLibraryMixin",
+		"SpriteContentsAccessor",
 		"TitleScreenMixin"
 	],
 	"injectors": {

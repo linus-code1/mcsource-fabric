@@ -46,6 +46,18 @@ public abstract class CameraMixin {
 	@Unique
 	private @Nullable Entity mcsource$lastEntity;
 
+	@Shadow
+	private float depthFar;
+
+	/** Distant terrain reaches far past the render distance; the far plane must too. */
+	@Inject(method = "update", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Camera;depthFar:F",
+			opcode = 181 /* PUTFIELD */, shift = At.Shift.AFTER))
+	private void mcsource$distantFar(net.minecraft.client.DeltaTracker deltaTracker, CallbackInfo ci) {
+		if (com.mcsource.client.lod.LodTerrain.active()) {
+			depthFar = Math.max(depthFar, com.mcsource.client.lod.LodTerrain.DEPTH_FAR);
+		}
+	}
+
 	@Inject(method = "alignWithEntity", at = @At("TAIL"))
 	private void mcsource$smoothSteps(float partialTicks, CallbackInfo ci) {
 		long now = Util.getNanos();

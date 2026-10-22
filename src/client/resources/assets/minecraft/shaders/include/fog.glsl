@@ -17,9 +17,13 @@ layout(std140) uniform Fog {
     float FogCloudsEnd;
 };
 
-// Haze starts this many blocks out and reaches its maximum at the render distance.
+// Haze starts this many blocks out and reaches MCSOURCE_HAZE_NEAR at the
+// fog's start (the render distance), then thickens on to full at the fog's
+// end. Without distant terrain the end is the render distance itself; with
+// it the end is the far edge of the distant terrain, so the land beyond the
+// loaded chunks fades slowly into the sky instead of stopping.
 const float MCSOURCE_HAZE_START = 16.0;
-const float MCSOURCE_HAZE_MAX_DENSITY = 0.6;
+const float MCSOURCE_HAZE_NEAR = 0.6;
 
 float linear_fog_value(float vertexDistance, float fogStart, float fogEnd) {
     if (vertexDistance <= fogStart) {
@@ -32,14 +36,13 @@ float linear_fog_value(float vertexDistance, float fogStart, float fogEnd) {
 
 float total_fog_value(float sphericalVertexDistance, float cylindricalVertexDistance, float environmentalStart, float environmentalEnd, float renderDistanceStart, float renderDistanceEnd) {
     float environment = linear_fog_value(sphericalVertexDistance, environmentalStart, environmentalEnd);
-    float edge = linear_fog_value(cylindricalVertexDistance, renderDistanceStart, renderDistanceEnd);
-    float fog = max(environment, edge);
     // The sky passes the same value for start and end; it gets no haze.
-    if (renderDistanceStart < renderDistanceEnd) {
-        float haze = linear_fog_value(sphericalVertexDistance, MCSOURCE_HAZE_START, renderDistanceEnd) * MCSOURCE_HAZE_MAX_DENSITY;
-        fog = max(fog, haze);
+    if (renderDistanceStart >= renderDistanceEnd) {
+        return max(environment, linear_fog_value(cylindricalVertexDistance, renderDistanceStart, renderDistanceEnd));
     }
-    return fog;
+    float nearHaze = linear_fog_value(sphericalVertexDistance, MCSOURCE_HAZE_START, renderDistanceStart) * MCSOURCE_HAZE_NEAR;
+    float farHaze = linear_fog_value(sphericalVertexDistance, renderDistanceStart, renderDistanceEnd);
+    return max(environment, nearHaze + (1.0 - MCSOURCE_HAZE_NEAR) * farHaze);
 }
 
 // Colour grading towards the look of Half-Life 2, applied once to the lit

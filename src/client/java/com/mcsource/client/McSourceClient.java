@@ -28,6 +28,7 @@ public class McSourceClient implements ClientModInitializer {
 					return new SmoothBlockModel(model);
 				}));
 		SourceHud.register();
+		com.mcsource.client.lod.LodTerrain.register();
 		com.mcsource.client.sound.Ambience.register();
 		com.mcsource.client.light.HeldLight.register();
 		com.mcsource.client.light.Emitters.register();
