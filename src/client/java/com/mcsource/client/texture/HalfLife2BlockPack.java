@@ -148,7 +148,10 @@ public final class HalfLife2BlockPack implements RepositorySource {
 			return;
 		}
 		try {
-			report.append(com.mcsource.client.prop.PropModels.generate(GameInstalls.source(), props, fresh));
+			// Furniture props come from the chosen game; Minecraft's own look has none.
+			if (!game.equals("minecraft")) {
+				report.append(com.mcsource.client.prop.PropModels.generate(GameInstalls.textureFiles(), props, fresh));
+			}
 		} catch (IOException | RuntimeException e) {
 			LOGGER.warn("Could not make the furniture props", e);
 		}

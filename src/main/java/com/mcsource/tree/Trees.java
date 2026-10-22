@@ -51,6 +51,19 @@ public final class Trees {
 
 	public static void setEnabled(boolean on) {
 		enabled = on;
+		decided = true;
+	}
+
+	/** Set once the client has looked for tree models; until then nothing is known. */
+	private static volatile boolean decided;
+
+	/**
+	 * Whether trees should be blocks: the client has looked and found no
+	 * tree models in the chosen game (or tree models are off), so tree
+	 * entities already in the world turn back into Minecraft trees.
+	 */
+	public static boolean blockTrees() {
+		return decided && !enabled;
 	}
 
 	/**

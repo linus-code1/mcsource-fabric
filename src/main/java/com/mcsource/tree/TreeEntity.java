@@ -75,7 +75,15 @@ public class TreeEntity extends Entity {
 		// A standing tree has nothing to update; a felled one falls over, and
 		// when it hits the ground breaks into logs.
 		int falling = falling();
-		if (falling < 0 || !(level() instanceof ServerLevel level)) {
+		if (!(level() instanceof ServerLevel level)) {
+			return;
+		}
+		if (falling < 0) {
+			// Tree models switched off, or the chosen game has none: grow the
+			// Minecraft tree it stands in for and go.
+			if (Trees.blockTrees() && tickCount % 20 == 0) {
+				toBlocks(level);
+			}
 			return;
 		}
 		entityData.set(FALLING, falling + 1);
@@ -146,6 +154,26 @@ public class TreeEntity extends Entity {
 	public ItemStack getPickResult() {
 		Item log = item(wood());
 		return log == Items.AIR ? ItemStack.EMPTY : new ItemStack(log);
+	}
+
+	/** Replaces this tree with the Minecraft tree of its wood. */
+	private void toBlocks(ServerLevel level) {
+		net.minecraft.core.BlockPos pos = blockPosition();
+		net.minecraft.world.level.block.grower.TreeGrower grower = switch (wood()) {
+			case "minecraft:spruce_log" -> net.minecraft.world.level.block.grower.TreeGrower.SPRUCE;
+			case "minecraft:birch_log" -> net.minecraft.world.level.block.grower.TreeGrower.BIRCH;
+			case "minecraft:jungle_log" -> net.minecraft.world.level.block.grower.TreeGrower.JUNGLE;
+			case "minecraft:acacia_log" -> net.minecraft.world.level.block.grower.TreeGrower.ACACIA;
+			case "minecraft:mangrove_log" -> net.minecraft.world.level.block.grower.TreeGrower.MANGROVE;
+			case "minecraft:cherry_log" -> net.minecraft.world.level.block.grower.TreeGrower.CHERRY;
+			default -> net.minecraft.world.level.block.grower.TreeGrower.OAK;
+		};
+		net.minecraft.world.level.block.state.BlockState sapling = net.minecraft.world.level.block.Blocks.OAK_SAPLING.defaultBlockState();
+		if (!grower.growTree(level, level.getChunkSource().getGenerator(), pos, sapling, random)
+				&& grower != net.minecraft.world.level.block.grower.TreeGrower.OAK) {
+			net.minecraft.world.level.block.grower.TreeGrower.OAK.growTree(level, level.getChunkSource().getGenerator(), pos, sapling, random);
+		}
+		discard();
 	}
 
 	private static Item item(String id) {

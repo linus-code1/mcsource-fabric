@@ -79,6 +79,14 @@ public abstract class VideoSettingsScreenMixin extends OptionsSubScreen {
 			mcsource$gameWhenOpened = GameInstalls.textureGame();
 			HalfLife2BlockPack.rebuild();
 			Minecraft.getInstance().reloadResourcePacks();
+			// Trees come from the chosen game too: its tree models, or block
+			// trees when it has none.
+			Thread trees = new Thread(() -> {
+				com.mcsource.client.tree.TreeModels.refresh();
+				com.mcsource.tree.Trees.setEnabled(GameInstalls.flag("hl2_trees", true) && com.mcsource.client.tree.TreeModels.available());
+			}, "MC:Source tree models");
+			trees.setDaemon(true);
+			trees.start();
 		}
 	}
 }

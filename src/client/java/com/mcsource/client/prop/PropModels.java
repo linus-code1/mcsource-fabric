@@ -56,7 +56,7 @@ public final class PropModels {
 	 * the footprint it fills, {@code yaw=} turns the model, {@code turn=no}
 	 * keeps it from turning with the block, {@code keep=slanted} keeps
 	 * the block's own slanted quads (a campfire's flames),
-	 * {@code tint=RRGGBB} recolours its textures (a watermelon as a pumpkin)
+	 * {@code tint=RRGGBB} recolours its textures
 	 * and {@code fit=door} stretches the model over a door's two blocks,
 	 * turning about its hinge as the door opens (see {@link DoorProps}).
 	 * The metal doors come before {@code *_door}, which takes the wooden
@@ -86,9 +86,6 @@ public final class PropModels {
 			jukebox = models/props_lab/citizenradio.mdl models/props_c17/consolebox0*.mdl h=0.8
 			lectern = models/props_c17/furnituredrawer001a.mdl models/props_c17/furnituredrawer00*.mdl
 			melon = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl turn=no
-			pumpkin = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl turn=no tint=C8701C
-			carved_pumpkin = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl tint=C8701C
-			jack_o_lantern = models/props_junk/watermelon01.mdl models/props_junk/*melon*.mdl tint=E08A2A
 			""";
 
 	private static final String USER_LIST = """

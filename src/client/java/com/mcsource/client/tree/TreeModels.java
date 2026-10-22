@@ -68,7 +68,7 @@ public final class TreeModels {
 	 */
 	private static RiggedModel readable(String path) {
 		try {
-			RiggedModel model = StudioModel.load(GameInstalls.source(), path, null);
+			RiggedModel model = StudioModel.load(GameInstalls.textureFiles(), path, null);
 			if (model == null || model.triangleCount() == 0) {
 				return null;
 			}
@@ -175,6 +175,14 @@ public final class TreeModels {
 		return n == 0 ? 0.0F : (float) (sum / n);
 	}
 
+	/** Looks again in the game now chosen in Video Settings (its trees, or none for Minecraft's). */
+	public static synchronized void refresh() {
+		conifers = null;
+		bestConifer = null;
+		bestLeaves = 0;
+		find();
+	}
+
 	private static void find() {
 		if (conifers != null) {
 			return;
@@ -182,9 +190,13 @@ public final class TreeModels {
 		conifers = new ArrayList<>();
 		bare = new ArrayList<>();
 		broadleaf = new ArrayList<>();
+		if (GameInstalls.textureGame().equals("minecraft")) {
+			// Minecraft's own look: block trees.
+			return;
+		}
 		List<String> paths;
 		try {
-			paths = GameInstalls.source().list("models/");
+			paths = GameInstalls.textureFiles().list("models/");
 		} catch (IOException | RuntimeException e) {
 			LOGGER.warn("Could not list Source models", e);
 			return;
