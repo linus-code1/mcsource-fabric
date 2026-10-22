@@ -42,6 +42,7 @@ public final class LodRenderer {
 			.withFragmentShader(Identifier.fromNamespaceAndPath("mcsource", "core/distant_terrain"))
 			.withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
 			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withColorTargetState(com.mojang.renderpearl.api.pipeline.ColorTargetState.DEFAULT)
 			.withCull(false)
 			.withDepthStencilState(DepthStencilState.DEFAULT)
 			.build();
