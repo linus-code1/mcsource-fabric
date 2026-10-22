@@ -6,5 +6,6 @@
 	"options.mcsource.header": "MC:Source",
 	"options.mcsource.texture_game": "Block Textures From",
 	"options.mcsource.texture_game.auto": "Any Game (Half-Life 2 First)",
-	"options.mcsource.texture_game.tooltip": "Which of your installed Source games Minecraft's blocks take their textures from. Changes when you close this screen."
+	"options.mcsource.texture_game.tooltip": "Which of your installed Source games Minecraft's blocks take their textures from. Changes when you close this screen.",
+	"options.mcsource.texture_game.minecraft": "Minecraft (Default Textures)"
 }

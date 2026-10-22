@@ -39,6 +39,7 @@ public abstract class VideoSettingsScreenMixin extends OptionsSubScreen {
 		mcsource$gameWhenOpened = GameInstalls.textureGame();
 		List<String> values = new ArrayList<>();
 		values.add("auto");
+		values.add("minecraft");
 		for (GameInstalls.Game game : GameInstalls.games()) {
 			values.add(game.id());
 		}
@@ -60,6 +61,9 @@ public abstract class VideoSettingsScreenMixin extends OptionsSubScreen {
 	private static Component mcsource$gameName(String id) {
 		if (id.equals("auto")) {
 			return Component.translatable("options.mcsource.texture_game.auto");
+		}
+		if (id.equals("minecraft")) {
+			return Component.translatable("options.mcsource.texture_game.minecraft");
 		}
 		for (GameInstalls.Game game : GameInstalls.games()) {
 			if (game.id().equals(id)) {

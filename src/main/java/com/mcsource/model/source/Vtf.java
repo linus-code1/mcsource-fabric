@@ -41,7 +41,7 @@ public final class Vtf {
 	/** ARGB, row by row. */
 	public final int[] pixels;
 
-	private Vtf(int width, int height, int[] pixels) {
+	Vtf(int width, int height, int[] pixels) {
 		this.width = width;
 		this.height = height;
 		this.pixels = pixels;

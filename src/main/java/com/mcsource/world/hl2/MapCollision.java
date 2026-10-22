@@ -722,8 +722,20 @@ public final class MapCollision {
 			normals[i * 3 + 2] = -n[1];
 		}
 		lastPlanes.set(normals);
-		return new Vec3((end[0] - start[0]) / MapVoxels.UNITS_PER_BLOCK, (end[2] - start[2]) / MapVoxels.UNITS_PER_BLOCK,
-				-(end[1] - start[1]) / MapVoxels.UNITS_PER_BLOCK);
+		if (touched.isEmpty()) {
+			// Nothing in the way: the move exactly as wished. Rounding through
+			// units would otherwise read as a bump, and Minecraft stops a
+			// falling or running thing dead at every bump.
+			return movement;
+		}
+		// Parts the surfaces didn't change (falling while sliding along a
+		// wall) are kept exactly as wished, for the same reason.
+		return new Vec3(keep(movement.x, (end[0] - start[0]) / MapVoxels.UNITS_PER_BLOCK),
+				keep(movement.y, (end[2] - start[2]) / MapVoxels.UNITS_PER_BLOCK), keep(movement.z, -(end[1] - start[1]) / MapVoxels.UNITS_PER_BLOCK));
+	}
+
+	private static double keep(double wished, double got) {
+		return Math.abs(wished - got) < 2.0E-4 ? wished : got;
 	}
 
 	/** Moves as far as it can, sliding along up to four surfaces in turn; returns where it ends. */

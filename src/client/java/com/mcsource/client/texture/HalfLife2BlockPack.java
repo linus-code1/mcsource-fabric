@@ -128,7 +128,9 @@ public final class HalfLife2BlockPack implements RepositorySource {
 		long start = System.currentTimeMillis();
 		Path fresh = root.resolve("hl2_block_pack.new");
 		delete(fresh);
-		Map<String, String> used = BlockTextures.generate(GameInstalls.textureFiles(), mapping, fresh);
+		// Minecraft's own block textures: none are made.
+		Map<String, String> used = game.equals("minecraft") ? new java.util.LinkedHashMap<>()
+				: BlockTextures.generate(GameInstalls.textureFiles(), mapping, fresh);
 		List<String> missing = new ArrayList<>();
 		StringBuilder report = new StringBuilder();
 		for (Map.Entry<String, String> entry : used.entrySet()) {

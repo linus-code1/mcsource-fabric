@@ -300,13 +300,15 @@ public final class BlockTextures {
 
 	/**
 	 * The built-in list for Half-Life: Source, whose textures are the first
-	 * game's, kept under {@code halflife/}. It has no plants, snow or ice;
-	 * those keep Minecraft's.
+	 * game's, kept under {@code halflife/}. Every block has a material; only
+	 * the plants keep Minecraft's, as the game has no grass or flower sprites.
 	 */
 	public static final String HALF_LIFE_SOURCE = """
 			# The mod's list of Half-Life: Source materials for Minecraft block textures.
+			# Half-Life's textures all sit in halflife/. It has no grass or flower sprites,
+			# so plants keep Minecraft's, recoloured to match the ground.
 			water = halflife/water4b halflife/scrollwater1 liquids/*
-			grass_block_top = halflife/out_grnd1 halflife/c2a5mound halflife/out_grnd2
+			grass_block_top = halflife/crossfire_outgrnd halflife/out_grnd1 halflife/out_grnd2
 			dirt = halflife/out_dirt1 halflife/out_grnd2
 			coarse_dirt = halflife/out_grnd2 halflife/out_dirt1
 			rooted_dirt = halflife/out_dirt1
@@ -314,44 +316,219 @@ public final class BlockTextures {
 			mud = halflife/out_mud1 halflife/c2a4_mud
 			farmland = halflife/out_dirt1
 			farmland_moist = halflife/out_mud1 halflife/out_dirt1
-			stone = halflife/out_rk3 halflife/tnnl_rck1
-			andesite = halflife/tnnl_rck1 halflife/out_rk3
-			diorite = halflife/out_rk3
-			granite = halflife/tnnl_rck1
-			tuff = halflife/out_rk3
-			deepslate = halflife/tnnl_rck1
-			deepslate_top = halflife/tnnl_rck1
-			cobbled_deepslate = halflife/tnnl_rck1
+			stone = halflife/out_rk3 halflife/cretecrumble halflife/tnnl_rck1
+			andesite = halflife/c2a4_brd1 halflife/out_rk3
+			diorite = halflife/cretecrumble2 halflife/fifties_ceil01
+			granite = halflife/c2a4_brd1r halflife/c2a4_mud
+			tuff = halflife/cretecrumble halflife/out_rk3
+			deepslate = halflife/tnnl_rck1 halflife/out_rk3
+			deepslate_top = halflife/tnnl_rck1 halflife/out_rk3
+			cobbled_deepslate = halflife/tnnl_swr1 halflife/tnnl_rck1
 			bedrock = halflife/tnnl_rck1
 			cobblestone = halflife/out_pav3 halflife/out_pave1 halflife/out_rk3
-			smooth_stone = halflife/crete2_flr01 halflife/crete2_flr*
-			stone_bricks = halflife/crete3_wall01 halflife/crete*_wall*
-			cracked_stone_bricks = halflife/crete3_wall02 halflife/crete*_wall*
-			chiseled_stone_bricks = halflife/crete2_wall01 halflife/crete*_wall*
-			bricks = halflife/out_wall1a halflife/out_wall*
+			smooth_stone = halflife/crete2_flr01 halflife/crete2_flr02
+			stone_bricks = halflife/c1a3wall01 halflife/crete3_wall01
+			cracked_stone_bricks = halflife/crete4_wall01 halflife/c1a3wall01
+			chiseled_stone_bricks = halflife/crete2_wall01 halflife/c1a3wall01
+			stone_bricks_wall = halflife/c1a3wall01
+			bricks = halflife/fifties_w12 halflife/fifties_w13 halflife/out_wall1a
 			gravel = halflife/out_gravel halflife/out_grvl2 halflife/c3a1a_gravel
+			suspicious_gravel_0 = halflife/out_gravel halflife/out_grvl2
 			sand = halflife/out_snd1 halflife/c2a5_sand
-			red_sand = halflife/out_snd2 halflife/c2a5b_sand
-			sandstone = halflife/out_snd2b halflife/c2a5w_sand
-			sandstone_top = halflife/out_snd2c halflife/c2a5w_sand
-			sandstone_bottom = halflife/out_snd2c halflife/c2a5w_sand
+			suspicious_sand_0 = halflife/out_snd1 halflife/c2a5_sand
+			red_sand = halflife/c2a5b_sand halflife/out_snd2
+			sandstone = halflife/c2a5w_sand halflife/out_snd2
+			sandstone_top = halflife/out_snd2 halflife/c2a5w_sand
+			sandstone_bottom = halflife/out_snd2 halflife/c2a5w_sand
+			smooth_sandstone = halflife/out_snd2 halflife/c2a5w_sand
+			cut_sandstone = halflife/out_con halflife/c2a5w_sand
+			chiseled_sandstone = halflife/out_con halflife/c2a5w_sand
+			red_sandstone = halflife/c2a4_mud2 halflife/c2a5b_sand
+			red_sandstone_top = halflife/c2a5b_sand
+			red_sandstone_bottom = halflife/c2a5b_sand
+			cut_red_sandstone = halflife/c2a4_mud2 halflife/c2a5b_sand
+			snow = halflife/fifties_ceil01 halflife/frost
+			snow_block = halflife/fifties_ceil01 halflife/frost
+			powder_snow = halflife/fifties_ceil01 halflife/frost
+			ice = halflife/frost halflife/frostslick
+			packed_ice = halflife/frostslick halflife/frost
+			blue_ice = halflife/frostslick2 halflife/frostslick
+			frosted_ice_0 = halflife/frost
+			frosted_ice_1 = halflife/frost
+			frosted_ice_2 = halflife/frost
+			frosted_ice_3 = halflife/frost
 			oak_planks = halflife/out_wd halflife/trrm_wood
 			spruce_planks = halflife/trrm_wood2 halflife/trrm_wood
-			birch_planks = halflife/trrm_wood halflife/out_wd
-			jungle_planks = halflife/trrm_wood2 halflife/out_wd
-			acacia_planks = halflife/out_wd
+			birch_planks = halflife/c1a1c_w1 halflife/out_wd
+			jungle_planks = halflife/trrm_pan1 halflife/out_wd
+			acacia_planks = halflife/crate01 halflife/out_wd
 			dark_oak_planks = halflife/trrm_wood2
-			oak_leaves = halflife/out_shrb1
-			birch_leaves = halflife/out_shrb1
-			spruce_leaves = halflife/out_shrb1
-			jungle_leaves = halflife/out_shrb1
+			mangrove_planks = halflife/trrm_wood
+			cherry_planks = halflife/trrm_wood
+			pale_oak_planks = halflife/c1a1c_w1 halflife/out_wd
+			bamboo_planks = halflife/out_slat01 halflife/out_wd
+			oak_log = halflife/trrm_wood2 halflife/out_wd
+			spruce_log = halflife/trrm_wood2 halflife/out_wd
+			birch_log = halflife/trrm_wood2 halflife/out_wd
+			jungle_log = halflife/trrm_wood2 halflife/out_wd
+			acacia_log = halflife/trrm_wood2 halflife/out_wd
+			dark_oak_log = halflife/trrm_wood2 halflife/out_wd
+			mangrove_log = halflife/trrm_wood2 halflife/out_wd
+			cherry_log = halflife/trrm_wood2 halflife/out_wd
+			pale_oak_log = halflife/trrm_wood2 halflife/out_wd
+			oak_log_top = halflife/out_wd
+			spruce_log_top = halflife/out_wd
+			birch_log_top = halflife/out_wd
+			jungle_log_top = halflife/out_wd
+			acacia_log_top = halflife/out_wd
+			dark_oak_log_top = halflife/out_wd
+			mangrove_log_top = halflife/out_wd
+			cherry_log_top = halflife/out_wd
+			pale_oak_log_top = halflife/out_wd
+			stripped_oak_log = halflife/out_wd
+			stripped_oak_log_top = halflife/out_wd
+			stripped_spruce_log = halflife/trrm_wood2
+			stripped_spruce_log_top = halflife/out_wd
+			stripped_birch_log = halflife/c1a1c_w1
+			stripped_birch_log_top = halflife/out_wd
+			stripped_jungle_log = halflife/out_wd
+			stripped_jungle_log_top = halflife/out_wd
+			stripped_acacia_log = halflife/out_wd
+			stripped_acacia_log_top = halflife/out_wd
+			stripped_dark_oak_log = halflife/trrm_wood2
+			stripped_dark_oak_log_top = halflife/out_wd
+			stripped_mangrove_log = halflife/trrm_wood
+			stripped_mangrove_log_top = halflife/out_wd
+			stripped_cherry_log = halflife/trrm_wood
+			stripped_cherry_log_top = halflife/out_wd
+			stripped_pale_oak_log = halflife/c1a1c_w1
+			stripped_pale_oak_log_top = halflife/out_wd
+			oak_leaves = halflife/out_shrb1 halflife/out_cac1
+			birch_leaves = halflife/out_shrb1 halflife/out_cac1
+			spruce_leaves = halflife/out_cac2 halflife/out_shrb1
+			jungle_leaves = halflife/out_cac1 halflife/out_shrb1
 			acacia_leaves = halflife/out_shrb1
-			dark_oak_leaves = halflife/out_shrb1
+			dark_oak_leaves = halflife/out_cac2 halflife/out_shrb1
+			mangrove_leaves = halflife/out_cac1 halflife/out_shrb1
+			cherry_leaves = halflife/out_shrb1
+			pale_oak_leaves = halflife/out_shrb1
+			vine = halflife/out_shrb1
+			moss_block = halflife/crossfire_outgrnd halflife/out_grnd1
+			moss_carpet = halflife/crossfire_outgrnd halflife/out_grnd1
+			dirt_path_top = halflife/out_grnd2 halflife/out_dirt1
+			dirt_path_side = halflife/out_dirt1
+			podzol_side = halflife/out_dirt1
+			mycelium_side = halflife/out_dirt1
+			hay_block_side = halflife/out_snbag halflife/out_sndbag4
+			hay_block_top = halflife/out_sndbag4 halflife/out_snbag
+			white_wool = halflife/c2a4_shield halflife/crete3_wall01b
+			polished_tuff = halflife/crete3_flr04 halflife/crete2_flr01
+			tuff_bricks = halflife/c1a3wall01
+			deepslate_bricks = halflife/tnnl_w6_2 halflife/c1a3wall01
+			cracked_deepslate_bricks = halflife/tnnl_w6_2
+			deepslate_tiles = halflife/tnnl_flr1 halflife/crete4_flr01
+			cracked_deepslate_tiles = halflife/tnnl_flr1
+			polished_deepslate = halflife/tnnl_c1 halflife/crete4_flr02
+			mud_bricks = halflife/fifties_w13 halflife/c2a4_mud
+			calcite = halflife/crete3_wall01b halflife/fifties_ceil01
+			dripstone_block = halflife/c2a4_mud2 halflife/out_rk3
+			iron_bars = halflife/frostgrate halflife/grate_rust halflife/out_net1
+			iron_door = halflife/c1a1_locker halflife/genlocker halflife/elev1
+			oak_door = halflife/c1a1c_w1 halflife/trrm_pan1
+			spruce_door = halflife/trrm_pan2 halflife/trrm_wood2
+			birch_door = halflife/c1a1c_w1
+			jungle_door = halflife/trrm_pan1
+			acacia_door = halflife/trrm_pan2
+			dark_oak_door = halflife/trrm_wood2
+			mangrove_door = halflife/trrm_pan1
+			cherry_door = halflife/trrm_pan1
+			bamboo_door = halflife/out_slat01
+			crimson_door = halflife/trrm_pan2
+			warped_door = halflife/trrm_pan2
+			pale_oak_door = halflife/c1a1c_w1
+			poplar_door = halflife/c1a1c_w1
+			anvil = halflife/steel halflife/duct_flr01
+			coal_block = halflife/out_gravel halflife/black
+			gold_block = halflife/c3a2b_reac halflife/yellow
+			copper_block = halflife/c2a3turbine1 halflife/c3a2a_pipe1
+			oxidized_copper = halflife/lab1_grn1 halflife/c2a3turbine2
+			netherrack = halflife/c2a4_mud halflife/c2a4_brd1r
+			blackstone = halflife/tnnl_rck1
+			blackstone_top = halflife/tnnl_rck1
+			polished_blackstone = halflife/tnnl_c1
+			polished_blackstone_bricks = halflife/tnnl_w6_2
+			cracked_polished_blackstone_bricks = halflife/tnnl_w6_2
+			gilded_blackstone = halflife/tnnl_rck1
+			basalt_side = halflife/tnnl_swr2 halflife/tnnl_rck1
+			basalt_top = halflife/tnnl_rck1
+			polished_basalt_side = halflife/tnnl_swr2
+			polished_basalt_top = halflife/tnnl_c1
+			smooth_basalt = halflife/tnnl_c1
+			end_stone = halflife/out_snd2 halflife/c2a5w_sand
+			obsidian = halflife/out_pav3 halflife/black
+			crying_obsidian = halflife/out_pav3 halflife/black
+			terracotta = halflife/c2a4_mud halflife/c3a1a_gravel
+			clay = halflife/out_mud1 halflife/c2a4_mud2
+			packed_mud = halflife/out_mud1
+			magma = halflife/c2a4_mud halflife/c3a2a_pipe1
+			glass = halflife/c1a1_window halflife/lab1_glss1 halflife/translucent
+			glass_pane_top = halflife/c1a1_window halflife/lab1_glss1
+			tinted_glass = halflife/lab1_glss1 halflife/c1a1_window
+			ladder = halflife/rope halflife/out_slat01
+			iron_trapdoor = halflife/duct_vnt halflife/frostgrate
+			oak_trapdoor = halflife/crate01
+			spruce_trapdoor = halflife/crate02
+			birch_trapdoor = halflife/crate01
+			jungle_trapdoor = halflife/crate01
+			acacia_trapdoor = halflife/crate01
+			dark_oak_trapdoor = halflife/crate02
+			mangrove_trapdoor = halflife/crate02
+			quartz_block_bottom = halflife/crete3_wall01b halflife/fifties_ceil01
+			quartz_block_side = halflife/crete3_wall01b halflife/fifties_ceil01
+			quartz_block_top = halflife/fifties_ceil01 halflife/crete3_wall01b
+			quartz_bricks = halflife/c1a3wall02
+			quartz_pillar_side = halflife/crete3_wall01b
+			quartz_pillar_top = halflife/fifties_ceil01
+			cracked_nether_bricks = halflife/fifties_w12
+			smooth_stone_slab_side = halflife/crete2_flr01
+			melon_side = halflife/lab1_grn1
+			melon_top = halflife/lab1_grn1
+			bone_block_side = halflife/crete3_wall01b
+			bone_block_top = halflife/fifties_ceil01
+			flower_pot = halflife/c2a4_mud
+			lantern = halflife/steel
+			white_concrete = halflife/crete3_wall01b halflife/white
+			light_gray_concrete = halflife/crete3_wall01 halflife/crete1_wall01
+			gray_concrete = halflife/crete2_flr01 halflife/crete2_wall01
+			polished_andesite = halflife/crete3_flr04 halflife/crete2_flr01
+			polished_diorite = halflife/fifties_ceil01
+			polished_granite = halflife/c2a4_brd1r
+			iron_block = halflife/metal_wall01b halflife/duct_wall01 halflife/steel
 			""";
 
-	/** The built-in list for a game, by its content folder (such as hl2 or hl1). */
+	/**
+	 * The built-in list for a game, by its content folder (such as hl2 or hl1).
+	 * Any other game, or all of them together, uses the Half-Life 2 list with
+	 * the Half-Life: Source materials after each line, so a block whose
+	 * Half-Life 2 material isn't there still gets one from the first game.
+	 */
 	public static String defaultsFor(String game) {
-		return game != null && game.startsWith("hl1") ? HALF_LIFE_SOURCE : DEFAULTS;
+		if (game != null && game.startsWith("hl1")) {
+			return HALF_LIFE_SOURCE;
+		}
+		Map<String, String[]> first = parse(HALF_LIFE_SOURCE);
+		StringBuilder out = new StringBuilder();
+		for (String line : DEFAULTS.split("\n")) {
+			String trimmed = line.trim();
+			int equals = trimmed.indexOf('=');
+			String[] more = equals < 0 || trimmed.startsWith("#") ? null : first.get(trimmed.substring(0, equals).trim());
+			out.append(trimmed);
+			if (more != null) {
+				out.append(' ').append(String.join(" ", more));
+			}
+			out.append('\n');
+		}
+		return out.toString();
 	}
 
 	/** Reads a list in the {@link #DEFAULTS} format. */
@@ -485,12 +662,31 @@ public final class BlockTextures {
 				break;
 			}
 		}
+		boolean grey = false;
+		if (image == null && tint(name) != 0) {
+			// Nothing green (Half-Life: Source's ground and shrubs are brown and
+			// olive): take the first one anyway, turned grey so Minecraft's
+			// biome colour makes it green.
+			outer:
+			for (String pattern : patterns) {
+				for (String material : candidates(pattern, materials)) {
+					RiggedModel.Texture texture = tryLoad(files, material, SIZE * 2, false);
+					if (texture != null) {
+						chosen = material + " (greyed for the biome colour)";
+						image = square(texture);
+						greyForTint(image, name.endsWith("_leaves") || name.equals("vine"));
+						grey = true;
+						break outer;
+					}
+				}
+			}
+		}
 		used.put(name, chosen);
 		if (image == null) {
 			return;
 		}
 		int tint = tint(name);
-		if (tint != 0) {
+		if (tint != 0 && !grey) {
 			untint(image, tint);
 		}
 		if (name.endsWith("_leaves")) {
@@ -593,6 +789,21 @@ public final class BlockTextures {
 				break;
 			}
 		}
+		if (normals == null) {
+			// Older games' water (Half-Life: Source's) is a plain picture with no
+			// ripple map: make one from how light and dark the picture is.
+			outer:
+			for (String pattern : patterns) {
+				for (String material : candidates(pattern, materials, false)) {
+					RiggedModel.Texture texture = tryLoad(files, material, 256, false);
+					if (texture != null) {
+						normals = bumpsOf(texture);
+						chosen = material + " (ripples from its shading)";
+						break outer;
+					}
+				}
+			}
+		}
 		used.put("water", chosen);
 		if (normals == null) {
 			return;
@@ -652,6 +863,33 @@ public final class BlockTextures {
 	}
 
 	/** The normal at a wrapped position on a normal map, each part from -1 to 1. */
+	/** A normal map from a picture's light and dark, as if it were a height map. */
+	private static Vtf bumpsOf(RiggedModel.Texture texture) {
+		int w = texture.width();
+		int h = texture.height();
+		int[] in = texture.pixels();
+		float[] height = new float[w * h];
+		for (int i = 0; i < in.length; i++) {
+			int p = in[i];
+			height[i] = ((p >> 16 & 255) * 0.3F + (p >> 8 & 255) * 0.59F + (p & 255) * 0.11F) / 255.0F;
+		}
+		int[] out = new int[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				float dx = height[y * w + Math.floorMod(x + 1, w)] - height[y * w + Math.floorMod(x - 1, w)];
+				float dy = height[Math.floorMod(y + 1, h) * w + x] - height[Math.floorMod(y - 1, h) * w + x];
+				float nx = -dx * 3.0F;
+				float ny = -dy * 3.0F;
+				float length = (float) Math.sqrt(nx * nx + ny * ny + 1.0F);
+				int r = Math.round((nx / length + 1.0F) * 127.5F);
+				int g = Math.round((ny / length + 1.0F) * 127.5F);
+				int b = Math.round((1.0F / length + 1.0F) * 127.5F);
+				out[y * w + x] = 0xFF000000 | Math.min(255, r) << 16 | Math.min(255, g) << 8 | Math.min(255, b);
+			}
+		}
+		return new Vtf(w, h, out);
+	}
+
 	private static float[] normal(Vtf map, float u, float v) {
 		int x = Math.floorMod((int) Math.floor(u * map.width), map.width);
 		int y = Math.floorMod((int) Math.floor(v * map.height), map.height);
@@ -2024,6 +2262,37 @@ public final class BlockTextures {
 			};
 		}
 		return 0;
+	}
+
+	/**
+	 * Turns a texture grey, about as bright as Minecraft's own grass and
+	 * leaves, keeping its light and dark. Leaves also get gaps where the
+	 * picture is darkest, so the foliage cards show through.
+	 */
+	private static void greyForTint(int[] image, boolean gaps) {
+		float[] light = new float[image.length];
+		double sum = 0;
+		for (int i = 0; i < image.length; i++) {
+			int p = image[i];
+			light[i] = (p >> 16 & 255) * 0.3F + (p >> 8 & 255) * 0.59F + (p & 255) * 0.11F;
+			sum += light[i];
+		}
+		float mean = (float) Math.max(1.0, sum / image.length);
+		float cut = -1;
+		if (gaps) {
+			float[] sorted = light.clone();
+			java.util.Arrays.sort(sorted);
+			cut = sorted[sorted.length * 3 / 10];
+		}
+		for (int i = 0; i < image.length; i++) {
+			if (light[i] <= cut) {
+				image[i] = 0;
+				continue;
+			}
+			// Contrast kept but squeezed a little around Minecraft's grey.
+			int v = Math.max(0, Math.min(255, Math.round(150.0F + (light[i] / mean - 1.0F) * 110.0F)));
+			image[i] = 0xFF000000 | v << 16 | v << 8 | v;
+		}
 	}
 
 	private static void untint(int[] image, int tint) {
