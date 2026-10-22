@@ -1,0 +1,6 @@
+{
+	"model": {
+		"type": "minecraft:model",
+		"model": "mcsource:block/mirror_block"
+	}
+}

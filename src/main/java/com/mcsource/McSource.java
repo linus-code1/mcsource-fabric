@@ -24,6 +24,7 @@ public class McSource implements ModInitializer {
 	public void onInitialize() {
 		Registry.register(BuiltInRegistries.CHUNK_GENERATOR, id("test_hills"), TestHillsGenerator.CODEC);
 		Karts.register();
+		com.mcsource.block.MirrorBlocks.register();
 		Trees.register();
 		com.mcsource.terrain.ServerSupport.register();
 		com.mcsource.world.hl2.Hl2Worlds.register();

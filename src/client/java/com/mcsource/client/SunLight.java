@@ -21,7 +21,7 @@ import com.mcsource.terrain.SmoothTerrain;
  * frame. The day/night cycle still comes from the lightmap.
  */
 public final class SunLight {
-	/** Direction towards the sun: high in the west-south-west. */
+	/** Direction towards the sun: in the west-south-west, some way up the sky. */
 	private static final float SUN_X;
 	private static final float SUN_Y;
 	private static final float SUN_Z;
@@ -30,8 +30,8 @@ public final class SunLight {
 
 	// Shares of daylight from the sky fill and from the sun. They match the
 	// lightmap, where open sky gives AMBIENT * FILL + DIRECT * SUN.
-	private static final float AMBIENT = 0.7F;
-	private static final float DIRECT = 0.6F;
+	private static final float AMBIENT = 0.55F;
+	private static final float DIRECT = 0.85F;
 	private static final float[] FILL = {0.78F, 0.87F, 1.06F};
 	private static final float[] SUN = {1.06F, 0.98F, 0.86F};
 
@@ -42,14 +42,37 @@ public final class SunLight {
 	private static final float SKIP = 0.3F;
 	private static final float LEAF_TRANSMIT = 0.45F;
 	private static final float WRAP = 0.35F;
-	private static final float BOUNCE = 0.3F;
+	private static final float BOUNCE = 0.22F;
+
+	/** Whether the sun casts shadows (Video Settings); off, everything facing the sun is lit by it. */
+	public static volatile boolean shadows = true;
+
+	/** Looks out over the half of the sky a surface faces, for darkening corners and cracks. */
+	private static final float[][] CORNER_RAYS;
+	/** How far corner darkening looks for walls, in blocks. */
+	private static final float CORNER_REACH = 3.5F;
+	/** How dark a fully enclosed crack gets. */
+	private static final float CORNER_STRENGTH = 0.8F;
 
 	private static final ThreadLocal<Cache> CACHE = ThreadLocal.withInitial(Cache::new);
 
 	static {
-		float x = -0.5F;
-		float y = 0.85F;
-		float z = 0.28F;
+		// Rays spread over a hemisphere around straight up, kept off the
+		// horizon so flat ground doesn't see its own neighbours.
+		int count = 12;
+		CORNER_RAYS = new float[count][];
+		float golden = (float) (Math.PI * (3.0 - Math.sqrt(5.0)));
+		for (int i = 0; i < count; i++) {
+			float u = 0.08F + 0.8F * (i + 0.5F) / count;
+			float r = Mth.sqrt(u);
+			float angle = i * golden;
+			CORNER_RAYS[i] = new float[] {r * Mth.cos(angle), Mth.sqrt(1.0F - u), r * Mth.sin(angle)};
+		}
+		// Lower than noon, as Half-Life 2's outdoor maps light their scenes, so
+		// slopes and walls turned away fall into shade and shadows run long.
+		float x = -0.62F;
+		float y = 0.62F;
+		float z = 0.35F;
 		float length = Mth.sqrt(x * x + y * y + z * z);
 		SUN_X = x / length;
 		SUN_Y = y / length;
@@ -90,7 +113,7 @@ public final class SunLight {
 	 */
 	public static int multiplier(BlockAndTintGetter level, float x, float y, float z, float nx, float ny, float nz, float sky,
 			float block) {
-		int soul = soulTint(level, x, y, z, nx, ny, nz, block);
+		int soul = ARGB.multiply(soulTint(level, x, y, z, nx, ny, nz, block), corners(level, x, y, z, nx, ny, nz));
 		if (sky <= 0.0F) {
 			return soul;
 		}
@@ -148,10 +171,14 @@ public final class SunLight {
 
 	/** Fraction of the sun visible from a point, 0 to 1, cached per chunk mesh. */
 	private static float visibility(BlockAndTintGetter level, float x, float y, float z) {
+		if (!shadows) {
+			return 1.0F;
+		}
 		Cache cache = CACHE.get();
 		if (cache.level != level) {
 			cache.level = level;
 			cache.values.clear();
+			cache.corners.clear();
 		}
 		long key = ((long) Math.round(x * 16.0F) & 0x3FFFFFL) << 42 | ((long) Math.round(y * 16.0F) & 0xFFFFFL) << 22
 				| (long) Math.round(z * 16.0F) & 0x3FFFFFL;
@@ -217,9 +244,88 @@ public final class SunLight {
 		return transmit;
 	}
 
+	/**
+	 * Darkening for corners, cracks and crevices: how much of the half of the
+	 * world a surface faces is closed in by blocks close by, the nearer the
+	 * darker, as baked light in Source maps settles darker into tight places.
+	 * Grey multiplier (opaque ARGB).
+	 */
+	private static int corners(BlockAndTintGetter level, float x, float y, float z, float nx, float ny, float nz) {
+		Cache cache = CACHE.get();
+		if (cache.level != level) {
+			cache.level = level;
+			cache.values.clear();
+			cache.corners.clear();
+		}
+		long key = ((long) Math.round(x * 16.0F) & 0x3FFFFFL) << 42 | ((long) Math.round(y * 16.0F) & 0xFFFFFL) << 22
+				| (long) Math.round(z * 16.0F) & 0x3FFFFFL;
+		key ^= (long) Math.round(nx * 3.0F + 3.0F) * 31L + Math.round(ny * 3.0F + 3.0F) * 7L + Math.round(nz * 3.0F + 3.0F);
+		float closed = cache.corners.getOrDefault(key, -1.0F);
+		if (closed < 0.0F) {
+			// A frame around the normal: rays tilt from the normal as they tilt from up.
+			float tx;
+			float ty;
+			float tz;
+			if (Math.abs(ny) < 0.9F) {
+				tx = -nz;
+				ty = 0.0F;
+				tz = nx;
+			} else {
+				tx = 1.0F;
+				ty = 0.0F;
+				tz = 0.0F;
+			}
+			float tl = Mth.sqrt(tx * tx + ty * ty + tz * tz);
+			tx /= tl;
+			ty /= tl;
+			tz /= tl;
+			float bx = ny * tz - nz * ty;
+			float by = nz * tx - nx * tz;
+			float bz = nx * ty - ny * tx;
+			float sum = 0.0F;
+			float ox = x + nx * 0.2F;
+			float oy = y + ny * 0.2F;
+			float oz = z + nz * 0.2F;
+			for (float[] ray : CORNER_RAYS) {
+				float dx = tx * ray[0] + nx * ray[1] + bx * ray[2];
+				float dy = ty * ray[0] + ny * ray[1] + by * ray[2];
+				float dz = tz * ray[0] + nz * ray[1] + bz * ray[2];
+				sum += reachClosed(level, cache.cursor, ox, oy, oz, dx, dy, dz);
+			}
+			closed = sum / CORNER_RAYS.length;
+			cache.corners.put(key, closed);
+		}
+		int v = Math.round(255.0F * (1.0F - CORNER_STRENGTH * closed));
+		return ARGB.color(255, v, v, v);
+	}
+
+	/** How soon a ray meets a solid block: 1 right away, 0 if nothing within reach. */
+	private static float reachClosed(BlockAndTintGetter level, BlockPos.MutableBlockPos cursor, float x, float y, float z, float dx, float dy,
+			float dz) {
+		for (float t = 0.25F; t < CORNER_REACH; t += 0.3F) {
+			float px = x + dx * t;
+			float py = y + dy * t;
+			float pz = z + dz * t;
+			int bx = Mth.floor(px);
+			int by = Mth.floor(py);
+			int bz = Mth.floor(pz);
+			BlockState state = level.getBlockState(cursor.set(bx, by, bz));
+			if (!state.isSolidRender()) {
+				continue;
+			}
+			// Smoothed ground may sit up to half a block below its cell.
+			if (state.is(SmoothTerrain.SMOOTH) && py - by >= 0.5F && SmoothTerrain.isOpen(level.getBlockState(cursor.set(bx, by + 1, bz)))) {
+				continue;
+			}
+			return 1.0F - t / CORNER_REACH;
+		}
+		return 0.0F;
+	}
+
 	private static final class Cache {
 		Object level;
 		final Long2FloatOpenHashMap values = new Long2FloatOpenHashMap();
+		final Long2FloatOpenHashMap corners = new Long2FloatOpenHashMap();
 		final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 	}
 }

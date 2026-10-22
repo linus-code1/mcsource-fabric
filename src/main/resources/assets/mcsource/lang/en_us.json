@@ -7,5 +7,8 @@
 	"options.mcsource.texture_game": "Block Textures From",
 	"options.mcsource.texture_game.auto": "Any Game (Half-Life 2 First)",
 	"options.mcsource.texture_game.tooltip": "Which of your installed Source games Minecraft's blocks take their textures from. Changes when you close this screen.",
-	"options.mcsource.texture_game.minecraft": "Minecraft (Default Textures)"
+	"options.mcsource.texture_game.minecraft": "Minecraft (Default Textures)",
+	"block.mcsource.mirror_block": "Mirror Block",
+	"options.mcsource.sun_shadows": "Sun Shadows",
+	"options.mcsource.sun_shadows.tooltip": "Shadows cast by the sun from trees, hills and buildings. Turning them off makes new chunks a little faster to build."
 }

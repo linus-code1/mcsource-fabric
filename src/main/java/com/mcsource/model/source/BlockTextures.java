@@ -622,6 +622,8 @@ public final class BlockTextures {
 			used.put("errors", errors.toString());
 		}
 
+		shine(folder);
+
 		// Grass and snowy grass block sides: the dirt with a band of the top
 		// along its upper edge, which Minecraft would otherwise tint and lay
 		// over the side.
@@ -640,6 +642,41 @@ public final class BlockTextures {
 			}
 		}
 		return used;
+	}
+
+	/**
+	 * Blocks that shine with a reflection, and how much: the terrain shader
+	 * reflects a texture whose pixels are a little short of opaque (alpha 251
+	 * polished metal, 253 a gloss; see terrain.fsh).
+	 */
+	private static final String[][] SHINY = {
+		{"iron_block", "251"}, {"gold_block", "251"}, {"copper_block", "251"}, {"netherite_block", "251"}, {"diamond_block", "251"},
+		{"emerald_block", "251"}, {"packed_ice", "253"}, {"blue_ice", "253"}, {"quartz_block_side", "253"}, {"quartz_block_top", "253"},
+		{"quartz_block_bottom", "253"}, {"polished_andesite", "253"}, {"polished_diorite", "253"}, {"polished_granite", "253"},
+		{"polished_deepslate", "253"}, {"polished_blackstone", "253"}, {"white_concrete", "253"},
+	};
+
+	private static void shine(Path folder) throws IOException {
+		for (String[] one : SHINY) {
+			Path file = folder.resolve(one[0] + ".png");
+			if (!Files.isRegularFile(file)) {
+				continue;
+			}
+			java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(file.toFile());
+			if (image == null) {
+				continue;
+			}
+			int alpha = Integer.parseInt(one[1]);
+			int w = image.getWidth();
+			int h = image.getHeight();
+			int[] argb = image.getRGB(0, 0, w, h, null, 0, w);
+			for (int i = 0; i < argb.length; i++) {
+				if ((argb[i] >>> 24) == 255) {
+					argb[i] = alpha << 24 | (argb[i] & 0xFFFFFF);
+				}
+			}
+			writePng(file, argb, w, h);
+		}
 	}
 
 	/** One ordinary block texture: the first of its materials found. */

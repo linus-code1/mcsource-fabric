@@ -39,12 +39,14 @@ const float LAMP_INTENSITY = 1.35;
 // same numbers to work out how much is left in shadow.
 const vec3 SUN_COLOR = vec3(1.06, 0.98, 0.86);
 const vec3 SKY_FILL_COLOR = vec3(0.78, 0.87, 1.06);
-const float SUN_STRENGTH = 0.6;
-const float SKY_FILL_STRENGTH = 0.7;
+const float SUN_STRENGTH = 0.85;
+const float SKY_FILL_STRENGTH = 0.55;
 // Overall daylight level, scaled so open ground in full sun lands just under
 // white after the soft clip.
-const float DAYLIGHT = 0.9;
-const vec3 MOONLIGHT = vec3(0.045, 0.06, 0.1);
+const float DAYLIGHT = 0.86;
+// Night is darker than Minecraft's: open ground keeps only a faint blue
+// moonlight, enough to see shapes but not to work by.
+const vec3 MOONLIGHT = vec3(0.028, 0.04, 0.075);
 
 
 // Keeps colours linear up to the knee and rolls brighter light off smoothly
@@ -75,7 +77,10 @@ void main() {
 
     // Daylight in proportion to how much sky is seen (and bounced in).
     vec3 daylight = (SKY_FILL_COLOR * SKY_FILL_STRENGTH + SUN_COLOR * SUN_STRENGTH) * DAYLIGHT * skyLevel;
-    color += lightmapInfo.SkyLightColor * daylight * lightmapInfo.SkyFactor;
+    // The sky's share falls away faster than Minecraft's as the sun sets, so
+    // dusk deepens and night is dark.
+    float skyFactor = pow(clamp(lightmapInfo.SkyFactor, 0.0, 1.0), 1.8);
+    color += lightmapInfo.SkyLightColor * daylight * skyFactor;
     // Moonlight: a faint cool fill under open sky at night, so the outdoors
     // keeps its shapes between the lamps.
     color += MOONLIGHT * skyLevel * clamp(1.0 - lightmapInfo.SkyFactor, 0.0, 1.0);

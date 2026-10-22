@@ -39,9 +39,10 @@ final class LodMesh {
 	private static final float SINK = 0.4F;
 
 	static {
-		float x = -0.5F;
-		float y = 0.85F;
-		float z = 0.28F;
+		// The same sun as SunLight.
+		float x = -0.62F;
+		float y = 0.62F;
+		float z = 0.35F;
 		float length = (float) Math.sqrt(x * x + y * y + z * z);
 		SUN_X = x / length;
 		SUN_Y = y / length;

@@ -54,7 +54,9 @@ final class BuiltTexture {
 
 	/** Whether a block is built of a plain material: a full, solid cube not turned any way. */
 	static boolean applies(BlockState state) {
-		return !state.is(SmoothTerrain.SMOOTH) && state.isSolidRender() && !state.hasProperty(BlockStateProperties.AXIS)
+		// The mirror's texture is a picture of its surroundings, read by the
+		// shader as a whole; spreading or blending it would cut it up.
+		return !state.is(SmoothTerrain.SMOOTH) && !state.is(com.mcsource.block.MirrorBlocks.MIRROR) && state.isSolidRender() && !state.hasProperty(BlockStateProperties.AXIS)
 				&& !state.hasProperty(BlockStateProperties.FACING) && !state.hasProperty(BlockStateProperties.HORIZONTAL_FACING);
 	}
 

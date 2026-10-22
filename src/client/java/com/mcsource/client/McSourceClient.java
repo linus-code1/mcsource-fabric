@@ -46,6 +46,7 @@ public class McSourceClient implements ClientModInitializer {
 		});
 		EntityRendererRegistry.register(Karts.KART, KartRenderer::new);
 		EntityRendererRegistry.register(Trees.TREE, TreeRenderer::new);
+		com.mcsource.client.SunLight.shadows = GameInstalls.flag("sun_shadows", true);
 		// New trees are tree models when there are tree models to draw them with.
 		// Reading the models takes a moment, so it's done while the game loads.
 		Thread finder = new Thread(() -> Trees.setEnabled(GameInstalls.flag("hl2_trees", true) && TreeModels.available()),

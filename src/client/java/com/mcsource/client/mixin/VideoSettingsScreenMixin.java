@@ -55,7 +55,17 @@ public abstract class VideoSettingsScreenMixin extends OptionsSubScreen {
 		list.addHeader(Component.translatable("options.mcsource.header").withStyle(net.minecraft.ChatFormatting.UNDERLINE,
 				net.minecraft.ChatFormatting.BOLD));
 		list.addBig(option);
+		mcsource$shadowsWhenOpened = com.mcsource.client.SunLight.shadows;
+		list.addBig(OptionInstance.createBoolean("options.mcsource.sun_shadows",
+				OptionInstance.cachedConstantTooltip(Component.translatable("options.mcsource.sun_shadows.tooltip")),
+				com.mcsource.client.SunLight.shadows, value -> {
+					com.mcsource.client.SunLight.shadows = value;
+					GameInstalls.saveSetting("sun_shadows", value.toString());
+				}));
 	}
+
+	@Unique
+	private boolean mcsource$shadowsWhenOpened;
 
 	@Unique
 	private static Component mcsource$gameName(String id) {
@@ -75,6 +85,14 @@ public abstract class VideoSettingsScreenMixin extends OptionsSubScreen {
 
 	@Inject(method = "removed()V", at = @At("HEAD"))
 	private void mcsource$applyTextureGame(CallbackInfo ci) {
+		Minecraft mc = Minecraft.getInstance();
+		if (mcsource$shadowsWhenOpened != com.mcsource.client.SunLight.shadows) {
+			mcsource$shadowsWhenOpened = com.mcsource.client.SunLight.shadows;
+			// Shadows are baked into the chunks: build them again.
+			if (mc.level != null) {
+				mc.levelRenderer.invalidateCompiledGeometry(mc.level, mc.options, mc.gameRenderer.mainCamera(), mc.getBlockColors());
+			}
+		}
 		if (mcsource$gameWhenOpened != null && !mcsource$gameWhenOpened.equals(GameInstalls.textureGame())) {
 			mcsource$gameWhenOpened = GameInstalls.textureGame();
 			HalfLife2BlockPack.rebuild();
